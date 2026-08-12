@@ -7,7 +7,7 @@ const SECURITY_HEADERS = Object.freeze({
     "form-action 'self'",
     "frame-ancestors 'self'",
     "frame-src https://playground.wordpress.net",
-    "img-src 'self' data: blob:",
+    "img-src 'self' data: blob: https://ps.w.org https://ts.w.org",
     "object-src 'none'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",

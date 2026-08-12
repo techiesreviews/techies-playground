@@ -17,15 +17,18 @@ test('creates a readable label without the version suffix', () => {
 })
 
 test('deduplicates plugin ids in a valid recipe', () => {
-  const recipe = validateRecipe({ name: 'Demo', plugins: ['one', 'one'] })
+  const recipe = validateRecipe({ name: 'Demo', plugins: ['one', 'one'], repositoryPlugins: ['woocommerce', 'woocommerce'] })
   assert.deepEqual(recipe.plugins, ['one'])
+  assert.deepEqual(recipe.repositoryPlugins, ['woocommerce'])
   assert.equal(recipe.theme, '')
+  assert.throws(() => validateRecipe({ name: 'Unsafe directory plugin', repositoryPlugins: ['../plugin'] }), /directory slugs/i)
 })
 
 test('keeps one browser-local theme id in a recipe', () => {
   const recipe = validateRecipe({ name: 'Theme demo', plugins: [], theme: '  premium-theme  ' })
   assert.equal(recipe.theme, 'premium-theme')
   assert.throws(() => validateRecipe({ name: 'Broken theme', theme: ['one', 'two'] }), /theme must be/i)
+  assert.throws(() => validateRecipe({ name: 'Two themes', theme: 'premium', repositoryTheme: 'astra' }), /either/i)
 })
 
 test('accepts historical WordPress version lines and exact releases', () => {
@@ -78,6 +81,26 @@ test('builds a valid advanced Playground blueprint', () => {
 
   const resumed = buildPlaygroundBlueprint({ name: 'Advanced demo', multisite: true, wxrUrl: 'https://example.com/content.xml' }, { includeOneTimeSetup: false })
   assert.equal(resumed.steps.some((step) => step.step === 'enableMultisite' || step.step === 'importWxr'), false)
+})
+
+test('installs WordPress.org plugins through official Blueprint resources', () => {
+  const blueprint = buildPlaygroundBlueprint({ name: 'Directory demo', repositoryPlugins: ['woocommerce'] })
+  assert.deepEqual(blueprint.steps.find((step) => step.step === 'installPlugin'), {
+    step: 'installPlugin',
+    pluginData: { resource: 'wordpress.org/plugins', slug: 'woocommerce' },
+    options: { activate: true, targetFolderName: 'woocommerce' },
+    ifAlreadyInstalled: 'overwrite',
+  })
+})
+
+test('installs and activates a WordPress.org theme through an official Blueprint resource', () => {
+  const blueprint = buildPlaygroundBlueprint({ name: 'Theme directory demo', repositoryTheme: 'astra' })
+  assert.deepEqual(blueprint.steps.find((step) => step.step === 'installTheme'), {
+    step: 'installTheme',
+    themeData: { resource: 'wordpress.org/themes', slug: 'astra' },
+    options: { activate: true, targetFolderName: 'astra' },
+    ifAlreadyInstalled: 'overwrite',
+  })
 })
 
 test('rejects recipes containing a license key field', () => {

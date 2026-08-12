@@ -33,6 +33,15 @@ export function upsertSavedRecipe(records, candidate, savedAt = new Date().toISO
   ]
 }
 
+export function replaceSavedRecipe(records, recordId, candidate, savedAt = new Date().toISOString()) {
+  const recipe = validateRecipe(candidate)
+  const id = normalizePluginId(recipe.name) || 'recipe'
+  return [
+    { id, savedAt, recipe },
+    ...records.filter((record) => record.id !== recordId && record.id !== id),
+  ]
+}
+
 export function serializeSavedRecipes(records) {
   return JSON.stringify(records.map((record) => ({
     id: record.id,

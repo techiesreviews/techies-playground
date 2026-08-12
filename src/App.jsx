@@ -17,6 +17,7 @@ import {
   LockClosedIcon,
   LockOpenIcon,
   MagnifyingGlassIcon,
+  PencilSquareIcon,
   PlayIcon,
   PlusIcon,
   TrashIcon,
@@ -38,8 +39,11 @@ import {
   preserveSelectedWordPressVersion,
   WORDPRESS_VERSION_FALLBACK_OPTIONS,
 } from './lib/wordpress-versions'
+import { searchWordPressOrgPlugins } from './lib/wordpress-org-plugins'
+import { searchWordPressOrgThemes } from './lib/wordpress-org-themes'
 import {
   parseSavedRecipes,
+  replaceSavedRecipe,
   SAVED_RECIPES_KEY,
   serializeSavedRecipes,
   upsertSavedRecipe,
@@ -226,19 +230,19 @@ function AppHeader({ onImportRecipe }) {
   )
 }
 
-function SavedRecipeRow({ record, active, missingCount, onChoose, onRemove }) {
-  const pluginCount = record.recipe.plugins.length
-  const themeCount = record.recipe.theme ? 1 : 0
+function SavedRecipeRow({ record, active, editing, missingCount, onChoose, onEdit, onRemove }) {
+  const pluginCount = record.recipe.plugins.length + record.recipe.repositoryPlugins.length
+  const themeCount = record.recipe.theme || record.recipe.repositoryTheme ? 1 : 0
   const packageSummary = [
     `${pluginCount} plugin${pluginCount === 1 ? '' : 's'}`,
     themeCount ? '1 theme' : '',
   ].filter(Boolean).join(', ')
   return (
-    <div className={`group relative min-w-0 border-t border-neutral-950/8 py-4 first:border-t-0 first:pt-0 last:pb-0 ${active ? 'text-neutral-950' : 'text-neutral-700'}`}>
+    <div className={`group relative min-w-0 border-t border-neutral-950/8 py-4 first:border-t-0 first:pt-0 last:pb-0 ${active || editing ? 'text-neutral-950' : 'text-neutral-700'}`}>
       <button
         type="button"
         onClick={() => onChoose(record)}
-        className={`w-full min-w-0 rounded-lg p-2 pr-11 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 ${active ? 'bg-teal-50' : 'hover:bg-neutral-50'}`}
+        className={`w-full min-w-0 rounded-lg p-2 pr-20 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 ${active || editing ? 'bg-teal-50' : 'hover:bg-neutral-50'}`}
       >
         <span className="flex min-w-0 items-start gap-2">
           <BookmarkIcon className={`size-4 h-lh shrink-0 ${active ? 'fill-teal-700' : 'fill-neutral-400'}`} />
@@ -251,6 +255,15 @@ function SavedRecipeRow({ record, active, missingCount, onChoose, onRemove }) {
       </button>
       <button
         type="button"
+        aria-label={`Edit ${record.recipe.name}`}
+        onClick={() => onEdit(record)}
+        className="absolute top-1/2 right-10 -translate-y-1/2 rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-teal-700 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 pointer-fine:pointer-events-none pointer-fine:opacity-0 pointer-fine:group-hover:pointer-events-auto pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:pointer-events-auto pointer-fine:group-focus-within:opacity-100"
+      >
+        <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
+        <PencilSquareIcon className="size-4 shrink-0 fill-current" />
+      </button>
+      <button
+        type="button"
         aria-label={`Remove ${record.recipe.name} from saved recipes`}
         onClick={() => onRemove(record.id)}
         className="absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-red-700 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 pointer-fine:pointer-events-none pointer-fine:opacity-0 pointer-fine:group-hover:pointer-events-auto pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:pointer-events-auto pointer-fine:group-focus-within:opacity-100"
@@ -259,6 +272,70 @@ function SavedRecipeRow({ record, active, missingCount, onChoose, onRemove }) {
         <TrashIcon className="size-4 shrink-0 fill-current" />
       </button>
     </div>
+  )
+}
+
+const compactNumberFormatter = new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 })
+
+function PackageArtwork({ src = '', label, kind }) {
+  return src ? (
+    <img
+      src={src}
+      alt=""
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      className={`shrink-0 rounded-lg bg-neutral-100 object-cover ring-1 ring-neutral-950/8 ${kind === 'theme' ? 'h-16 w-24' : 'size-12'}`}
+    />
+  ) : (
+    <span className={`grid shrink-0 place-items-center rounded-lg bg-neutral-100 font-semibold text-neutral-500 ring-1 ring-neutral-950/8 ${kind === 'theme' ? 'h-16 w-24' : 'size-12'}`} aria-hidden="true">
+      {kind === 'theme' ? <FolderOpenIcon className="size-5 fill-neutral-400" /> : label.slice(0, 1).toUpperCase()}
+    </span>
+  )
+}
+
+function RepositoryPluginRow({ plugin, selected, onToggle }) {
+  return (
+    <div className="flex min-w-0 items-start gap-3 border-t border-neutral-950/8 py-4 first:border-t-0 first:pt-0 last:pb-0">
+      <PackageArtwork src={plugin.image} label={plugin.name} kind="plugin" />
+      <button
+        type="button"
+        onClick={() => onToggle(plugin.slug)}
+        aria-pressed={selected}
+        className={`relative mt-0.5 inline-grid size-5 shrink-0 place-items-center rounded border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 sm:size-4 ${selected ? 'border-teal-700 bg-teal-700 text-white' : 'border-neutral-300 bg-white text-transparent hover:border-teal-700'}`}
+      >
+        <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
+        <CheckIcon className="size-3 fill-current" />
+        <span className="sr-only">{selected ? 'Remove' : 'Add'} {plugin.name}</span>
+      </button>
+      <button type="button" onClick={() => onToggle(plugin.slug)} className="min-w-0 flex-1 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600">
+        <span className="block font-medium text-neutral-950">{plugin.name}</span>
+        <span className="block text-neutral-600">
+          {plugin.slug}{plugin.version ? ` — ${plugin.version}` : ''}{plugin.activeInstalls ? ` — ${compactNumberFormatter.format(plugin.activeInstalls)} active installs` : ''}
+        </span>
+        {(plugin.author || plugin.tested) && <span className="block text-neutral-500">{plugin.author}{plugin.author && plugin.tested ? ' — ' : ''}{plugin.tested ? `Tested through WordPress ${plugin.tested}` : ''}</span>}
+      </button>
+    </div>
+  )
+}
+
+function RepositoryThemeRow({ theme, selected, onSelect }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(selected ? '' : theme.slug)}
+      aria-pressed={selected}
+      className={`flex w-full min-w-0 items-start gap-3 border-t border-neutral-950/8 py-4 text-left first:border-t-0 first:pt-0 last:pb-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 ${selected ? 'text-teal-900' : 'text-neutral-700'}`}
+    >
+      <PackageArtwork src={theme.image} label={theme.name} kind="theme" />
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-2 font-medium text-neutral-950">
+          {theme.name}
+          {selected && <CheckCircleIcon className="size-4 shrink-0 fill-teal-700" />}
+        </span>
+        <span className="block text-neutral-600">{theme.slug}{theme.version ? ` — ${theme.version}` : ''}{theme.rating ? ` — ${theme.rating}% rating` : ''}</span>
+        {theme.author && <span className="block text-neutral-500">By {theme.author}</span>}
+      </span>
+    </button>
   )
 }
 
@@ -719,6 +796,7 @@ function PluginRow({ plugin, selected, onToggle, onReplace, onRemove }) {
   const packageDetails = [versionHint && `version ${versionHint}`, size, 'stored only in this browser'].filter(Boolean).join(', ')
   return (
     <div className="group flex min-w-0 items-start gap-3 border-t border-neutral-950/8 py-4 first:border-t-0 first:pt-0 last:pb-0">
+      <PackageArtwork label={plugin.label} kind="plugin" />
       <div className="min-w-0 flex-1 text-base/7 sm:text-sm/6">
         <Checkbox
           id={`plugin-${plugin.id}`}
@@ -759,6 +837,7 @@ function ThemeRow({ theme, selected, onSelect, onReplace, onRemove }) {
   const packageDetails = [versionHint && `version ${versionHint}`, size, 'stored only in this browser'].filter(Boolean).join(', ')
   return (
     <div className="group flex min-w-0 items-start gap-3 border-t border-neutral-950/8 py-4 first:border-t-0 first:pt-0 last:pb-0">
+      <PackageArtwork label={theme.label} kind="theme" />
       <div className="min-w-0 flex-1 text-base/7 sm:text-sm/6">
         <Radio
           id={`theme-${theme.id}`}
@@ -867,9 +946,13 @@ export default function App() {
   const clientRef = useRef(null)
   const [plugins, setPlugins] = useState([])
   const [pluginSearch, setPluginSearch] = useState('')
+  const [repositoryPluginResults, setRepositoryPluginResults] = useState([])
+  const [repositoryPluginSearchState, setRepositoryPluginSearchState] = useState({ loading: false, message: '' })
   const [pluginRecency, setPluginRecency] = useState(() => parsePluginRecency(localStorage.getItem(PLUGIN_RECENCY_KEY)))
   const [themes, setThemes] = useState([])
   const [themeSearch, setThemeSearch] = useState('')
+  const [repositoryThemeResults, setRepositoryThemeResults] = useState([])
+  const [repositoryThemeSearchState, setRepositoryThemeSearchState] = useState({ loading: false, message: '' })
   const [themeRecency, setThemeRecency] = useState(() => parsePluginRecency(localStorage.getItem(THEME_RECENCY_KEY)))
   const [recipe, setRecipe] = useState(() => {
     try {
@@ -887,6 +970,7 @@ export default function App() {
   const [activeSavedId, setActiveSavedId] = useState(() => (
     savedRecipes.find((record) => JSON.stringify(record.recipe) === JSON.stringify(recipe))?.id || ''
   ))
+  const [editingSavedId, setEditingSavedId] = useState('')
   const [activeSpinupId, setActiveSpinupId] = useState('')
   const [replacementPluginId, setReplacementPluginId] = useState('')
   const [replacementThemeId, setReplacementThemeId] = useState('')
@@ -898,11 +982,12 @@ export default function App() {
   const [error, setError] = useState('')
   const [wordpressVersionOptions, setWordPressVersionOptions] = useState(WORDPRESS_VERSION_FALLBACK_OPTIONS)
 
-  const selectedCount = recipe.plugins.length
-  const selectedPackageCount = selectedCount + (recipe.theme ? 1 : 0)
+  const selectedCount = recipe.plugins.length + recipe.repositoryPlugins.length
+  const selectedPackageCount = selectedCount + (recipe.theme || recipe.repositoryTheme ? 1 : 0)
+  const licensedPackageCount = recipe.plugins.length + (recipe.theme ? 1 : 0)
   const selectedPackageLabel = [
     selectedCount ? `${selectedCount} plugin${selectedCount === 1 ? '' : 's'}` : '',
-    recipe.theme ? '1 theme' : '',
+    recipe.theme || recipe.repositoryTheme ? '1 theme' : '',
   ].filter(Boolean).join(' + ')
   const missingPluginIds = useMemo(
     () => recipe.plugins.filter((id) => !plugins.some((plugin) => plugin.id === id)),
@@ -925,6 +1010,20 @@ export default function App() {
     () => preserveSelectedWordPressVersion(wordpressVersionOptions, recipe.wordpress),
     [wordpressVersionOptions, recipe.wordpress],
   )
+  const visibleRepositoryPlugins = useMemo(() => {
+    const bySlug = new Map(repositoryPluginResults.map((plugin) => [plugin.slug, plugin]))
+    for (const slug of recipe.repositoryPlugins) {
+      if (!bySlug.has(slug)) bySlug.set(slug, { slug, name: slug, version: '', author: '', activeInstalls: 0, tested: '', image: '' })
+    }
+    return [...bySlug.values()]
+  }, [repositoryPluginResults, recipe.repositoryPlugins])
+  const visibleRepositoryThemes = useMemo(() => {
+    const bySlug = new Map(repositoryThemeResults.map((theme) => [theme.slug, theme]))
+    if (recipe.repositoryTheme && !bySlug.has(recipe.repositoryTheme)) {
+      bySlug.set(recipe.repositoryTheme, { slug: recipe.repositoryTheme, name: recipe.repositoryTheme, version: '', author: '', rating: 0, image: '' })
+    }
+    return [...bySlug.values()]
+  }, [repositoryThemeResults, recipe.repositoryTheme])
 
   useEffect(() => {
     listPlugins().then(setPlugins).catch((caught) => setError(caught.message))
@@ -938,6 +1037,58 @@ export default function App() {
       .catch(() => {})
     return () => controller.abort()
   }, [])
+
+  useEffect(() => {
+    const query = pluginSearch.trim()
+    if (query.length < 2) {
+      setRepositoryPluginResults([])
+      setRepositoryPluginSearchState({ loading: false, message: '' })
+      return undefined
+    }
+
+    const controller = new AbortController()
+    const timeout = setTimeout(() => {
+      setRepositoryPluginSearchState({ loading: true, message: '' })
+      searchWordPressOrgPlugins(query, { signal: controller.signal })
+        .then((results) => {
+          setRepositoryPluginResults(results)
+          setRepositoryPluginSearchState({ loading: false, message: results.length ? '' : 'No WordPress.org plugins matched your search.' })
+        })
+        .catch((caught) => {
+          if (caught.name !== 'AbortError') setRepositoryPluginSearchState({ loading: false, message: 'WordPress.org search is temporarily unavailable.' })
+        })
+    }, 350)
+
+    return () => {
+      clearTimeout(timeout)
+      controller.abort()
+    }
+  }, [pluginSearch])
+
+  useEffect(() => {
+    const query = themeSearch.trim()
+    if (query.length < 2) {
+      setRepositoryThemeResults([])
+      setRepositoryThemeSearchState({ loading: false, message: '' })
+      return undefined
+    }
+    const controller = new AbortController()
+    const timeout = setTimeout(() => {
+      setRepositoryThemeSearchState({ loading: true, message: '' })
+      searchWordPressOrgThemes(query, { signal: controller.signal })
+        .then((results) => {
+          setRepositoryThemeResults(results)
+          setRepositoryThemeSearchState({ loading: false, message: results.length ? '' : 'No WordPress.org themes matched your search.' })
+        })
+        .catch((caught) => {
+          if (caught.name !== 'AbortError') setRepositoryThemeSearchState({ loading: false, message: 'WordPress.org theme search is temporarily unavailable.' })
+        })
+    }, 350)
+    return () => {
+      clearTimeout(timeout)
+      controller.abort()
+    }
+  }, [themeSearch])
 
   useEffect(() => {
     localStorage.setItem(DRAFT_KEY, JSON.stringify(recipe))
@@ -965,18 +1116,21 @@ export default function App() {
     setRecipe((current) => ({ ...current, ...patch }))
   }
 
-  function saveRecipeToLibrary(candidate) {
+  function saveRecipeToLibrary(candidate, replaceId = '') {
     const safeRecipe = validateRecipe(candidate)
     const id = normalizePluginId(safeRecipe.name) || 'recipe'
-    setSavedRecipes((current) => upsertSavedRecipe(current, safeRecipe))
+    setSavedRecipes((current) => replaceId
+      ? replaceSavedRecipe(current, replaceId, safeRecipe)
+      : upsertSavedRecipe(current, safeRecipe))
     setActiveSavedId(id)
+    setEditingSavedId('')
     setSelectionMode('recipes')
   }
 
   function handleSaveRecipe() {
     try {
       setError('')
-      saveRecipeToLibrary(recipe)
+      saveRecipeToLibrary(recipe, editingSavedId)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Review the recipe settings before saving.')
     }
@@ -1117,18 +1271,28 @@ export default function App() {
   function chooseSavedRecipe(record) {
     setRecipe(validateRecipe(record.recipe))
     setActiveSavedId(record.id)
+    setEditingSavedId('')
+    setActiveSpinupId('')
+  }
+
+  function editSavedRecipe(record) {
+    setRecipe(validateRecipe(record.recipe))
+    setActiveSavedId(record.id)
+    setEditingSavedId(record.id)
     setActiveSpinupId('')
   }
 
   function chooseSpinup(record) {
     setRecipe(validateRecipe(record.recipe))
     setActiveSavedId('')
+    setEditingSavedId('')
     setActiveSpinupId(record.id)
   }
 
   function removeSavedRecipe(id) {
     setSavedRecipes((current) => current.filter((record) => record.id !== id))
     if (activeSavedId === id) setActiveSavedId('')
+    if (editingSavedId === id) setEditingSavedId('')
   }
 
   function removeSpinup(id) {
@@ -1155,9 +1319,21 @@ export default function App() {
     })
   }
 
+  function toggleRepositoryPlugin(slug) {
+    updateRecipe({
+      repositoryPlugins: recipe.repositoryPlugins.includes(slug)
+        ? recipe.repositoryPlugins.filter((pluginSlug) => pluginSlug !== slug)
+        : [...recipe.repositoryPlugins, slug],
+    })
+  }
+
   function chooseTheme(id) {
     if (id) setThemeRecency((current) => markPluginSelected(current, id))
-    updateRecipe({ theme: id })
+    updateRecipe({ theme: id, repositoryTheme: '' })
+  }
+
+  function chooseRepositoryTheme(slug) {
+    updateRecipe({ repositoryTheme: slug, theme: '' })
   }
 
   async function handleRemovePlugin(id) {
@@ -1222,7 +1398,14 @@ export default function App() {
       clientRef.current = client
       setStatus({ running: true, step: 1, message: 'WordPress is ready.' })
 
-      const installedPlugins = []
+      const installedPlugins = launchedRecipe.repositoryPlugins.map((slug) => {
+        const metadata = repositoryPluginResults.find((plugin) => plugin.slug === slug)
+        return {
+          id: slug,
+          label: metadata?.name || slug,
+          version: metadata?.version || '',
+        }
+      })
       for (const [index, id] of launchedRecipe.plugins.entries()) {
         const plugin = await getPlugin(id)
         installedPlugins.push(plugin)
@@ -1235,7 +1418,10 @@ export default function App() {
         })
       }
 
-      let installedTheme = null
+      let installedTheme = launchedRecipe.repositoryTheme ? (() => {
+        const metadata = repositoryThemeResults.find((theme) => theme.slug === launchedRecipe.repositoryTheme)
+        return { id: launchedRecipe.repositoryTheme, label: metadata?.name || launchedRecipe.repositoryTheme, version: metadata?.version || '' }
+      })() : null
       if (launchedRecipe.theme) {
         installedTheme = await getTheme(launchedRecipe.theme)
         const themeFile = new File([installedTheme.file], installedTheme.filename, { type: 'application/zip' })
@@ -1503,7 +1689,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
               <section aria-labelledby="plugins-heading" className="border-t border-neutral-950/10 pt-6">
                 <div>
                   <h2 id="plugins-heading" className="text-xl font-semibold text-balance">2. Choose a setup</h2>
-                  <p className="max-w-[56ch] text-pretty text-base/7 text-neutral-600 sm:text-sm/6">Start with a saved recipe, restore a past spin-up, or choose premium plugins and a theme from your local vault.</p>
+                  <p className="max-w-[56ch] text-pretty text-base/7 text-neutral-600 sm:text-sm/6">Start with a saved recipe, restore a past spin-up, or search uploaded and WordPress.org packages together.</p>
                 </div>
 
                 <div role="tablist" aria-label="Setup source" className="flex max-w-full gap-1 overflow-x-auto border-b border-neutral-950/10 pt-5">
@@ -1554,8 +1740,10 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                             key={record.id}
                             record={record}
                             active={activeSavedId === record.id}
+                            editing={editingSavedId === record.id}
                             missingCount={record.recipe.plugins.filter((id) => !plugins.some((plugin) => plugin.id === id)).length + (record.recipe.theme && !themes.some((theme) => theme.id === record.recipe.theme) ? 1 : 0)}
                             onChoose={chooseSavedRecipe}
+                            onEdit={editSavedRecipe}
                             onRemove={removeSavedRecipe}
                           />
                         ))}
@@ -1601,10 +1789,10 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                 ) : selectionMode === 'themes' ? (
                   <div className="pt-5">
                     <div className="grid gap-4">
-                      <p className="max-w-[56ch] text-pretty text-base/7 text-neutral-600 sm:text-sm/6">Import premium theme ZIPs once, then choose the single theme WordPress should activate. Re-importing the same theme replaces its stored package.</p>
+                      <p className="max-w-[62ch] text-pretty text-base/7 text-neutral-600 sm:text-sm/6">Choose one uploaded premium theme or search the official WordPress.org directory. Uploaded packages always appear first.</p>
                       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
                         <div className="relative min-w-0 flex-1">
-                          <label htmlFor="theme-search" className="sr-only">Search premium themes</label>
+                          <label htmlFor="theme-search" className="sr-only">Search uploaded and WordPress.org themes</label>
                           <MagnifyingGlassIcon className="pointer-events-none absolute top-1/2 left-3 size-4 shrink-0 -translate-y-1/2 fill-neutral-400" />
                           <input
                             id="theme-search"
@@ -1612,7 +1800,8 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                             type="search"
                             value={themeSearch}
                             onChange={(event) => setThemeSearch(event.target.value)}
-                            placeholder="Search themes by name or version"
+                            placeholder="Search uploaded and WordPress.org themes"
+                            autoComplete="off"
                             className="w-full rounded-lg bg-white py-2.5 pr-3 pl-9 text-base/7 text-neutral-900 ring-1 ring-neutral-950/10 outline-none placeholder:text-neutral-500 focus-visible:outline-2 -outline-offset-1 focus-visible:outline-teal-600 sm:py-2 sm:text-sm/6"
                           />
                         </div>
@@ -1628,16 +1817,18 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                       </div>
                     </div>
 
-                    <div className="pt-5">
-                      <div className="rounded-[min(1vw,var(--radius-xl))] bg-white p-4 ring-1 ring-neutral-950/8">
+                    <div className="grid gap-5 pt-5">
+                      <section aria-labelledby="uploaded-themes-heading" className="grid gap-2">
+                        <h3 id="uploaded-themes-heading" className="font-mono text-base/7 tracking-wide text-neutral-500 sm:text-sm/6">UPLOADED THEMES</h3>
+                        <div className="rounded-[min(1vw,var(--radius-xl))] bg-white p-4 ring-1 ring-neutral-950/8">
                         <div className="border-b border-neutral-950/8 pb-4 text-base/7 sm:text-sm/6">
                           <Radio
                             id="theme-default"
                             name="premium-theme"
-                            checked={!recipe.theme}
+                            checked={!recipe.theme && !recipe.repositoryTheme}
                             onChange={() => chooseTheme('')}
                             label="WordPress default theme"
-                            description="Do not install a premium theme"
+                            description="Do not install or activate another theme"
                           />
                         </div>
                         {visibleThemes.length ? (
@@ -1653,8 +1844,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                           ))
                         ) : themes.length ? (
                           <div className="pt-4">
-                            <p className="text-pretty text-base/7 font-medium text-neutral-900 sm:text-sm/6">No themes match your search.</p>
-                            <p className="max-w-[56ch] text-pretty text-base/7 text-neutral-600 sm:text-sm/6">Try a theme name, vault ID, filename, or version.</p>
+                            <p className="text-pretty text-base/7 font-medium text-neutral-900 sm:text-sm/6">No uploaded themes match your search.</p>
                           </div>
                         ) : (
                           <button
@@ -1664,19 +1854,44 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                           >
                             <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
                             <PlusIcon className="size-4 shrink-0 fill-current" />
-                            Choose premium theme ZIPs
+                            Upload a premium theme ZIP
                           </button>
                         )}
-                      </div>
+                        </div>
+                      </section>
+
+                      {(themeSearch.trim().length >= 2 || recipe.repositoryTheme) && (
+                        <section aria-labelledby="directory-themes-heading" className="grid gap-2" aria-live="polite" aria-busy={repositoryThemeSearchState.loading}>
+                          <h3 id="directory-themes-heading" className="font-mono text-base/7 tracking-wide text-neutral-500 sm:text-sm/6">WORDPRESS.ORG THEMES</h3>
+                          {repositoryThemeSearchState.loading ? (
+                            <div className="rounded-[min(1vw,var(--radius-xl))] bg-neutral-100 p-5 text-base/7 text-neutral-600 sm:text-sm/6">Searching WordPress.org…</div>
+                          ) : visibleRepositoryThemes.length ? (
+                            <div className="rounded-[min(1vw,var(--radius-xl))] bg-white p-4 ring-1 ring-neutral-950/8">
+                              {visibleRepositoryThemes.map((theme) => (
+                                <RepositoryThemeRow
+                                  key={theme.slug}
+                                  theme={theme}
+                                  selected={recipe.repositoryTheme === theme.slug}
+                                  onSelect={chooseRepositoryTheme}
+                                />
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="rounded-[min(1vw,var(--radius-xl))] bg-neutral-100 p-5">
+                              <p className="text-pretty text-base/7 font-medium text-neutral-900 sm:text-sm/6">{repositoryThemeSearchState.message || 'No WordPress.org themes matched your search.'}</p>
+                            </div>
+                          )}
+                        </section>
+                      )}
                     </div>
                   </div>
                 ) : (
                   <div className="pt-5">
                     <div className="grid gap-4">
-                      <p className="max-w-[56ch] text-pretty text-base/7 text-neutral-600 sm:text-sm/6">Import a ZIP once. A later ZIP with the same plugin name replaces the package while recipes keep working.</p>
+                      <p className="max-w-[62ch] text-pretty text-base/7 text-neutral-600 sm:text-sm/6">Search your uploaded premium plugins and the official WordPress.org directory together. Uploaded packages always appear first.</p>
                       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
                         <div className="relative min-w-0 flex-1">
-                          <label htmlFor="plugin-search" className="sr-only">Search premium plugins</label>
+                          <label htmlFor="plugin-search" className="sr-only">Search uploaded and WordPress.org plugins</label>
                           <MagnifyingGlassIcon className="pointer-events-none absolute top-1/2 left-3 size-4 shrink-0 -translate-y-1/2 fill-neutral-400" />
                           <input
                             id="plugin-search"
@@ -1684,7 +1899,8 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                             type="search"
                             value={pluginSearch}
                             onChange={(event) => setPluginSearch(event.target.value)}
-                            placeholder="Search plugins by name or version"
+                            placeholder="Search uploaded and WordPress.org plugins"
+                            autoComplete="off"
                             className="w-full rounded-lg bg-white py-2.5 pr-3 pl-9 text-base/7 text-neutral-900 ring-1 ring-neutral-950/10 outline-none placeholder:text-neutral-500 focus-visible:outline-2 -outline-offset-1 focus-visible:outline-teal-600 sm:py-2 sm:text-sm/6"
                           />
                         </div>
@@ -1700,35 +1916,61 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                       </div>
                     </div>
 
-                    <div className="pt-5">
-                      {visiblePlugins.length ? (
-                        <div className="rounded-[min(1vw,var(--radius-xl))] bg-white p-4 ring-1 ring-neutral-950/8">
-                          {visiblePlugins.map((plugin) => (
-                            <PluginRow
-                              key={plugin.id}
-                              plugin={plugin}
-                              selected={recipe.plugins.includes(plugin.id)}
-                              onToggle={togglePlugin}
-                              onReplace={replacePluginZip}
-                              onRemove={handleRemovePlugin}
-                            />
-                          ))}
-                        </div>
-                      ) : plugins.length ? (
-                        <div className="rounded-[min(1vw,var(--radius-xl))] bg-neutral-100 p-5">
-                          <p className="text-pretty text-base/7 font-medium text-neutral-900 sm:text-sm/6">No plugins match your search.</p>
-                          <p className="max-w-[56ch] text-pretty text-base/7 text-neutral-600 sm:text-sm/6">Try a plugin name, vault ID, filename, or version.</p>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => zipInputRef.current?.click()}
-                          className="relative grid w-full place-items-center gap-2 rounded-[min(1vw,var(--radius-xl))] border border-dashed border-neutral-950/20 bg-white/60 px-5 py-10 text-base/7 text-neutral-600 hover:border-teal-700 hover:text-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 sm:text-sm/6"
-                        >
-                          <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
-                          <PlusIcon className="size-4 shrink-0 fill-current" />
-                          Choose premium plugin ZIPs
-                        </button>
+                    <div className="grid gap-5 pt-5">
+                      <section aria-labelledby="uploaded-plugins-heading" className="grid gap-2">
+                        <h3 id="uploaded-plugins-heading" className="font-mono text-base/7 tracking-wide text-neutral-500 sm:text-sm/6">UPLOADED PLUGINS</h3>
+                        {visiblePlugins.length ? (
+                          <div className="rounded-[min(1vw,var(--radius-xl))] bg-white p-4 ring-1 ring-neutral-950/8">
+                            {visiblePlugins.map((plugin) => (
+                              <PluginRow
+                                key={plugin.id}
+                                plugin={plugin}
+                                selected={recipe.plugins.includes(plugin.id)}
+                                onToggle={togglePlugin}
+                                onReplace={replacePluginZip}
+                                onRemove={handleRemovePlugin}
+                              />
+                            ))}
+                          </div>
+                        ) : plugins.length ? (
+                          <div className="rounded-[min(1vw,var(--radius-xl))] bg-neutral-100 p-5">
+                            <p className="text-pretty text-base/7 font-medium text-neutral-900 sm:text-sm/6">No uploaded plugins match your search.</p>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => zipInputRef.current?.click()}
+                            className="relative grid w-full place-items-center gap-2 rounded-[min(1vw,var(--radius-xl))] border border-dashed border-neutral-950/20 bg-white/60 px-5 py-10 text-base/7 text-neutral-600 hover:border-teal-700 hover:text-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 sm:text-sm/6"
+                          >
+                            <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
+                            <PlusIcon className="size-4 shrink-0 fill-current" />
+                            Upload premium plugin ZIPs
+                          </button>
+                        )}
+                      </section>
+
+                      {(pluginSearch.trim().length >= 2 || recipe.repositoryPlugins.length > 0) && (
+                        <section aria-labelledby="directory-plugins-heading" className="grid gap-2" aria-live="polite" aria-busy={repositoryPluginSearchState.loading}>
+                          <h3 id="directory-plugins-heading" className="font-mono text-base/7 tracking-wide text-neutral-500 sm:text-sm/6">WORDPRESS.ORG PLUGINS</h3>
+                          {repositoryPluginSearchState.loading ? (
+                            <div className="rounded-[min(1vw,var(--radius-xl))] bg-neutral-100 p-5 text-base/7 text-neutral-600 sm:text-sm/6">Searching WordPress.org…</div>
+                          ) : visibleRepositoryPlugins.length ? (
+                            <div className="rounded-[min(1vw,var(--radius-xl))] bg-white p-4 ring-1 ring-neutral-950/8">
+                              {visibleRepositoryPlugins.map((plugin) => (
+                                <RepositoryPluginRow
+                                  key={plugin.slug}
+                                  plugin={plugin}
+                                  selected={recipe.repositoryPlugins.includes(plugin.slug)}
+                                  onToggle={toggleRepositoryPlugin}
+                                />
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="rounded-[min(1vw,var(--radius-xl))] bg-neutral-100 p-5">
+                              <p className="text-pretty text-base/7 font-medium text-neutral-900 sm:text-sm/6">{repositoryPluginSearchState.message || 'No WordPress.org plugins matched your search.'}</p>
+                            </div>
+                          )}
+                        </section>
                       )}
                     </div>
                   </div>
@@ -1743,6 +1985,19 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
               <section aria-labelledby="recipe-heading" className="border-t border-neutral-950/10 pt-6">
                 <div className="grid gap-2">
                   <label htmlFor="recipe-name" id="recipe-heading" className="text-xl font-semibold">3. Name and save</label>
+                  {editingSavedId && (
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-teal-50 px-3 py-2 text-base/7 text-teal-900 ring-1 ring-teal-700/15 sm:text-sm/6">
+                      <span>Editing saved recipe. Updating also applies a renamed recipe without leaving the old copy behind.</span>
+                      <button
+                        type="button"
+                        onClick={() => setEditingSavedId('')}
+                        className="relative shrink-0 rounded-md px-2 py-1 font-medium hover:bg-teal-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+                      >
+                        <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
+                        Stop editing
+                      </button>
+                    </div>
+                  )}
                   <input
                     id="recipe-name"
                     name="recipe-name"
@@ -1769,7 +2024,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                   >
                     <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
                     <BookmarkIcon className="size-4 shrink-0 fill-neutral-500" />
-                    Save recipe
+                    {editingSavedId ? 'Update recipe' : 'Save recipe'}
                   </button>
                   <button
                     type="button"
@@ -1793,7 +2048,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
         <div className="grid min-h-0 grid-rows-[2rem_1fr] overflow-hidden bg-white">
           <div className="flex min-w-0 items-center gap-1.5 bg-[#1d2327] px-2 text-white">
             <p className="min-w-0 flex-1 truncate text-sm/5 font-medium">{recipe.name}</p>
-            {status.step > 2 && selectedPackageCount > 0 && (
+            {status.step > 2 && licensedPackageCount > 0 && (
               <button
                 ref={licenseButtonRef}
                 type="button"

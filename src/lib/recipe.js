@@ -19,13 +19,16 @@ export const DEFAULT_RECIPE = Object.freeze({
   phpExtensionManifestUrl: '',
   landingPage: '/wp-admin/plugins.php',
   plugins: [],
+  repositoryPlugins: [],
   theme: '',
+  repositoryTheme: '',
 })
 
 const PHP_VERSIONS = new Set(['7.4', '8.0', '8.1', '8.2', '8.3', '8.4', '8.5'])
 const STORAGE_MODES = new Set(['temporary', 'browser'])
 const PERMALINK_STRUCTURES = new Set(['', '/%postname%/', '/%year%/%monthnum%/%postname%/'])
 const LOCALE = /^[a-z]{2,3}_[A-Z]{2}(?:_[A-Za-z0-9]+)?$/
+const WORDPRESS_ORG_PLUGIN_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const WP_CHANNELS = new Set(['latest', 'beta', 'nightly'])
 const WP_RELEASE = /^\d+\.\d+(?:\.\d+)?(?:-(?:beta\d+|rc\d+))?$/i
 const VERSION_SUFFIX = /(?:[-_.\s]+v?\d+(?:\.\d+){1,3}(?:[-_.]?(?:alpha|beta|rc)(?:[-_.]?\d+)?)?)$/i
@@ -102,7 +105,16 @@ export function validateRecipe(candidate) {
   if (!Array.isArray(recipe.plugins) || recipe.plugins.some((id) => typeof id !== 'string')) {
     throw new Error('Plugins must be an array of local vault IDs.')
   }
+  if (!Array.isArray(recipe.repositoryPlugins) || recipe.repositoryPlugins.some((slug) => (
+    typeof slug !== 'string' || slug.length > 100 || !WORDPRESS_ORG_PLUGIN_SLUG.test(slug)
+  ))) {
+    throw new Error('WordPress.org plugins must be an array of valid directory slugs.')
+  }
   if (typeof recipe.theme !== 'string') throw new Error('Theme must be a local vault ID or an empty string.')
+  if (typeof recipe.repositoryTheme !== 'string' || (recipe.repositoryTheme && (
+    recipe.repositoryTheme.length > 100 || !WORDPRESS_ORG_PLUGIN_SLUG.test(recipe.repositoryTheme)
+  ))) throw new Error('WordPress.org theme must be a valid directory slug or empty.')
+  if (recipe.theme && recipe.repositoryTheme) throw new Error('Choose either a browser-local theme or a WordPress.org theme.')
 
   const serialized = JSON.stringify(candidate).toLowerCase()
   const forbidden = ['licensekey', 'license_key', 'license-key', 'api_key', 'apikey', 'secret']
@@ -131,7 +143,9 @@ export function validateRecipe(candidate) {
     phpExtensionManifestUrl: normalizeOptionalUrl(recipe.phpExtensionManifestUrl, 'PHP extension manifest'),
     landingPage: recipe.landingPage,
     plugins: [...new Set(recipe.plugins)],
+    repositoryPlugins: [...new Set(recipe.repositoryPlugins)],
     theme: recipe.theme.trim(),
+    repositoryTheme: recipe.repositoryTheme.trim(),
   }
 }
 
@@ -163,6 +177,22 @@ export function buildPlaygroundBlueprint(candidate, { includeOneTimeSetup = true
     steps.push({
       step: 'importWxr',
       file: { resource: 'url', url: recipe.wxrUrl },
+    })
+  }
+  for (const slug of recipe.repositoryPlugins) {
+    steps.push({
+      step: 'installPlugin',
+      pluginData: { resource: 'wordpress.org/plugins', slug },
+      options: { activate: true, targetFolderName: slug },
+      ifAlreadyInstalled: 'overwrite',
+    })
+  }
+  if (recipe.repositoryTheme) {
+    steps.push({
+      step: 'installTheme',
+      themeData: { resource: 'wordpress.org/themes', slug: recipe.repositoryTheme },
+      options: { activate: true, targetFolderName: recipe.repositoryTheme },
+      ifAlreadyInstalled: 'overwrite',
     })
   }
   steps.push({ step: 'login' })

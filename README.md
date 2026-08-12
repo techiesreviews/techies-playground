@@ -72,6 +72,15 @@ Storage can remain temporary or persist the WordPress filesystem in browser OPFS
 - Saved recipes appear as an alternative to choosing individual plugins.
 - Importing a recipe also saves it to the local library.
 - Saved recipes contain only environment settings and local vault IDs.
+- Hover a saved recipe and choose **Edit** to load it into the form. **Update recipe** replaces that record even when you rename it, so the old copy is not left behind.
+
+## WordPress.org plugins and themes
+
+- Search the **Choose plugins** or **Choose themes** list to search uploaded packages and the official WordPress.org directory at the same time.
+- Browser-uploaded premium ZIPs appear first. Directory results follow and include artwork served only from WordPress.org's plugin icon and theme screenshot hosts.
+- Search results come directly from the public WordPress.org APIs; Techies Playground has no search proxy or credential.
+- Recipes store only validated directory slugs. At launch, official Playground Blueprint resources download and activate the current directory releases.
+- Premium ZIP IDs and WordPress.org slugs remain separate, so a public result cannot replace a browser-local premium package.
 
 ## Past spin-ups
 
