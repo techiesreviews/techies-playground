@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "name": "Starter playground",
+  "wordpress": "latest",
+  "php": "8.3",
+  "networking": true,
+  "landingPage": "/wp-admin/plugins.php",
+  "plugins": []
+}
