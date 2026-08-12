@@ -2,6 +2,8 @@
 
 A browser-local control panel for starting WordPress Playground with premium plugin ZIPs you own.
 
+The WordPress selector refreshes stable versions from the official WordPress.org update API at runtime. The `latest` option is resolved by WordPress Playground at launch, while exact patch versions remain available for reproducible compatibility tests. A built-in list keeps the launcher usable offline.
+
 ## Security boundary
 
 - Plugin ZIPs are stored in IndexedDB in the current browser profile.
@@ -44,6 +46,18 @@ npm run deploy
 ```
 
 Deployment requires an authenticated Wrangler session and the `techies.tools` zone in the same Cloudflare account. Cloudflare creates the Custom Domain DNS record and certificate during deployment; an existing CNAME at `play.techies.tools` must be removed first.
+
+### Automatic production deployment
+
+`.github/workflows/deploy.yml` tests, builds, and deploys every push to `main`, but only when the push actor is `techiesreviews` and production deployment has been explicitly enabled. The workflow has read-only repository permissions and uses immutable action revisions.
+
+Create a Cloudflare API token scoped to this account and Worker deployment, then configure it without printing or committing it:
+
+```powershell
+.\scripts\configure-cloudflare-deploy.ps1
+```
+
+The script verifies the active GitHub account, prompts securely for the token, stores it as the encrypted `CLOUDFLARE_API_TOKEN` GitHub secret, records the account ID as a repository variable, enables production, and starts the first workflow run. Never add the token to this repository or an `.env` file.
 
 ## Advanced environment settings
 

@@ -1,0 +1,52 @@
+name: Deploy production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: play-techies-tools-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Test and deploy
+    if: >-
+      github.repository == 'techiesreviews/techies-playground' &&
+      github.actor == 'techiesreviews' &&
+      vars.CLOUDFLARE_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the production commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build production assets
+        run: npm run build
+
+      - name: Deploy to play.techies.tools
+        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy
+
+      - name: Publish deployment link
+        run: echo "### Deployed to [play.techies.tools](https://play.techies.tools)" >> "$GITHUB_STEP_SUMMARY"

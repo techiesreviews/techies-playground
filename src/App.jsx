@@ -32,8 +32,12 @@ import {
   normalizePluginId,
   pluginLabelFromFilename,
   validateRecipe,
-  WORDPRESS_VERSION_OPTIONS,
 } from './lib/recipe'
+import {
+  fetchWordPressVersionOptions,
+  preserveSelectedWordPressVersion,
+  WORDPRESS_VERSION_FALLBACK_OPTIONS,
+} from './lib/wordpress-versions'
 import {
   parseSavedRecipes,
   SAVED_RECIPES_KEY,
@@ -198,7 +202,7 @@ function AppHeader({ onImportRecipe }) {
       <div className="mx-auto flex max-w-7xl items-center gap-4 px-5 py-4 sm:px-8 lg:px-10">
         <a href="/" aria-label="Homepage" className="flex min-w-0 flex-1 items-center gap-3 rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600">
           <CircleStackIcon className="size-4 shrink-0 fill-teal-700" />
-          <span className="truncate font-semibold text-neutral-950">Private Playground</span>
+          <span className="truncate font-semibold text-neutral-950">Techies Playground</span>
         </a>
         <div className="flex shrink-0 items-center gap-3">
           <p className="hidden items-center gap-1.5 text-sm/6 text-neutral-600 sm:flex">
@@ -892,6 +896,7 @@ export default function App() {
   const [showPlayground, setShowPlayground] = useState(false)
   const [snapshotExporting, setSnapshotExporting] = useState(false)
   const [error, setError] = useState('')
+  const [wordpressVersionOptions, setWordPressVersionOptions] = useState(WORDPRESS_VERSION_FALLBACK_OPTIONS)
 
   const selectedCount = recipe.plugins.length
   const selectedPackageCount = selectedCount + (recipe.theme ? 1 : 0)
@@ -916,10 +921,22 @@ export default function App() {
     ...plugins.map((plugin) => ({ ...plugin, vaultId: `plugin:${plugin.id}`, kind: 'Plugin' })),
     ...themes.map((theme) => ({ ...theme, vaultId: `theme:${theme.id}`, kind: 'Theme' })),
   ], [plugins, themes])
+  const visibleWordPressVersionOptions = useMemo(
+    () => preserveSelectedWordPressVersion(wordpressVersionOptions, recipe.wordpress),
+    [wordpressVersionOptions, recipe.wordpress],
+  )
 
   useEffect(() => {
     listPlugins().then(setPlugins).catch((caught) => setError(caught.message))
     listThemes().then(setThemes).catch((caught) => setError(caught.message))
+  }, [])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    fetchWordPressVersionOptions({ signal: controller.signal })
+      .then(setWordPressVersionOptions)
+      .catch(() => {})
+    return () => controller.abort()
   }, [])
 
   useEffect(() => {
@@ -1377,10 +1394,10 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
         <div className="grid gap-8 lg:grid-cols-[13fr_7fr] lg:items-start">
           <div className="min-w-0">
             <div>
-              <p className="font-mono text-base/7 tracking-wide text-teal-700 sm:text-sm/6">WORDPRESS, ON DEMAND</p>
-              <h1 className="max-w-[24ch] text-4xl font-semibold tracking-tight text-balance sm:text-5xl">Build a clean testing site in one click</h1>
+              <p className="font-mono text-base/7 tracking-wide text-teal-700 sm:text-sm/6">PRIVATE, IN-BROWSER PLAYGROUND</p>
+              <h1 className="max-w-[24ch] text-4xl font-semibold tracking-tight text-balance sm:text-5xl">Test premium WordPress tools with ease</h1>
               <p className="max-w-[48ch] text-pretty text-lg text-neutral-600">
-                Choose your runtime, premium plugins, and a premium theme. Everything runs in your browser, with licenses kept out of recipes and prompts.
+                Test your premium plugins and themes on the official WordPress Playground stack. Everything runs privately in your browser, with your packages and licenses kept under your control.
               </p>
             </div>
 
@@ -1392,9 +1409,14 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                 </div>
                 <div className="@container pt-5">
                   <div className="grid gap-4 @md:grid-cols-2">
-                    <Select id="wordpress-version" label="WordPress" value={recipe.wordpress} onChange={(event) => updateRecipe({ wordpress: event.target.value })}>
+                    <Select
+                      id="wordpress-version"
+                      label="WordPress"
+                      value={recipe.wordpress}
+                      onChange={(event) => updateRecipe({ wordpress: event.target.value })}
+                    >
                       <optgroup label="Stable releases">
-                        {WORDPRESS_VERSION_OPTIONS.map(({ value, label }) => (
+                        {visibleWordPressVersionOptions.map(({ value, label }) => (
                           <option key={value} value={value}>{label}</option>
                         ))}
                       </optgroup>

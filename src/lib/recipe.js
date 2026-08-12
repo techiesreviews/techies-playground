@@ -26,18 +26,6 @@ const PHP_VERSIONS = new Set(['7.4', '8.0', '8.1', '8.2', '8.3', '8.4', '8.5'])
 const STORAGE_MODES = new Set(['temporary', 'browser'])
 const PERMALINK_STRUCTURES = new Set(['', '/%postname%/', '/%year%/%monthnum%/%postname%/'])
 const LOCALE = /^[a-z]{2,3}_[A-Z]{2}(?:_[A-Za-z0-9]+)?$/
-export const WORDPRESS_VERSION_OPTIONS = Object.freeze([
-  { value: 'latest', label: 'Latest stable' },
-  { value: '7.0', label: 'WordPress 7.0' },
-  { value: '6.9', label: 'WordPress 6.9' },
-  { value: '6.8', label: 'WordPress 6.8' },
-  { value: '6.7', label: 'WordPress 6.7' },
-  { value: '6.6', label: 'WordPress 6.6' },
-  { value: '6.5', label: 'WordPress 6.5' },
-  { value: '6.4', label: 'WordPress 6.4' },
-  { value: '6.3', label: 'WordPress 6.3' },
-])
-
 const WP_CHANNELS = new Set(['latest', 'beta', 'nightly'])
 const WP_RELEASE = /^\d+\.\d+(?:\.\d+)?(?:-(?:beta\d+|rc\d+))?$/i
 const VERSION_SUFFIX = /(?:[-_.\s]+v?\d+(?:\.\d+){1,3}(?:[-_.]?(?:alpha|beta|rc)(?:[-_.]?\d+)?)?)$/i
