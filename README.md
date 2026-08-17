@@ -2,7 +2,7 @@
 
 A browser-local control panel for starting WordPress Playground with premium plugin ZIPs you own.
 
-The WordPress selector refreshes stable versions from the official WordPress.org update API at runtime. The `latest` option is resolved by WordPress Playground at launch, while exact patch versions remain available for reproducible compatibility tests. A built-in list keeps the launcher usable offline.
+The WordPress selector refreshes stable versions from the official WordPress.org update API at runtime. At launch, the `latest` option is resolved and verified against the current exact stable release, while exact patch versions remain available for reproducible compatibility tests. A built-in list keeps the launcher usable offline.
 
 ## Security boundary
 
@@ -67,7 +67,7 @@ Storage can remain temporary or persist the WordPress filesystem in browser OPFS
 
 ## Saved recipes
 
-- The current draft is saved into the browser recipe library on first load.
+- The current draft is retained separately from the recipe library, which starts empty for new users.
 - Use **Save recipe** to add or replace a named setup.
 - Saved recipes appear as an alternative to choosing individual plugins.
 - Importing a recipe also saves it to the local library.
@@ -84,9 +84,10 @@ Storage can remain temporary or persist the WordPress filesystem in browser OPFS
 
 ## Past spin-ups
 
-- Every successful launch adds a browser-local history entry.
+- Every successful launch adds or refreshes a browser-local history entry.
 - History records the safe recipe, launch time, and plugin names and versions—not ZIP contents, WordPress data, or license keys.
-- Choose **Past spin-ups** and select a row to restore an earlier launch configuration.
+- Choose **Past spin-ups** and select a row to restore an earlier launch configuration. Browser-saved environments resume their site data; temporary entries restore setup only.
+- Relaunching the same browser-saved environment replaces its older history row, keeping only the latest launch metadata.
 - The newest 30 launches are retained in the current browser profile.
 
 ## Keeping premium plugins current

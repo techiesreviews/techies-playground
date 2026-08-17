@@ -24,6 +24,10 @@ test('deduplicates plugin ids in a valid recipe', () => {
   assert.throws(() => validateRecipe({ name: 'Unsafe directory plugin', repositoryPlugins: ['../plugin'] }), /directory slugs/i)
 })
 
+test('saves new playgrounds in browser storage by default', () => {
+  assert.equal(validateRecipe({ name: 'Persistent demo' }).storage, 'browser')
+})
+
 test('keeps one browser-local theme id in a recipe', () => {
   const recipe = validateRecipe({ name: 'Theme demo', plugins: [], theme: '  premium-theme  ' })
   assert.equal(recipe.theme, 'premium-theme')

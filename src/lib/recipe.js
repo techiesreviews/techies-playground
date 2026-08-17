@@ -5,7 +5,7 @@ export const DEFAULT_RECIPE = Object.freeze({
   php: '8.3',
   networking: true,
   intl: false,
-  storage: 'temporary',
+  storage: 'browser',
   language: 'en_US',
   multisite: false,
   siteTitle: 'My WordPress Website',

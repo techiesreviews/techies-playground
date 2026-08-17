@@ -1,4 +1,5 @@
 import { extractVersionHint, pluginLabelFromFilename, validateRecipe } from './recipe.js'
+import { persistedSiteId } from './playground-persistence.js'
 
 export const SPINUP_HISTORY_KEY = 'private-playground-launcher:spinup-history'
 export const MAX_SPINUP_HISTORY = 30
@@ -30,18 +31,29 @@ function normalizeSpinup(candidate) {
   }
 }
 
+function keepLatestBrowserEnvironment(records) {
+  const seen = new Set()
+  return records.filter((record) => {
+    if (record.recipe.storage !== 'browser') return true
+    const environmentId = persistedSiteId(record.recipe)
+    if (seen.has(environmentId)) return false
+    seen.add(environmentId)
+    return true
+  })
+}
+
 export function parseSpinupHistory(serialized) {
   if (!serialized) return []
   try {
     const parsed = JSON.parse(serialized)
     if (!Array.isArray(parsed)) return []
-    return parsed.flatMap((candidate) => {
+    return keepLatestBrowserEnvironment(parsed.flatMap((candidate) => {
       try {
         return [normalizeSpinup(candidate)]
       } catch {
         return []
       }
-    }).slice(0, MAX_SPINUP_HISTORY)
+    })).slice(0, MAX_SPINUP_HISTORY)
   } catch {
     return []
   }
@@ -49,9 +61,9 @@ export function parseSpinupHistory(serialized) {
 
 export function appendSpinup(records, { recipe, plugins, theme }, launchedAt = new Date().toISOString(), id = crypto.randomUUID()) {
   const record = normalizeSpinup({ id, launchedAt, recipe, plugins, theme })
-  return [record, ...records].slice(0, MAX_SPINUP_HISTORY)
+  return keepLatestBrowserEnvironment([record, ...records]).slice(0, MAX_SPINUP_HISTORY)
 }
 
 export function serializeSpinupHistory(records) {
-  return JSON.stringify(records.map(normalizeSpinup).slice(0, MAX_SPINUP_HISTORY))
+  return JSON.stringify(keepLatestBrowserEnvironment(records.map(normalizeSpinup)).slice(0, MAX_SPINUP_HISTORY))
 }

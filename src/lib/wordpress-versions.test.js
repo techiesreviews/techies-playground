@@ -3,6 +3,7 @@ import test from 'node:test'
 import {
   createWordPressVersionOptions,
   fetchWordPressVersionOptions,
+  getLatestStableWordPressVersion,
   preserveSelectedWordPressVersion,
 } from './wordpress-versions.js'
 
@@ -18,11 +19,18 @@ test('builds a dynamic latest label and pinned historical releases', () => {
   })
 
   assert.deepEqual(options, [
-    { value: 'latest', label: 'Latest stable — 7.0.4' },
+    { value: 'latest', label: 'Latest stable — 7.0.4', resolvedVersion: '7.0.4' },
     { value: '7.0.4', label: 'WordPress 7.0.4 (pinned)' },
     { value: '6.9.7', label: 'WordPress 6.9.7 (pinned)' },
     { value: '6.3.10', label: 'WordPress 6.3.10 (pinned)' },
   ])
+})
+
+test('exposes the exact stable release resolved for latest', () => {
+  assert.equal(getLatestStableWordPressVersion([
+    { value: 'latest', label: 'Latest stable — 7.0.4', resolvedVersion: '7.0.4' },
+  ]), '7.0.4')
+  assert.equal(getLatestStableWordPressVersion([]), '')
 })
 
 test('keeps an exact saved version when it is absent from the live list', () => {

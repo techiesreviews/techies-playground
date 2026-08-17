@@ -20,6 +20,7 @@ import {
   PencilSquareIcon,
   PlayIcon,
   PlusIcon,
+  ShieldCheckIcon,
   TrashIcon,
   XMarkIcon,
 } from '@heroicons/react/16/solid'
@@ -36,6 +37,7 @@ import {
 } from './lib/recipe'
 import {
   fetchWordPressVersionOptions,
+  getLatestStableWordPressVersion,
   preserveSelectedWordPressVersion,
   WORDPRESS_VERSION_FALLBACK_OPTIONS,
 } from './lib/wordpress-versions'
@@ -63,6 +65,12 @@ import {
   SPINUP_HISTORY_KEY,
 } from './lib/spinup-history'
 import {
+  migrateStorageDefault,
+  persistedSiteId,
+  shouldWarnBeforeUnload,
+  spinupPersistenceLabel,
+} from './lib/playground-persistence'
+import {
   addLicense,
   copyLicenseToClipboard,
   createLicenseVault,
@@ -86,6 +94,7 @@ import {
 
 const DRAFT_KEY = 'private-playground-launcher:draft'
 const PERSISTED_SITES_KEY = 'private-playground-launcher:persisted-sites'
+const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-storage-default-v1'
 
 function readPersistedSites() {
   try {
@@ -100,14 +109,6 @@ function rememberPersistedSite(id) {
   const sites = readPersistedSites()
   sites.add(id)
   localStorage.setItem(PERSISTED_SITES_KEY, JSON.stringify([...sites]))
-}
-
-function persistedSiteId(recipe) {
-  return `${recipe.name}-${recipe.wordpress}-${recipe.php}`
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 96) || 'playground'
 }
 
 function Select({ id, label, value, onChange, children }) {
@@ -344,7 +345,7 @@ const launchTimeFormatter = new Intl.DateTimeFormat(undefined, {
   timeStyle: 'short',
 })
 
-function SpinupHistoryRow({ record, active, missingCount, onChoose, onRemove }) {
+function SpinupHistoryRow({ record, active, missingCount, persistenceLabel, onChoose, onRemove }) {
   const pluginDetails = record.plugins.length
     ? record.plugins.map((plugin) => `${plugin.label}${plugin.version ? ` ${plugin.version}` : ''}`).join(', ')
     : 'No premium plugins'
@@ -366,6 +367,7 @@ function SpinupHistoryRow({ record, active, missingCount, onChoose, onRemove }) 
             </span>
             <span className="truncate text-neutral-500">{pluginDetails}</span>
             <span className="truncate text-neutral-500">Theme: {themeDetails}</span>
+            <span className={record.recipe.storage === 'browser' && persistenceLabel.startsWith('Saved') ? 'text-teal-700' : 'text-neutral-500'}>{persistenceLabel}</span>
             <span className="tabular-nums text-neutral-500">
               <time dateTime={record.launchedAt}>{launchTimeFormatter.format(new Date(record.launchedAt))}</time>
               {missingCount > 0 && <span className="text-amber-700"> — {missingCount} local ZIP{missingCount === 1 ? '' : 's'} missing</span>}
@@ -873,7 +875,7 @@ function ThemeRow({ theme, selected, onSelect, onReplace, onRemove }) {
   )
 }
 
-function ProgressPanel({ status, error }) {
+function LaunchSummary({ recipe, selectedPackageLabel, status, error, onLaunch }) {
   const stages = [
     ['Preparing WordPress', status.step > 0],
     ['Installing selected packages', status.step > 1],
@@ -881,69 +883,84 @@ function ProgressPanel({ status, error }) {
   ]
 
   return (
-    <aside className="rounded-[min(1vw,var(--radius-xl))] bg-neutral-950 p-6 text-white lg:sticky lg:top-6">
-      <p className="font-mono text-base/7 tracking-wide text-teal-300 sm:text-sm/6">PRIVATE BY DESIGN</p>
-      <h2 className="max-w-[35ch] text-2xl font-semibold tracking-tight text-balance">Keep licenses out of recipes and prompts</h2>
-      <p className="max-w-[48ch] text-pretty text-base/7 text-neutral-300 sm:text-sm/6">
-        Enter licenses inside WordPress, or keep them in the optional encrypted local vault. Neither path puts a key in a recipe, prompt, URL, or Blueprint.
-      </p>
+    <aside className="overflow-hidden rounded-[min(1vw,var(--radius-xl))] bg-linear-to-b from-teal-50/90 via-white to-emerald-50/70 text-neutral-950 shadow-sm ring-1 ring-neutral-950/10 lg:sticky lg:top-6">
+      <div className="p-6">
+        <h2 className="truncate text-2xl font-semibold tracking-tight text-balance text-neutral-950">{recipe.name}</h2>
 
-      <dl className="grid gap-5 border-t border-white/10 pt-6">
-        <div>
-          <dt className="flex items-start gap-2 text-base/7 font-medium text-white sm:text-sm/6">
-            <CircleStackIcon className="size-4 h-lh shrink-0 fill-teal-300" />
-            Plugin and theme packages
-          </dt>
-          <dd className="pl-6 text-base/7 text-neutral-400 sm:text-sm/6">Saved in IndexedDB on this browser profile.</dd>
+        <dl className="grid gap-3 pt-5 text-base/7 sm:text-sm/6">
+          <div className="flex items-start justify-between gap-4">
+            <dt className="font-medium text-neutral-900">Environment</dt>
+            <dd className="text-right text-neutral-600">WordPress {recipe.wordpress}<br />PHP {recipe.php}</dd>
+          </div>
+          <div className="flex items-start justify-between gap-4">
+            <dt className="font-medium text-neutral-900">Packages</dt>
+            <dd className="text-right text-neutral-600">{selectedPackageLabel || 'WordPress only'}</dd>
+          </div>
+          <div className="flex items-start justify-between gap-4">
+            <dt className="font-medium text-neutral-900">Storage</dt>
+            <dd className="text-right text-neutral-600">{recipe.storage === 'browser' ? 'Saved in this browser' : 'Temporary'}</dd>
+          </div>
+          <div className="flex items-start justify-between gap-4">
+            <dt className="font-medium text-neutral-900">Networking</dt>
+            <dd className="text-right text-neutral-600">{recipe.networking ? 'Allowed' : 'Blocked'}</dd>
+          </div>
+        </dl>
+
+        <div className="mt-6">
+          <button
+            type="button"
+            disabled={status.running}
+            onClick={onLaunch}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-teal-700 py-2.5 pr-4 pl-2.5 text-sm/5 font-semibold text-white ring-1 ring-teal-700 hover:bg-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <PlayIcon className="size-4 shrink-0 fill-white" />
+            Launch {selectedPackageLabel || 'WordPress'}
+          </button>
         </div>
-        <div>
-          <dt className="flex items-start gap-2 text-base/7 font-medium text-white sm:text-sm/6">
-            <KeyIcon className="size-4 h-lh shrink-0 fill-teal-300" />
-            License keys
-          </dt>
-          <dd className="pl-6 text-base/7 text-neutral-400 sm:text-sm/6">Optional AES-GCM vault; unlocked only with a master password that is never stored.</dd>
-        </div>
-        <div>
-          <dt className="flex items-start gap-2 text-base/7 font-medium text-white sm:text-sm/6">
-            <LockClosedIcon className="size-4 h-lh shrink-0 fill-teal-300" />
-            Recipes
-          </dt>
-          <dd className="pl-6 text-base/7 text-neutral-400 sm:text-sm/6">Safe to create with Codex because they contain only vault IDs.</dd>
-        </div>
-        <div>
-          <dt className="flex items-start gap-2 text-base/7 font-medium text-white sm:text-sm/6">
-            <ArrowPathIcon className="size-4 h-lh shrink-0 fill-teal-300" />
-            Latest versions
-          </dt>
-          <dd className="pl-6 text-base/7 text-neutral-400 sm:text-sm/6">Activate vendor licenses, then use Update all inside the Playground.</dd>
-        </div>
-      </dl>
+      </div>
 
       {status.running && (
-        <ol role="list" className="grid gap-3 border-t border-white/10 pt-6">
+        <ol role="list" className="grid gap-3 bg-white/65 px-6 py-5">
           {stages.map(([label, complete], index) => (
             <li key={label} className="flex items-center gap-2 text-base/7 sm:text-sm/6">
-              <CheckCircleIcon className={`size-4 shrink-0 ${complete ? 'fill-teal-300' : 'fill-neutral-700'}`} />
-              <span className={complete ? 'text-white' : 'text-neutral-500'}>{index + 1}. {label}</span>
+              <CheckCircleIcon className={`size-4 shrink-0 ${complete ? 'fill-teal-700' : 'fill-neutral-300'}`} />
+              <span className={complete ? 'text-neutral-950' : 'text-neutral-500'}>{index + 1}. {label}</span>
             </li>
           ))}
-          <li className="text-base/7 text-neutral-300 sm:text-sm/6" aria-live="polite">{status.message}</li>
+          <li className="text-base/7 text-neutral-600 sm:text-sm/6" aria-live="polite">{status.message}</li>
         </ol>
       )}
 
-      {error && <p role="alert" className="rounded-lg bg-red-950/60 p-3 text-base/7 text-red-100 ring-1 ring-red-400/20 sm:text-sm/6">{error}</p>}
+      {error && <p role="alert" className="mx-6 mb-5 rounded-lg bg-red-50 p-3 text-base/7 text-red-800 ring-1 ring-red-700/15 sm:text-sm/6">{error}</p>}
+
+      <div className="grid gap-3 px-6 pb-6 text-base/7 sm:text-sm/6">
+        <div className="flex items-start gap-2">
+          <ShieldCheckIcon className="size-4 h-lh shrink-0 fill-teal-700" />
+          <p className="text-pretty text-neutral-600"><span className="font-medium text-neutral-900">Runs locally.</span> Packages and site data stay in this browser.</p>
+        </div>
+        <div className="flex items-start gap-2">
+          <LockClosedIcon className="size-4 h-lh shrink-0 fill-teal-700" />
+          <p className="text-pretty text-neutral-600"><span className="font-medium text-neutral-900">License-safe.</span> Recipes never contain license keys.</p>
+        </div>
+        <div className="flex items-start gap-2">
+          <CheckCircleIcon className="size-4 h-lh shrink-0 fill-teal-700" />
+          <p className="text-pretty text-neutral-600"><span className="font-medium text-neutral-900">Official runtime.</span> WordPress starts on the Playground stack.</p>
+        </div>
+      </div>
     </aside>
   )
 }
 
 export default function App() {
   const iframeRef = useRef(null)
+  const launchButtonRef = useRef(null)
   const licenseButtonRef = useRef(null)
   const zipInputRef = useRef(null)
   const replacementZipInputRef = useRef(null)
   const themeZipInputRef = useRef(null)
   const replacementThemeZipInputRef = useRef(null)
   const clientRef = useRef(null)
+  const launchIdRef = useRef(0)
   const [plugins, setPlugins] = useState([])
   const [pluginSearch, setPluginSearch] = useState('')
   const [repositoryPluginResults, setRepositoryPluginResults] = useState([])
@@ -955,18 +972,21 @@ export default function App() {
   const [repositoryThemeSearchState, setRepositoryThemeSearchState] = useState({ loading: false, message: '' })
   const [themeRecency, setThemeRecency] = useState(() => parsePluginRecency(localStorage.getItem(THEME_RECENCY_KEY)))
   const [recipe, setRecipe] = useState(() => {
+    let initialRecipe
     try {
-      return validateRecipe(JSON.parse(localStorage.getItem(DRAFT_KEY)))
+      initialRecipe = validateRecipe(JSON.parse(localStorage.getItem(DRAFT_KEY)))
     } catch {
-      return DEFAULT_RECIPE
+      initialRecipe = DEFAULT_RECIPE
     }
+    const migratedRecipe = migrateStorageDefault(initialRecipe, localStorage.getItem(STORAGE_DEFAULT_MIGRATION_KEY) === '1')
+    localStorage.setItem(STORAGE_DEFAULT_MIGRATION_KEY, '1')
+    return migratedRecipe
   })
   const [savedRecipes, setSavedRecipes] = useState(() => {
-    const saved = parseSavedRecipes(localStorage.getItem(SAVED_RECIPES_KEY))
-    return saved.length ? saved : upsertSavedRecipe([], recipe)
+    return parseSavedRecipes(localStorage.getItem(SAVED_RECIPES_KEY))
   })
   const [spinupHistory, setSpinupHistory] = useState(() => parseSpinupHistory(localStorage.getItem(SPINUP_HISTORY_KEY)))
-  const [selectionMode, setSelectionMode] = useState('recipes')
+  const [selectionMode, setSelectionMode] = useState(() => savedRecipes.length ? 'recipes' : 'plugins')
   const [activeSavedId, setActiveSavedId] = useState(() => (
     savedRecipes.find((record) => JSON.stringify(record.recipe) === JSON.stringify(recipe))?.id || ''
   ))
@@ -978,13 +998,13 @@ export default function App() {
   const [updateCheck, setUpdateCheck] = useState({ checking: false, message: '' })
   const [showLicenseManager, setShowLicenseManager] = useState(false)
   const [showPlayground, setShowPlayground] = useState(false)
+  const [confirmingPlaygroundClose, setConfirmingPlaygroundClose] = useState(false)
   const [snapshotExporting, setSnapshotExporting] = useState(false)
   const [error, setError] = useState('')
   const [wordpressVersionOptions, setWordPressVersionOptions] = useState(WORDPRESS_VERSION_FALLBACK_OPTIONS)
 
   const selectedCount = recipe.plugins.length + recipe.repositoryPlugins.length
   const selectedPackageCount = selectedCount + (recipe.theme || recipe.repositoryTheme ? 1 : 0)
-  const licensedPackageCount = recipe.plugins.length + (recipe.theme ? 1 : 0)
   const selectedPackageLabel = [
     selectedCount ? `${selectedCount} plugin${selectedCount === 1 ? '' : 's'}` : '',
     recipe.theme || recipe.repositoryTheme ? '1 theme' : '',
@@ -1109,6 +1129,18 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(THEME_RECENCY_KEY, JSON.stringify(themeRecency))
   }, [themeRecency])
+
+  useEffect(() => {
+    if (!shouldWarnBeforeUnload({ playgroundOpen: showPlayground, running: status.running, storage: recipe.storage })) return undefined
+
+    function warnBeforeUnload(event) {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+
+    window.addEventListener('beforeunload', warnBeforeUnload)
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload)
+  }, [recipe.storage, showPlayground, status.running])
 
   function updateRecipe(patch) {
     setActiveSavedId('')
@@ -1350,6 +1382,27 @@ export default function App() {
     setThemes(await listThemes())
   }
 
+  function closePlayground() {
+    launchIdRef.current += 1
+    setConfirmingPlaygroundClose(false)
+    setShowLicenseManager(false)
+    setShowPlayground(false)
+    clientRef.current = null
+    if (iframeRef.current) iframeRef.current.src = 'about:blank'
+    setStatus({ running: false, step: 0, message: '' })
+    setUpdateCheck({ checking: false, message: '' })
+    window.requestAnimationFrame(() => launchButtonRef.current?.focus())
+  }
+
+  function requestPlaygroundClose() {
+    if (recipe.storage === 'temporary' && status.step > 0) {
+      setShowLicenseManager(false)
+      setConfirmingPlaygroundClose(true)
+      return
+    }
+    closePlayground()
+  }
+
   async function launch() {
     if (missingPluginIds.length) {
       setError(`Import the missing ZIP${missingPluginIds.length === 1 ? '' : 's'} first: ${missingPluginIds.join(', ')}`)
@@ -1367,7 +1420,34 @@ export default function App() {
       setError(caught instanceof Error ? caught.message : 'Review the environment settings before launching.')
       return
     }
-    const siteId = persistedSiteId(launchedRecipe)
+    const launchId = launchIdRef.current + 1
+    launchIdRef.current = launchId
+    setError('')
+    setConfirmingPlaygroundClose(false)
+    setShowPlayground(true)
+    setStatus({ running: true, step: 0, message: launchedRecipe.wordpress === 'latest' ? 'Confirming the latest stable WordPress release…' : 'Starting the local WordPress runtime…' })
+
+    let expectedLatestWordPressVersion = ''
+    if (launchedRecipe.wordpress === 'latest') {
+      try {
+        const launchVersionOptions = await fetchWordPressVersionOptions()
+        if (launchId !== launchIdRef.current) return
+        expectedLatestWordPressVersion = getLatestStableWordPressVersion(launchVersionOptions)
+        if (!expectedLatestWordPressVersion) throw new Error('WordPress did not return a latest stable release.')
+        setWordPressVersionOptions(launchVersionOptions)
+      } catch (caught) {
+        if (launchId !== launchIdRef.current) return
+        setShowPlayground(false)
+        setStatus({ running: false, step: 0, message: '' })
+        setError(caught instanceof Error ? `The latest WordPress release could not be confirmed: ${caught.message}` : 'The latest WordPress release could not be confirmed.')
+        return
+      }
+    }
+
+    const runtimeRecipe = expectedLatestWordPressVersion
+      ? { ...launchedRecipe, wordpress: expectedLatestWordPressVersion }
+      : launchedRecipe
+    const siteId = persistedSiteId(runtimeRecipe)
     const usesBrowserStorage = launchedRecipe.storage === 'browser'
     const hasPersistedSite = usesBrowserStorage && readPersistedSites().has(siteId)
     const mountDescriptor = {
@@ -1375,28 +1455,48 @@ export default function App() {
       mountpoint: '/wordpress',
       initialSyncDirection: hasPersistedSite ? 'opfs-to-memfs' : 'memfs-to-opfs',
     }
-    setError('')
-    setShowPlayground(true)
     setStatus({ running: true, step: 0, message: 'Starting the local WordPress runtime…' })
 
     try {
+      if (usesBrowserStorage && navigator.storage?.persist) {
+        await navigator.storage.persist().catch(() => false)
+      }
       const client = await startPlaygroundWeb({
         iframe: iframeRef.current,
         remoteUrl: 'https://playground.wordpress.net/remote.html',
         scope: `launcher-${siteId}`,
-        blueprint: buildPlaygroundBlueprint(launchedRecipe, { includeOneTimeSetup: !hasPersistedSite }),
+        blueprint: buildPlaygroundBlueprint(runtimeRecipe, { includeOneTimeSetup: !hasPersistedSite }),
         ...(launchedRecipe.phpExtensionManifestUrl ? {
           extensions: [{ source: { format: 'manifest', manifestUrl: launchedRecipe.phpExtensionManifestUrl } }],
         } : {}),
         ...(hasPersistedSite ? { mounts: [mountDescriptor], shouldInstallWordPress: false } : {}),
       })
       await client.isReady()
+      if (launchId !== launchIdRef.current) return
+      const wordpressVersionResponse = await client.run({
+        code: `<?php
+require '/wordpress/wp-load.php';
+global $wp_version;
+echo 'PLAYGROUND_WORDPRESS_VERSION:' . $wp_version;
+`,
+      })
+      if (launchId !== launchIdRef.current) return
+      const wordpressVersionMarker = 'PLAYGROUND_WORDPRESS_VERSION:'
+      const wordpressVersionMarkerIndex = wordpressVersionResponse.text.lastIndexOf(wordpressVersionMarker)
+      const launchedWordPressVersion = wordpressVersionMarkerIndex >= 0
+        ? wordpressVersionResponse.text.slice(wordpressVersionMarkerIndex + wordpressVersionMarker.length).split(/\r?\n/, 1)[0].trim()
+        : ''
+      if (!launchedWordPressVersion) throw new Error('The launched WordPress version could not be verified.')
+      if (expectedLatestWordPressVersion && launchedWordPressVersion !== expectedLatestWordPressVersion) {
+        throw new Error(`Playground started WordPress ${launchedWordPressVersion}, but the latest stable release is ${expectedLatestWordPressVersion}.`)
+      }
       if (usesBrowserStorage && !hasPersistedSite) {
         await client.mountOpfs(mountDescriptor)
+        if (launchId !== launchIdRef.current) return
         rememberPersistedSite(siteId)
       }
       clientRef.current = client
-      setStatus({ running: true, step: 1, message: 'WordPress is ready.' })
+      setStatus({ running: true, step: 1, message: `WordPress ${launchedWordPressVersion} is ready.` })
 
       const installedPlugins = launchedRecipe.repositoryPlugins.map((slug) => {
         const metadata = repositoryPluginResults.find((plugin) => plugin.slug === slug)
@@ -1416,6 +1516,7 @@ export default function App() {
           options: { activate: true },
           ifAlreadyInstalled: 'overwrite',
         })
+        if (launchId !== launchIdRef.current) return
       }
 
       let installedTheme = launchedRecipe.repositoryTheme ? (() => {
@@ -1431,12 +1532,14 @@ export default function App() {
           options: { activate: true, targetFolderName: launchedRecipe.theme },
           ifAlreadyInstalled: 'overwrite',
         })
+        if (launchId !== launchIdRef.current) return
         const activeThemeResponse = await client.run({
           code: `<?php
 require '/wordpress/wp-load.php';
 echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
 `,
         })
+        if (launchId !== launchIdRef.current) return
         const activeThemeMarker = 'PLAYGROUND_ACTIVE_THEME:'
         const activeThemeMarkerIndex = activeThemeResponse.text.lastIndexOf(activeThemeMarker)
         const activeThemeId = activeThemeMarkerIndex >= 0
@@ -1447,10 +1550,18 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
         setStatus({ running: true, step: 2, message: 'Selected packages are installed.' })
       }
 
-      setStatus({ running: true, step: 3, message: 'Ready. Activate licenses inside WordPress when needed.' })
+      setStatus({ running: true, step: 3, message: `Ready on WordPress ${launchedWordPressVersion}. Activate licenses inside WordPress when needed.` })
       await client.goTo(launchedRecipe.landingPage)
-      setSpinupHistory((current) => appendSpinup(current, { recipe: launchedRecipe, plugins: installedPlugins, theme: installedTheme }))
+      if (launchId !== launchIdRef.current) return
+      const historyRecipe = launchedRecipe.wordpress === 'latest'
+        ? { ...launchedRecipe, wordpress: launchedWordPressVersion }
+        : launchedRecipe
+      setSpinupHistory((current) => appendSpinup(current, { recipe: historyRecipe, plugins: installedPlugins, theme: installedTheme }))
     } catch (caught) {
+      if (launchId !== launchIdRef.current) return
+      clientRef.current = null
+      if (iframeRef.current) iframeRef.current.src = 'about:blank'
+      setShowPlayground(false)
       setError(caught instanceof Error ? caught.message : 'Playground failed to start.')
       setStatus((current) => ({ ...current, running: false }))
     }
@@ -1658,8 +1769,8 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                           <option value="">Plain</option>
                         </Select>
                         <Select id="storage-mode" label="Storage" value={recipe.storage} onChange={(event) => updateRecipe({ storage: event.target.value })}>
-                          <option value="temporary">Temporary — discard when closed</option>
-                          <option value="browser">Browser — resume by recipe name</option>
+                          <option value="browser">Saved in browser — resumes after refresh</option>
+                          <option value="temporary">Temporary — lost when closed or refreshed</option>
                         </Select>
                       </div>
                     </fieldset>
@@ -1774,6 +1885,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                             record={record}
                             active={activeSpinupId === record.id}
                             missingCount={record.recipe.plugins.filter((id) => !plugins.some((plugin) => plugin.id === id)).length + (record.recipe.theme && !themes.some((theme) => theme.id === record.recipe.theme) ? 1 : 0)}
+                            persistenceLabel={spinupPersistenceLabel(record, readPersistedSites())}
                             onChoose={chooseSpinup}
                             onRemove={removeSpinup}
                           />
@@ -1782,7 +1894,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                     ) : (
                       <div className="rounded-[min(1vw,var(--radius-xl))] bg-neutral-100 p-5">
                         <p className="text-pretty text-base/7 font-medium text-neutral-900 sm:text-sm/6">No past spin-ups yet.</p>
-                        <p className="max-w-[56ch] text-pretty text-base/7 text-neutral-600 sm:text-sm/6">Successful launches will appear here with their recipe, plugin versions, and launch time. The latest 30 stay in this browser.</p>
+                        <p className="max-w-[56ch] text-pretty text-base/7 text-neutral-600 sm:text-sm/6">Successful launches appear here. Browser-saved rows can resume the site; temporary rows only restore the setup. The latest 30 records stay in this browser.</p>
                       </div>
                     )}
                   </div>
@@ -2010,6 +2122,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                 </div>
                 <div className="flex flex-wrap items-center gap-3 pt-5">
                   <button
+                    ref={launchButtonRef}
                     type="submit"
                     disabled={status.running}
                     className="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 py-2.5 pr-4 pl-2.5 text-sm/5 font-medium text-white ring-1 ring-teal-700 hover:bg-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
@@ -2040,62 +2153,86 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
             </form>
           </div>
 
-          <ProgressPanel status={status} error={error} />
+          <LaunchSummary
+            recipe={recipe}
+            selectedPackageLabel={selectedPackageLabel}
+            status={status}
+            error={error}
+            onLaunch={launch}
+          />
         </div>
       </main>
 
       <section className={showPlayground ? 'fixed inset-0 z-50 grid bg-white' : 'hidden'} aria-label="WordPress Playground">
         <div className="grid min-h-0 grid-rows-[2rem_1fr] overflow-hidden bg-white">
           <div className="flex min-w-0 items-center gap-1.5 bg-[#1d2327] px-2 text-white">
+            {confirmingPlaygroundClose ? (
+              <>
+                <p className="min-w-0 flex-1 truncate text-sm/5 font-medium">Discard this temporary site?</p>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingPlaygroundClose(false)}
+                  className="relative shrink-0 rounded-md px-2 py-1 text-sm/5 font-medium text-neutral-200 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
+                >
+                  Keep open
+                </button>
+                <button
+                  type="button"
+                  onClick={closePlayground}
+                  className="relative shrink-0 rounded-md bg-red-500/15 px-2 py-1 text-sm/5 font-medium text-red-100 ring-1 ring-red-300/20 hover:bg-red-500/25 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
+                >
+                  Discard and close
+                </button>
+              </>
+            ) : (
+              <>
             <p className="min-w-0 flex-1 truncate text-sm/5 font-medium">{recipe.name}</p>
-            {status.step > 2 && licensedPackageCount > 0 && (
-              <button
-                ref={licenseButtonRef}
-                type="button"
-                aria-haspopup="dialog"
-                aria-expanded={showLicenseManager}
-                onClick={() => setShowLicenseManager(true)}
-                className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white [anchor-name:--license-trigger]"
-              >
-                <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
-                <KeyIcon className="size-4 shrink-0 fill-neutral-300" />
-                Licenses
-              </button>
-            )}
-            {status.step > 2 && (
-              <button
-                type="button"
-                disabled={snapshotExporting}
-                onClick={exportSiteSnapshot}
-                className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
-                <ArrowDownTrayIcon className="size-4 shrink-0 fill-neutral-300" />
-                {snapshotExporting ? 'Exporting…' : 'Export snapshot'}
-              </button>
-            )}
-            {status.step > 2 && (
-              <button
-                type="button"
-                disabled={updateCheck.checking}
-                onClick={updateAllPackages}
-                className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
-                <ArrowPathIcon className="size-4 shrink-0 fill-neutral-300" />
-                {updateCheck.checking ? 'Updating…' : 'Update all'}
-              </button>
-            )}
+            <button
+              ref={licenseButtonRef}
+              type="button"
+              aria-haspopup="dialog"
+              aria-expanded={showLicenseManager}
+              onClick={() => setShowLicenseManager(true)}
+              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white [anchor-name:--license-trigger]"
+            >
+              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
+              <KeyIcon className="size-4 shrink-0 fill-neutral-300" />
+              Licenses
+            </button>
+            <button
+              type="button"
+              disabled={status.step <= 2 || snapshotExporting}
+              title={status.step <= 2 ? 'Available when setup finishes' : undefined}
+              onClick={exportSiteSnapshot}
+              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
+              <ArrowDownTrayIcon className="size-4 shrink-0 fill-neutral-300" />
+              {snapshotExporting ? 'Exporting…' : 'Export snapshot'}
+            </button>
+            <button
+              type="button"
+              disabled={status.step <= 2 || updateCheck.checking}
+              title={status.step <= 2 ? 'Available when setup finishes' : undefined}
+              onClick={updateAllPackages}
+              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
+              <ArrowPathIcon className="size-4 shrink-0 fill-neutral-300" />
+              {updateCheck.checking ? 'Updating…' : 'Update all'}
+            </button>
             <span className="sr-only" aria-live="polite">{updateCheck.message}</span>
             <button
               type="button"
               aria-label="Close Playground"
-              onClick={() => window.location.reload()}
+              onClick={requestPlaygroundClose}
               className="relative shrink-0 rounded-md p-1.5 text-neutral-300 hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
             >
               <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
               <XMarkIcon className="size-4 shrink-0 fill-current" />
             </button>
+              </>
+            )}
           </div>
           <iframe ref={iframeRef} title="WordPress Playground" className="size-full bg-white" />
         </div>

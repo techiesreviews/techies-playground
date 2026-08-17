@@ -3,7 +3,7 @@ const STABLE_RELEASE = /^\d+\.\d+\.\d+$/
 const MINIMUM_BRANCH = [6, 3]
 
 export const WORDPRESS_VERSION_FALLBACK_OPTIONS = Object.freeze([
-  { value: 'latest', label: 'Latest stable — resolved at launch' },
+  { value: 'latest', label: 'Latest stable — resolved at launch', resolvedVersion: '' },
   { value: '7.0', label: 'WordPress 7.0' },
   { value: '6.9', label: 'WordPress 6.9' },
   { value: '6.8', label: 'WordPress 6.8' },
@@ -48,9 +48,13 @@ export function createWordPressVersionOptions(payload) {
   const latestVersion = latest ? latest.current || latest.version : releases[0]
 
   return [
-    { value: 'latest', label: `Latest stable — ${latestVersion}` },
+    { value: 'latest', label: `Latest stable — ${latestVersion}`, resolvedVersion: latestVersion },
     ...releases.map((version) => ({ value: version, label: `WordPress ${version} (pinned)` })),
   ]
+}
+
+export function getLatestStableWordPressVersion(options) {
+  return options.find(({ value }) => value === 'latest')?.resolvedVersion || ''
 }
 
 export function preserveSelectedWordPressVersion(options, selectedVersion) {

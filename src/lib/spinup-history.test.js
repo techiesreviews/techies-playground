@@ -14,6 +14,7 @@ const recipe = validateRecipe({
   wordpress: 'latest',
   php: '8.4',
   networking: true,
+  storage: 'temporary',
   landingPage: '/wp-admin/plugins.php',
   plugins: ['unblock'],
   theme: '',
@@ -63,4 +64,20 @@ test('records the active premium theme without its ZIP', () => {
 
   assert.deepEqual(records[0].theme, { id: 'novamira-pro', label: 'novamira pro', version: '1.8.0' })
   assert.equal('file' in records[0].theme, false)
+})
+
+test('keeps only the latest launch of the same browser-saved environment', () => {
+  const browserRecipe = { ...recipe, storage: 'browser', wordpress: '7.0.4' }
+  const first = appendSpinup([], {
+    recipe: browserRecipe,
+    plugins: [{ id: 'unblock', label: 'Unblock', version: '1.0.0' }],
+  }, '2026-08-01T12:00:00.000Z', 'first-launch')
+  const relaunched = appendSpinup(first, {
+    recipe: browserRecipe,
+    plugins: [{ id: 'unblock', label: 'Unblock', version: '1.1.0' }],
+  }, '2026-08-01T13:00:00.000Z', 'latest-launch')
+
+  assert.equal(relaunched.length, 1)
+  assert.equal(relaunched[0].id, 'latest-launch')
+  assert.equal(relaunched[0].plugins[0].version, '1.1.0')
 })
