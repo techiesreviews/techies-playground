@@ -1,9 +1,10 @@
 const WORDPRESS_VERSION_API_URL = 'https://api.wordpress.org/core/version-check/1.7/'
-const STABLE_RELEASE = /^\d+\.\d+\.\d+$/
+const STABLE_RELEASE = /^\d+\.\d+(?:\.\d+)?$/
 const MINIMUM_BRANCH = [6, 3]
 
 export const WORDPRESS_VERSION_FALLBACK_OPTIONS = Object.freeze([
   { value: 'latest', label: 'Latest stable — resolved at launch', resolvedVersion: '' },
+  { value: '7.1', label: 'WordPress 7.1' },
   { value: '7.0', label: 'WordPress 7.0' },
   { value: '6.9', label: 'WordPress 6.9' },
   { value: '6.8', label: 'WordPress 6.8' },

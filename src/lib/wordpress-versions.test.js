@@ -11,7 +11,8 @@ test('builds a dynamic latest label and pinned historical releases', () => {
   const options = createWordPressVersionOptions({
     offers: [
       { response: 'autoupdate', current: '6.9.7', locale: 'en_US' },
-      { response: 'upgrade', current: '7.0.4', locale: 'en_US' },
+      { response: 'upgrade', current: '7.1', locale: 'en_US' },
+      { response: 'autoupdate', current: '7.1', locale: 'en_US' },
       { response: 'autoupdate', current: '7.0.4', locale: 'en_US' },
       { response: 'autoupdate', current: '6.3.10', locale: 'en_US' },
       { response: 'autoupdate', current: '6.2.11', locale: 'en_US' },
@@ -19,7 +20,8 @@ test('builds a dynamic latest label and pinned historical releases', () => {
   })
 
   assert.deepEqual(options, [
-    { value: 'latest', label: 'Latest stable — 7.0.4', resolvedVersion: '7.0.4' },
+    { value: 'latest', label: 'Latest stable — 7.1', resolvedVersion: '7.1' },
+    { value: '7.1', label: 'WordPress 7.1 (pinned)' },
     { value: '7.0.4', label: 'WordPress 7.0.4 (pinned)' },
     { value: '6.9.7', label: 'WordPress 6.9.7 (pinned)' },
     { value: '6.3.10', label: 'WordPress 6.3.10 (pinned)' },
@@ -28,8 +30,8 @@ test('builds a dynamic latest label and pinned historical releases', () => {
 
 test('exposes the exact stable release resolved for latest', () => {
   assert.equal(getLatestStableWordPressVersion([
-    { value: 'latest', label: 'Latest stable — 7.0.4', resolvedVersion: '7.0.4' },
-  ]), '7.0.4')
+    { value: 'latest', label: 'Latest stable — 7.1', resolvedVersion: '7.1' },
+  ]), '7.1')
   assert.equal(getLatestStableWordPressVersion([]), '')
 })
 
@@ -47,9 +49,9 @@ test('loads versions from the official endpoint response', async () => {
   const options = await fetchWordPressVersionOptions({
     fetchImpl: async () => ({
       ok: true,
-      json: async () => ({ offers: [{ response: 'upgrade', current: '7.0.4', locale: 'en_US' }] }),
+      json: async () => ({ offers: [{ response: 'upgrade', current: '7.1', locale: 'en_US' }] }),
     }),
   })
 
-  assert.equal(options[0].label, 'Latest stable — 7.0.4')
+  assert.equal(options[0].label, 'Latest stable — 7.1')
 })

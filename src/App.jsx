@@ -1,12 +1,14 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowDownTrayIcon,
+  ArrowLeftIcon,
   ArrowPathIcon,
   ArrowUpTrayIcon,
   BookmarkIcon,
   CheckCircleIcon,
   CheckIcon,
   ChevronDownIcon,
+  ChevronRightIcon,
   CircleStackIcon,
   ClockIcon,
   ClipboardDocumentIcon,
@@ -95,6 +97,54 @@ import {
 const DRAFT_KEY = 'private-playground-launcher:draft'
 const PERSISTED_SITES_KEY = 'private-playground-launcher:persisted-sites'
 const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-storage-default-v1'
+const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
+const CHANGELOG_ENTRIES = [
+  {
+    version: '0.4.0',
+    date: 'August 25, 2026',
+    title: 'Interface refinements',
+    summary: 'A clearer environment setup and a versioned changelog.',
+    changes: [
+      'Added release drill-downs and an unread changelog indicator.',
+      'Reorganized networking and browser-storage controls.',
+      'Refined alignment across environment and saved-recipe rows.',
+    ],
+  },
+  {
+    version: '0.3.0',
+    date: 'August 25, 2026',
+    title: 'WordPress 7.1 support',
+    summary: 'The latest stable WordPress release is ready to launch.',
+    changes: [
+      'Latest stable now resolves to WordPress 7.1.',
+      'Two-part stable releases are recognized alongside patch releases.',
+      'WordPress 7.1 is available when the version API is offline.',
+    ],
+  },
+  {
+    version: '0.2.0',
+    date: 'August 17, 2026',
+    title: 'Persistent playgrounds',
+    summary: 'Browser-saved sites can resume after a refresh.',
+    changes: [
+      'Playgrounds can resume from browser storage after a refresh.',
+      'Site snapshots can be exported from the Playground header.',
+      'Temporary sites warn before their data is discarded.',
+    ],
+  },
+  {
+    version: '0.1.0',
+    date: 'August 12, 2026',
+    title: 'Package search and recipes',
+    summary: 'The first browser-local package and recipe workflow.',
+    changes: [
+      'Plugins and themes can be searched directly from WordPress.org.',
+      'Premium ZIPs stay in the browser-local package vault.',
+      'Safe recipes can be saved, imported, and exported.',
+    ],
+  },
+]
+const CURRENT_CHANGELOG_VERSION = CHANGELOG_ENTRIES[0].version
 
 function readPersistedSites() {
   try {
@@ -151,7 +201,7 @@ function TextField({ id, label, value, onChange, type = 'text', placeholder = ''
 
 function Checkbox({ id, checked, onChange, label, description }) {
   return (
-    <label htmlFor={id} className="flex min-w-0 cursor-pointer items-start gap-3">
+    <label htmlFor={id} className="flex min-w-0 cursor-pointer items-center gap-3">
       <span className="flex h-lh shrink-0 items-center text-base sm:text-sm">
         <span className="group inline-grid size-5 grid-cols-1 sm:size-4">
           <input
@@ -201,10 +251,61 @@ function Radio({ id, name, checked, onChange, label, description }) {
 
 function AppHeader({ onImportRecipe }) {
   const recipeInput = useRef(null)
+  const changelogButton = useRef(null)
+  const changelogPanel = useRef(null)
+  const changelogCloseButton = useRef(null)
+  const [showChangelog, setShowChangelog] = useState(false)
+  const [selectedChangelogVersion, setSelectedChangelogVersion] = useState('')
+  const [hasUnreadChangelog, setHasUnreadChangelog] = useState(() => (
+    localStorage.getItem(CHANGELOG_SEEN_VERSION_KEY) !== CURRENT_CHANGELOG_VERSION
+  ))
+  const selectedChangelog = CHANGELOG_ENTRIES.find(({ version }) => version === selectedChangelogVersion)
+
+  function openChangelog() {
+    setSelectedChangelogVersion('')
+    setShowChangelog(true)
+    localStorage.setItem(CHANGELOG_SEEN_VERSION_KEY, CURRENT_CHANGELOG_VERSION)
+    setHasUnreadChangelog(false)
+  }
+
+  function closeChangelog({ restoreFocus = true } = {}) {
+    setShowChangelog(false)
+    setSelectedChangelogVersion('')
+    if (restoreFocus) changelogButton.current?.focus()
+  }
+
+  useEffect(() => {
+    if (!showChangelog) return undefined
+
+    changelogCloseButton.current?.focus()
+    function handlePointerDown(event) {
+      if (changelogPanel.current?.contains(event.target) || changelogButton.current?.contains(event.target)) return
+      closeChangelog({ restoreFocus: false })
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+    }
+  }, [showChangelog])
+
+  useEffect(() => {
+    if (!showChangelog) return undefined
+    function handleKeyDown(event) {
+      if (event.key !== 'Escape') return
+      if (selectedChangelogVersion) {
+        setSelectedChangelogVersion('')
+      } else {
+        closeChangelog()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [showChangelog, selectedChangelogVersion])
 
   return (
     <header className="border-b border-neutral-950/10 bg-white">
-      <div className="mx-auto flex max-w-7xl items-center gap-4 px-5 py-4 sm:px-8 lg:px-10">
+      <div className="relative mx-auto flex max-w-7xl items-center gap-4 px-5 py-4 sm:px-8 lg:px-10">
         <a href="/" aria-label="Homepage" className="flex min-w-0 flex-1 items-center gap-3 rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600">
           <CircleStackIcon className="size-4 shrink-0 fill-teal-700" />
           <span className="truncate font-semibold text-neutral-950">Techies Playground</span>
@@ -214,6 +315,25 @@ function AppHeader({ onImportRecipe }) {
             <LockClosedIcon className="size-4 shrink-0 fill-teal-700" />
             Browser-local vault
           </p>
+          <button
+            ref={changelogButton}
+            type="button"
+            aria-label="View changelog"
+            aria-haspopup="dialog"
+            aria-expanded={showChangelog}
+            title={hasUnreadChangelog ? 'Changelog — new changes' : 'Changelog'}
+            onClick={() => showChangelog ? closeChangelog() : openChangelog()}
+            className="relative shrink-0 rounded-lg bg-white p-2 text-neutral-600 ring-1 ring-neutral-950/10 hover:bg-neutral-50 hover:text-neutral-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+          >
+            <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
+            <ClockIcon className="size-4 shrink-0 fill-current" />
+            {hasUnreadChangelog && (
+              <>
+                <span className="absolute top-1 right-1 size-2 rounded-full bg-teal-600 ring-2 ring-white" aria-hidden="true" />
+                <span className="sr-only">New changes available</span>
+              </>
+            )}
+          </button>
           <button
             type="button"
             onClick={() => recipeInput.current?.click()}
@@ -226,6 +346,83 @@ function AppHeader({ onImportRecipe }) {
           </button>
           <input ref={recipeInput} type="file" name="recipe" accept="application/json,.json" className="hidden" onChange={onImportRecipe} />
         </div>
+        {showChangelog && (
+          <section
+            ref={changelogPanel}
+            role="dialog"
+            aria-labelledby="changelog-title"
+            className="absolute top-[calc(100%+0.5rem)] right-5 z-40 grid max-h-[min(38rem,calc(100dvh-5rem))] w-[min(26rem,calc(100vw-2.5rem))] grid-rows-[auto_1fr] overflow-hidden rounded-[min(2vw,var(--radius-xl))] bg-white shadow-xl ring-1 ring-neutral-950/10 sm:right-8 lg:right-10"
+          >
+            <div className="flex min-w-0 items-center gap-2 border-b border-neutral-950/10 px-4 py-3">
+              {selectedChangelog ? (
+                <button
+                  type="button"
+                  aria-label="Back to all releases"
+                  onClick={() => setSelectedChangelogVersion('')}
+                  className="relative shrink-0 rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+                >
+                  <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
+                  <ArrowLeftIcon className="size-4 shrink-0 fill-current" />
+                </button>
+              ) : (
+                <ClockIcon className="size-4 shrink-0 fill-teal-700" />
+              )}
+              <h2 id="changelog-title" className="min-w-0 flex-1 text-lg font-semibold text-balance text-neutral-950">{selectedChangelog ? `Release ${selectedChangelog.version}` : 'Changelog'}</h2>
+              <button
+                ref={changelogCloseButton}
+                type="button"
+                aria-label="Close changelog"
+                onClick={() => closeChangelog()}
+                className="relative shrink-0 rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+              >
+                <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
+                <XMarkIcon className="size-4 shrink-0 fill-current" />
+              </button>
+            </div>
+            {selectedChangelog ? (
+              <article className="grid content-start gap-5 overflow-y-auto p-4">
+                <div className="grid gap-2">
+                  <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+                    <p className="w-fit rounded-md bg-teal-50 px-2 py-1 font-mono text-base/7 font-medium tabular-nums text-teal-800 sm:text-sm/6">v{selectedChangelog.version}</p>
+                    <p className="tabular-nums text-base/7 text-neutral-500 sm:text-sm/6">{selectedChangelog.date}</p>
+                  </div>
+                  <h3 className="text-xl font-semibold text-balance text-neutral-950">{selectedChangelog.title}</h3>
+                  <p className="text-pretty text-base/7 text-neutral-600 sm:text-sm/6">{selectedChangelog.summary}</p>
+                </div>
+                <ul role="list" className="grid gap-3 border-t border-neutral-950/8 pt-4">
+                  {selectedChangelog.changes.map((change) => (
+                    <li key={change} className="flex min-w-0 items-start gap-2 text-base/7 text-neutral-700 sm:text-sm/6">
+                      <CheckIcon className="size-4 h-lh shrink-0 fill-teal-700" />
+                      <span className="min-w-0">{change}</span>
+                    </li>
+                  ))}
+                </ul>
+              </article>
+            ) : (
+              <ol role="list" className="overflow-y-auto px-2 py-2">
+                {CHANGELOG_ENTRIES.map((entry) => (
+                  <li key={entry.version}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedChangelogVersion(entry.version)}
+                      className="flex w-full min-w-0 items-center gap-3 rounded-lg py-3 pr-2 pl-3 text-left text-base/7 hover:bg-neutral-50 focus-visible:outline-2 -outline-offset-1 focus-visible:outline-teal-600 sm:text-sm/6"
+                    >
+                      <span className="grid min-w-0 flex-1 gap-1">
+                        <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
+                          <span className="font-mono font-medium tabular-nums text-teal-800">v{entry.version}</span>
+                          <span className="font-semibold text-neutral-950">{entry.title}</span>
+                        </span>
+                        <span className="text-neutral-600">{entry.summary}</span>
+                        <span className="tabular-nums text-neutral-500">{entry.date}</span>
+                      </span>
+                      <ChevronRightIcon className="size-4 shrink-0 fill-neutral-400" />
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </section>
+        )}
       </div>
     </header>
   )
@@ -239,39 +436,41 @@ function SavedRecipeRow({ record, active, editing, missingCount, onChoose, onEdi
     themeCount ? '1 theme' : '',
   ].filter(Boolean).join(', ')
   return (
-    <div className={`group relative min-w-0 border-t border-neutral-950/8 py-4 first:border-t-0 first:pt-0 last:pb-0 ${active || editing ? 'text-neutral-950' : 'text-neutral-700'}`}>
-      <button
-        type="button"
-        onClick={() => onChoose(record)}
-        className={`w-full min-w-0 rounded-lg p-2 pr-20 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 ${active || editing ? 'bg-teal-50' : 'hover:bg-neutral-50'}`}
-      >
-        <span className="flex min-w-0 items-start gap-2">
-          <BookmarkIcon className={`size-4 h-lh shrink-0 ${active ? 'fill-teal-700' : 'fill-neutral-400'}`} />
-          <span className="min-w-0">
-            <span className="font-medium">{record.recipe.name}</span>
-            <span className="text-neutral-600"> — {packageSummary}, WP {record.recipe.wordpress}, PHP {record.recipe.php}</span>
-            {missingCount > 0 && <span className="text-amber-700"> — {missingCount} local ZIP{missingCount === 1 ? '' : 's'} missing</span>}
+    <div className={`group min-w-0 border-t border-neutral-950/8 py-4 first:border-t-0 first:pt-0 last:pb-0 ${active || editing ? 'text-neutral-950' : 'text-neutral-700'}`}>
+      <div className="relative min-w-0">
+        <button
+          type="button"
+          onClick={() => onChoose(record)}
+          className={`w-full min-w-0 rounded-lg p-2 pr-20 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 ${active || editing ? 'bg-teal-50' : 'hover:bg-neutral-50'}`}
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            <BookmarkIcon className={`size-4 h-lh shrink-0 ${active ? 'fill-teal-700' : 'fill-neutral-400'}`} />
+            <span className="min-w-0">
+              <span className="font-medium">{record.recipe.name}</span>
+              <span className="text-neutral-600"> — {packageSummary}, WP {record.recipe.wordpress}, PHP {record.recipe.php}</span>
+              {missingCount > 0 && <span className="text-amber-700"> — {missingCount} local ZIP{missingCount === 1 ? '' : 's'} missing</span>}
+            </span>
           </span>
-        </span>
-      </button>
-      <button
-        type="button"
-        aria-label={`Edit ${record.recipe.name}`}
-        onClick={() => onEdit(record)}
-        className="absolute top-1/2 right-10 -translate-y-1/2 rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-teal-700 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 pointer-fine:pointer-events-none pointer-fine:opacity-0 pointer-fine:group-hover:pointer-events-auto pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:pointer-events-auto pointer-fine:group-focus-within:opacity-100"
-      >
-        <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
-        <PencilSquareIcon className="size-4 shrink-0 fill-current" />
-      </button>
-      <button
-        type="button"
-        aria-label={`Remove ${record.recipe.name} from saved recipes`}
-        onClick={() => onRemove(record.id)}
-        className="absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-red-700 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 pointer-fine:pointer-events-none pointer-fine:opacity-0 pointer-fine:group-hover:pointer-events-auto pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:pointer-events-auto pointer-fine:group-focus-within:opacity-100"
-      >
-        <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
-        <TrashIcon className="size-4 shrink-0 fill-current" />
-      </button>
+        </button>
+        <button
+          type="button"
+          aria-label={`Edit ${record.recipe.name}`}
+          onClick={() => onEdit(record)}
+          className="absolute top-1/2 right-10 -translate-y-1/2 rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-teal-700 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 pointer-fine:pointer-events-none pointer-fine:opacity-0 pointer-fine:group-hover:pointer-events-auto pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:pointer-events-auto pointer-fine:group-focus-within:opacity-100"
+        >
+          <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
+          <PencilSquareIcon className="size-4 shrink-0 fill-current" />
+        </button>
+        <button
+          type="button"
+          aria-label={`Remove ${record.recipe.name} from saved recipes`}
+          onClick={() => onRemove(record.id)}
+          className="absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-red-700 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 pointer-fine:pointer-events-none pointer-fine:opacity-0 pointer-fine:group-hover:pointer-events-auto pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:pointer-events-auto pointer-fine:group-focus-within:opacity-100"
+        >
+          <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
+          <TrashIcon className="size-4 shrink-0 fill-current" />
+        </button>
+      </div>
     </div>
   )
 }
@@ -1705,7 +1904,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                   <p className="font-mono text-base/7 text-neutral-500 sm:text-sm/6">EPHEMERAL + SQLITE</p>
                 </div>
                 <div className="@container pt-5">
-                  <div className="grid gap-4 @md:grid-cols-2">
+                  <div className="grid gap-4 @md:grid-cols-2 @md:items-start">
                     <Select
                       id="wordpress-version"
                       label="WordPress"
@@ -1725,16 +1924,16 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                     <Select id="php-version" label="PHP" value={recipe.php} onChange={(event) => updateRecipe({ php: event.target.value })}>
                       {['8.5', '8.4', '8.3', '8.2', '8.1', '8.0', '7.4'].map((version) => <option key={version} value={version}>{version}</option>)}
                     </Select>
+                    <div className="flex justify-start text-base/7 @md:col-span-2 sm:text-sm/6">
+                      <Checkbox
+                        id="storage-mode"
+                        checked={recipe.storage === 'browser'}
+                        onChange={(event) => updateRecipe({ storage: event.target.checked ? 'browser' : 'temporary' })}
+                        label="Save playground in browser"
+                        description="Resume this site after closing or refreshing the page."
+                      />
+                    </div>
                   </div>
-                </div>
-                <div className="pt-5 text-base/7 sm:text-sm/6">
-                  <Checkbox
-                    id="networking"
-                    checked={recipe.networking}
-                    onChange={(event) => updateRecipe({ networking: event.target.checked })}
-                    label="Allow outbound networking"
-                    description="Usually required when a plugin or theme contacts its license server."
-                  />
                 </div>
                 <details className="group mt-5 rounded-xl bg-white ring-1 ring-neutral-950/10 open:shadow-sm">
                   <summary className="flex cursor-pointer list-none items-center gap-3 rounded-xl px-4 py-3 text-base/7 font-medium text-neutral-900 outline-none marker:hidden hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 sm:text-sm/6 [&::-webkit-details-marker]:hidden">
@@ -1768,15 +1967,18 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                           <option value="/%year%/%monthnum%/%postname%/">Month and name</option>
                           <option value="">Plain</option>
                         </Select>
-                        <Select id="storage-mode" label="Storage" value={recipe.storage} onChange={(event) => updateRecipe({ storage: event.target.value })}>
-                          <option value="browser">Saved in browser — resumes after refresh</option>
-                          <option value="temporary">Temporary — lost when closed or refreshed</option>
-                        </Select>
                       </div>
                     </fieldset>
 
                     <fieldset className="grid gap-3 border-t border-neutral-950/10 pt-5 text-base/7 sm:text-sm/6">
                       <legend className="mb-1 text-base/7 font-semibold text-neutral-950 sm:text-sm/6">Runtime features</legend>
+                      <Checkbox
+                        id="networking"
+                        checked={recipe.networking}
+                        onChange={(event) => updateRecipe({ networking: event.target.checked })}
+                        label="Allow outbound networking"
+                        description="Usually required when a plugin or theme contacts its license server."
+                      />
                       <Checkbox id="multisite" checked={recipe.multisite} onChange={(event) => updateRecipe({ multisite: event.target.checked })} label="Enable Multisite" description="Configured when a new site is created." />
                       <Checkbox id="intl" checked={recipe.intl} onChange={(event) => updateRecipe({ intl: event.target.checked })} label="Enable PHP Intl" description="Adds locale-aware PHP formatting support." />
                       <Checkbox id="wp-cli" checked={recipe.wpCli} onChange={(event) => updateRecipe({ wpCli: event.target.checked })} label="Load WP-CLI" description="Makes WP-CLI available to Playground automation." />
