@@ -43,3 +43,4 @@ Prefer, in order:
 - [2026-08-28-unified-plugin-checkmarks.md](2026-08-28-unified-plugin-checkmarks.md) — shared round plugin selection indicators.
 - [2026-08-28-uploaded-plugin-metadata-layout.md](2026-08-28-uploaded-plugin-metadata-layout.md) — two-line uploaded-plugin metadata with internal IDs hidden.
 - [2026-08-28-release-0.6.0.md](2026-08-28-release-0.6.0.md) — publication of release 0.6.0 through the GitHub deployment pipeline.
+- [2026-08-28-release-0.6.0-deployment-blocked.md](2026-08-28-release-0.6.0-deployment-blocked.md) — deployment investigation showing the missing Cloudflare API token and unchanged live bundle.

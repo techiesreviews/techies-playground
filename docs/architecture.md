@@ -99,7 +99,7 @@ The Worker adds:
 - `X-Content-Type-Options: nosniff`.
 - `X-Frame-Options: SAMEORIGIN`.
 
-The production workflow runs only in `techiesreviews/techies-playground`, for actor `techiesreviews`, with deployment explicitly enabled. It installs with `npm ci`, tests, builds, then runs Wrangler through the pinned Cloudflare action.
+The production workflow runs only in `techiesreviews/techies-playground`, for actor `techiesreviews`, with repository variable `CLOUDFLARE_DEPLOY_ENABLED` explicitly set to `true`. It requires the `CLOUDFLARE_ACCOUNT_ID` repository variable and a non-empty `CLOUDFLARE_API_TOKEN` Actions secret. It installs with `npm ci`, tests, builds, then runs Wrangler through the pinned Cloudflare action. Keep the deployment gate disabled when credentials are unavailable; a missing token allows tests/build to pass but makes the Cloudflare action fail before upload.
 
 The daily WordPress release workflow checks the official API. A new release branch causes a minor app-version bump, fallback entry, lockfile update, and changelog entry on a reviewable automation branch. It tests/builds before opening or refreshing a pull request.
 
