@@ -2,7 +2,13 @@
 
 A browser-local control panel for starting WordPress Playground with premium plugin ZIPs you own.
 
+## Project documentation
+
+Start with [CONTEXT.md](CONTEXT.md) for the product vocabulary, invariants, and system map. The [documentation index](docs/README.md) links the exact rebuild specification, architecture, data contracts, test matrix, product history, and the change/experiment ledger used to record what was tried, kept, removed, or found inconclusive.
+
 The WordPress selector refreshes stable versions from the official WordPress.org update API at runtime. At launch, the `latest` option is resolved and verified against the current exact stable release, while exact patch versions remain available for reproducible compatibility tests. A built-in list keeps the launcher usable offline.
+
+The live selector therefore follows new stable releases without a deployment. A daily GitHub Actions check also runs `npm run sync:wordpress`; when WordPress.org reports a new release branch, it opens a pull request that updates the offline fallback, bumps the app minor version, and adds a changelog entry. Merging that reviewed pull request uses the normal production pipeline.
 
 ## Security boundary
 

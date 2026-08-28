@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  fetchFeaturedWordPressOrgPlugins,
   isWordPressOrgPluginSlug,
   normalizeWordPressOrgPluginResults,
   searchWordPressOrgPlugins,
@@ -33,6 +34,13 @@ test('normalizes safe plugin search results', () => {
   }])
 })
 
+test('decodes entities in plugin names from the directory', () => {
+  const [plugin] = normalizeWordPressOrgPluginResults({ plugins: [{
+    slug: 'example', name: 'Forms &#8211; Surveys &amp; more',
+  }] })
+  assert.equal(plugin.name, 'Forms – Surveys & more')
+})
+
 test('rejects artwork outside the official plugin image host', () => {
   const [plugin] = normalizeWordPressOrgPluginResults({ plugins: [{
     slug: 'example', name: 'Example', icons: { svg: 'https://tracker.example/icon.svg' },
@@ -52,4 +60,19 @@ test('searches with a compact official-directory request', async () => {
   assert.match(requestedUrl, /^https:\/\/api\.wordpress\.org\/plugins\/info\/1\.2\//)
   assert.match(requestedUrl, /request%5Bsearch%5D=woo\+commerce/)
   assert.equal(results[0].slug, 'woocommerce')
+})
+
+test('requests the featured WordPress.org plugins with icons', async () => {
+  let requestedUrl = ''
+  await fetchFeaturedWordPressOrgPlugins({
+    fetchImpl: async (url) => {
+      requestedUrl = url
+      return { ok: true, json: async () => ({ plugins: [] }) }
+    },
+  })
+
+  assert.match(requestedUrl, /request%5Bbrowse%5D=featured/)
+  assert.match(requestedUrl, /request%5Bper_page%5D=8/)
+  assert.match(requestedUrl, /request%5Bfields%5D%5Bicons%5D=1/)
+  assert.doesNotMatch(requestedUrl, /request%5Bsearch%5D/)
 })

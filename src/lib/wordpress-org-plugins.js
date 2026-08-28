@@ -12,6 +12,17 @@ function normalizeImageUrl(value) {
   }
 }
 
+function decodeHtmlEntities(value) {
+  return value
+    .replace(/&#(\d+);/g, (_, codePoint) => String.fromCodePoint(Number(codePoint)))
+    .replace(/&#x([\da-f]+);/gi, (_, codePoint) => String.fromCodePoint(Number.parseInt(codePoint, 16)))
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;|&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+}
+
 export function isWordPressOrgPluginSlug(value) {
   return typeof value === 'string' && value.length <= 100 && PLUGIN_SLUG.test(value)
 }
@@ -23,7 +34,7 @@ export function normalizeWordPressOrgPluginResults(payload) {
     if (!plugin || !isWordPressOrgPluginSlug(plugin.slug) || typeof plugin.name !== 'string') return []
     return [{
       slug: plugin.slug,
-      name: plugin.name.trim() || plugin.slug,
+      name: decodeHtmlEntities(plugin.name.trim()) || plugin.slug,
       version: typeof plugin.version === 'string' ? plugin.version : '',
       author: typeof plugin.author === 'string' ? plugin.author.replace(/<[^>]*>/g, '').trim() : '',
       activeInstalls: Number.isSafeInteger(plugin.active_installs) ? plugin.active_installs : 0,
@@ -33,26 +44,38 @@ export function normalizeWordPressOrgPluginResults(payload) {
   })
 }
 
-export async function searchWordPressOrgPlugins(query, { signal, fetchImpl = fetch } = {}) {
-  const search = String(query || '').trim()
-  if (search.length < 2) return []
-
+function buildPluginDirectoryParameters({ search = '', browse = '', perPage = 12 }) {
   const parameters = new URLSearchParams({
     action: 'query_plugins',
-    'request[search]': search,
     'request[page]': '1',
-    'request[per_page]': '12',
+    'request[per_page]': String(perPage),
     'request[fields][description]': '0',
     'request[fields][short_description]': '0',
     'request[fields][sections]': '0',
     'request[fields][icons]': '1',
     'request[fields][banners]': '0',
   })
+  if (search) parameters.set('request[search]', search)
+  if (browse) parameters.set('request[browse]', browse)
+  return parameters
+}
+
+async function queryWordPressOrgPlugins(parameters, { signal, fetchImpl = fetch } = {}) {
   const response = await fetchImpl(`${PLUGIN_DIRECTORY_API}?${parameters}`, {
     signal,
     cache: 'no-store',
     headers: { Accept: 'application/json' },
   })
-  if (!response.ok) throw new Error(`WordPress.org plugin search failed with status ${response.status}.`)
+  if (!response.ok) throw new Error(`WordPress.org plugin request failed with status ${response.status}.`)
   return normalizeWordPressOrgPluginResults(await response.json())
+}
+
+export function fetchFeaturedWordPressOrgPlugins(options = {}) {
+  return queryWordPressOrgPlugins(buildPluginDirectoryParameters({ browse: 'featured', perPage: 8 }), options)
+}
+
+export async function searchWordPressOrgPlugins(query, { signal, fetchImpl = fetch } = {}) {
+  const search = String(query || '').trim()
+  if (search.length < 2) return []
+  return queryWordPressOrgPlugins(buildPluginDirectoryParameters({ search }), { signal, fetchImpl })
 }

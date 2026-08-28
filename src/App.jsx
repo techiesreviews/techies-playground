@@ -43,7 +43,7 @@ import {
   preserveSelectedWordPressVersion,
   WORDPRESS_VERSION_FALLBACK_OPTIONS,
 } from './lib/wordpress-versions'
-import { searchWordPressOrgPlugins } from './lib/wordpress-org-plugins'
+import { fetchFeaturedWordPressOrgPlugins, searchWordPressOrgPlugins } from './lib/wordpress-org-plugins'
 import { searchWordPressOrgThemes } from './lib/wordpress-org-themes'
 import {
   parseSavedRecipes,
@@ -99,6 +99,20 @@ const PERSISTED_SITES_KEY = 'private-playground-launcher:persisted-sites'
 const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-storage-default-v1'
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
+  {
+    version: '0.5.0',
+    date: 'August 28, 2026',
+    title: 'Release tracking and plugin discovery',
+    summary: 'Stable WordPress releases stay current and featured plugins are easier to discover.',
+    changes: [
+      'Latest stable is refreshed from WordPress.org at page load and launch.',
+      'A daily release check prepares offline fallback and changelog updates.',
+      'New release branches open a tested, reviewable update pull request.',
+      'Featured WordPress.org plugins appear before you start a search.',
+      'Plugin directory names now render encoded punctuation correctly.',
+      'Project documentation now records architecture, rebuild requirements, tests, and experiment outcomes.',
+    ],
+  },
   {
     version: '0.4.0',
     date: 'August 25, 2026',
@@ -1150,6 +1164,21 @@ function LaunchSummary({ recipe, selectedPackageLabel, status, error, onLaunch }
   )
 }
 
+function FeaturedPluginCard({ plugin, selected, onToggle }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onToggle(plugin.slug)}
+      aria-pressed={selected}
+      className={`relative flex min-w-0 items-center gap-3 rounded-xl p-3 text-left ring-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 ${selected ? 'bg-teal-50 text-teal-950 ring-teal-700/30' : 'bg-white text-neutral-950 ring-neutral-950/8 hover:bg-neutral-50'}`}
+    >
+      <PackageArtwork src={plugin.image} label={plugin.name} kind="plugin" />
+      <span className="line-clamp-2 min-w-0 flex-1 pr-3 text-base/6 font-medium sm:text-sm/5" title={plugin.name}>{plugin.name}</span>
+      {selected && <CheckCircleIcon className="absolute top-2 right-2 size-4 shrink-0 fill-teal-700" />}
+    </button>
+  )
+}
+
 export default function App() {
   const iframeRef = useRef(null)
   const launchButtonRef = useRef(null)
@@ -1162,6 +1191,8 @@ export default function App() {
   const launchIdRef = useRef(0)
   const [plugins, setPlugins] = useState([])
   const [pluginSearch, setPluginSearch] = useState('')
+  const [featuredPlugins, setFeaturedPlugins] = useState([])
+  const [featuredPluginState, setFeaturedPluginState] = useState({ loading: true, message: '' })
   const [repositoryPluginResults, setRepositoryPluginResults] = useState([])
   const [repositoryPluginSearchState, setRepositoryPluginSearchState] = useState({ loading: false, message: '' })
   const [pluginRecency, setPluginRecency] = useState(() => parsePluginRecency(localStorage.getItem(PLUGIN_RECENCY_KEY)))
@@ -1247,6 +1278,19 @@ export default function App() {
   useEffect(() => {
     listPlugins().then(setPlugins).catch((caught) => setError(caught.message))
     listThemes().then(setThemes).catch((caught) => setError(caught.message))
+  }, [])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    fetchFeaturedWordPressOrgPlugins({ signal: controller.signal })
+      .then((results) => {
+        setFeaturedPlugins(results)
+        setFeaturedPluginState({ loading: false, message: results.length ? '' : 'No featured plugins are available right now.' })
+      })
+      .catch((caught) => {
+        if (caught.name !== 'AbortError') setFeaturedPluginState({ loading: false, message: 'Featured plugins are temporarily unavailable.' })
+      })
+    return () => controller.abort()
   }, [])
 
   useEffect(() => {
@@ -2263,7 +2307,29 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                         )}
                       </section>
 
-                      {(pluginSearch.trim().length >= 2 || recipe.repositoryPlugins.length > 0) && (
+                      {!pluginSearch.trim() ? (
+                        <section aria-labelledby="featured-plugins-heading" className="grid gap-2" aria-live="polite" aria-busy={featuredPluginState.loading}>
+                          <h3 id="featured-plugins-heading" className="font-mono text-base/7 tracking-wide text-neutral-500 sm:text-sm/6">FEATURED ON WORDPRESS.ORG</h3>
+                          {featuredPluginState.loading ? (
+                            <div className="rounded-[min(1vw,var(--radius-xl))] bg-neutral-100 p-5 text-base/7 text-neutral-600 sm:text-sm/6">Loading featured plugins…</div>
+                          ) : featuredPlugins.length ? (
+                            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                              {featuredPlugins.map((plugin) => (
+                                <FeaturedPluginCard
+                                  key={plugin.slug}
+                                  plugin={plugin}
+                                  selected={recipe.repositoryPlugins.includes(plugin.slug)}
+                                  onToggle={toggleRepositoryPlugin}
+                                />
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="rounded-[min(1vw,var(--radius-xl))] bg-neutral-100 p-5">
+                              <p className="text-pretty text-base/7 font-medium text-neutral-900 sm:text-sm/6">{featuredPluginState.message}</p>
+                            </div>
+                          )}
+                        </section>
+                      ) : pluginSearch.trim().length >= 2 || recipe.repositoryPlugins.length > 0 ? (
                         <section aria-labelledby="directory-plugins-heading" className="grid gap-2" aria-live="polite" aria-busy={repositoryPluginSearchState.loading}>
                           <h3 id="directory-plugins-heading" className="font-mono text-base/7 tracking-wide text-neutral-500 sm:text-sm/6">WORDPRESS.ORG PLUGINS</h3>
                           {repositoryPluginSearchState.loading ? (
@@ -2285,6 +2351,8 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                             </div>
                           )}
                         </section>
+                      ) : (
+                        <div className="rounded-[min(1vw,var(--radius-xl))] bg-neutral-100 p-5 text-base/7 text-neutral-600 sm:text-sm/6">Type at least 2 characters to search WordPress.org.</div>
                       )}
                     </div>
                   </div>
