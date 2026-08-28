@@ -13,7 +13,7 @@ This history combines Git commits and the user-facing `CHANGELOG_ENTRIES`. It re
 | 2026-08-25 | changelog 0.3.0 | Added WordPress 7.1 recognition and two-part release handling. | Kept. |
 | 2026-08-25 | `9f51658`, changelog 0.4.0 | Added in-app versioned changelog and reorganized/refined environment and saved-recipe UI. | Kept. Earlier hero copy and layout details were replaced. |
 | 2026-08-27/28 | `dc6efb9`, changelog 0.5.0 | Added daily WordPress release-sync PR automation, featured WordPress.org plugins, HTML-entity decoding for plugin names, and the durable documentation/change-record system. | Kept and deployed through the GitHub pipeline. |
-| 2026-08-28 | `86b454a`, changelog 0.6.0 | Added a site-styled GitHub Star control, moved featured plugins ahead of uploads in the empty state, unified plugin selection cards/check-circles, and simplified uploaded-plugin metadata. | Source is on `main`; Cloudflare publication is blocked because the repository has no `CLOUDFLARE_API_TOKEN` Actions secret. The deployment gate was restored to `false` after the failed run. |
+| 2026-08-28 | `86b454a`, changelog 0.6.0, Actions run `33205835385` | Added a site-styled GitHub Star control, moved featured plugins ahead of uploads in the empty state, unified plugin selection cards/check-circles, and simplified uploaded-plugin metadata. | Kept and deployed to `play.techies.tools`. An initial missing-token failure is preserved in its own change record; the credential was added, a dispatched run succeeded, and the deployment gate was restored to `false`. |
 
 ## Superseded behavior
 
