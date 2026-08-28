@@ -16,6 +16,7 @@ The header contains:
 
 - Techies Playground identity linking to `/`.
 - “Browser-local vault” security cue on non-small screens.
+- A site-styled GitHub Star link immediately before the changelog control. It targets `techiesreviews/techies-playground`, matches the app's white rounded surfaces and teal focus treatment, and shows the public star count when GitHub's API is available.
 - A changelog button with an unread teal dot when the newest version has not been viewed in this browser.
 - An Import recipe button backed by a hidden JSON file input.
 
@@ -62,13 +63,13 @@ Each row shows name, plugin/theme count, WordPress/PHP versions, and missing loc
 
 #### Plugins
 
-The user can upload multiple ZIPs. A valid upload must have a `.zip` filename and a ZIP file signature. Version suffixes are removed from the stable vault ID so a newer ZIP can replace an older file without breaking recipes. The UI shows label, optional version hint, size, browser-local note, and stable ID.
+The user can upload multiple ZIPs. A valid upload must have a `.zip` filename and a ZIP file signature. Version suffixes are removed from the stable vault ID so a newer ZIP can replace an older file without breaking recipes. The stable ID remains an internal recipe/vault reference rather than visible card metadata. The UI shows the label on the first line, then the optional version hint, size, and browser-local note on a second line without a leading dash.
 
 Uploaded plugins can be selected independently, replaced in place, or deleted. Deleting also removes that ID from the current recipe and its recency preference.
 
 The same search field filters uploaded plugins immediately and queries WordPress.org after 350 ms when the trimmed query contains at least two characters. Uploaded results appear first. Directory results show sanitized name, slug, version, author, active installs, tested WordPress version, and official icon when present.
 
-With an empty search, fetch and show eight featured WordPress.org plugins as selectable cards. Failures produce a non-blocking unavailable message. Selected directory slugs remain visible even when they are absent from the latest result set.
+With an empty search, fetch and show eight featured WordPress.org plugins as selectable cards before the uploaded-plugin section. Uploaded plugins and WordPress.org search results use the same card surface, selected teal background/ring, and round teal check-circle as the featured cards, while uploaded-package replacement and deletion remain separate actions. Once the user enters a query, uploaded matches return to the first position and the featured grid is replaced by the directory search state or results. Failures produce a non-blocking unavailable message. Selected directory slugs remain visible even when they are absent from the latest result set.
 
 Multiple WordPress.org plugins may be selected. They never replace similarly named local packages.
 

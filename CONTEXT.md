@@ -53,6 +53,7 @@ User
        -> IndexedDB package vault: plugin/theme ZIPs
        -> IndexedDB encrypted license vault
        -> WordPress.org public APIs: versions, plugins, themes
+       -> GitHub public API: repository star count
        -> embedded WordPress Playground client
             -> in-memory WordPress + SQLite
             -> optional OPFS `/wordpress` persistence
@@ -84,7 +85,7 @@ Git push to `main`
 - `src/App.jsx` is deliberately the orchestration and presentation center. Pure data rules live in `src/lib` and are tested with Node's built-in test runner.
 - `worker.js` only serves built assets through a Cloudflare Worker and adds security headers.
 - There is no router, global state library, server database, analytics client, or authentication layer.
-- The source-controlled app version is `0.5.0` in the current working tree.
+- The source-controlled app version is `0.6.0` in the current working tree.
 
 ## Where to look next
 

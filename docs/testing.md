@@ -26,7 +26,7 @@ For a deployment preparation, also run `npm run deploy:check`. Per `AGENTS.md`, 
 
 ## Current automated suite
 
-The suite uses Node's built-in test runner and contains 48 tests in the current working tree.
+The suite uses Node's built-in test runner and contains 50 tests in the current working tree.
 
 | Test module | Coverage |
 | --- | --- |
@@ -34,6 +34,7 @@ The suite uses Node's built-in test runner and contains 48 tests in the current 
 | `wordpress-versions.test.js` | Live version normalization, exact latest resolution, preserved saved versions, fetch contract. |
 | `wordpress-org-plugins.test.js` | Slugs, normalized/sanitized results, entity decoding, artwork host allowlist, search and featured request parameters. |
 | `wordpress-org-themes.test.js` | Slugs, HTTPS screenshot normalization, artwork host allowlist, search request. |
+| `github-repository.test.js` | Public star-count normalization and the fixed Techies Playground repository API request. |
 | `vault.test.js` | Separate theme storage and IndexedDB transaction completion. |
 | `license-vault.test.js` | Authenticated encryption round trip, wrong-password failure, deletion transaction completion. |
 | `saved-recipes.test.js` | Upsert, rename-replace, safe round trip, invalid-record dropping. |
@@ -52,9 +53,10 @@ Use synthetic ZIPs/test packages and non-production vendor licenses.
 | --- | --- | --- |
 | Initial state | Clear origin data and load the app. | Browser storage is default, saved library/history are empty, featured plugins load or show a non-blocking failure. |
 | Responsive shell | Inspect at 320 px, tablet, and desktop. | No horizontal page overflow; summary stacks then becomes sticky two-column; tabs remain scrollable. |
+| GitHub star button | Load the header at mobile and desktop widths, then activate it with pointer and keyboard. | The site-styled control appears immediately before the changelog, targets `techiesreviews/techies-playground`, shows the public count when available, remains a usable link without the count, and does not overflow the header. |
 | Keyboard | Traverse header, environment, tabs, rows, and dialogs using keyboard only. | Visible focus, meaningful names, Escape/outside-close behavior, correct focus restoration. |
-| Local plugin | Upload valid and invalid ZIP files, select, replace with versioned filename, refresh. | Invalid signature rejected; valid File persists; ID stays stable across replacement. |
-| Directory plugin | Search with 0, 1, and 2+ characters and select a result. | Featured state at empty query, hint at 1 character, debounced official results at 2+, selected slug persists in recipe. |
+| Local plugin | Upload valid and invalid ZIP files, select, replace with versioned filename, refresh. | Invalid signature rejected; valid File persists; internal ID stays stable across replacement but is not repeated on the card; metadata starts on a dash-free second line; selected card uses the featured-plugin teal surface/ring and check-circle while replace and delete stay operable. |
+| Directory plugin | Search with 0, 1, and 2+ characters and select a result. | Empty query orders featured plugins before uploads; 1 character orders uploads before the hint; 2+ characters orders uploaded matches before debounced official results; selected slug persists in recipe and uses the same teal surface/ring and check-circle in featured and search views. |
 | Theme exclusivity | Alternate default, local, and directory themes. | Exactly one source is selected; opposing theme field is cleared. |
 | Recipe | Save, rename-update, export, import, remove a required ZIP, launch. | No duplicate old name; JSON is normalized/secret-free; missing ZIP blocks launch with ID. |
 | Latest WordPress | Launch `latest` with network available, then simulate version API failure. | Exact version is verified when available; launch fails closed if latest cannot be confirmed. |

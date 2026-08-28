@@ -35,3 +35,11 @@ Prefer, in order:
 
 - [2026-08-28-current-baseline.md](2026-08-28-current-baseline.md) — reconstructed baseline and documentation pass.
 - [2026-08-28-release-0.5.0.md](2026-08-28-release-0.5.0.md) — publication of release 0.5.0 through the GitHub deployment pipeline.
+- [2026-08-28-featured-plugins-first.md](2026-08-28-featured-plugins-first.md) — featured WordPress.org plugins before uploads in the empty state.
+- [2026-08-28-github-star-link.md](2026-08-28-github-star-link.md) — initial GitHub repository link experiment.
+- [2026-08-28-official-github-star-button.md](2026-08-28-official-github-star-button.md) — official GitHub Buttons embed experiment.
+- [2026-08-28-site-styled-github-stars.md](2026-08-28-site-styled-github-stars.md) — final site-styled GitHub Star control and public count.
+- [2026-08-28-unified-plugin-selection.md](2026-08-28-unified-plugin-selection.md) — shared selection surfaces for every plugin source.
+- [2026-08-28-unified-plugin-checkmarks.md](2026-08-28-unified-plugin-checkmarks.md) — shared round plugin selection indicators.
+- [2026-08-28-uploaded-plugin-metadata-layout.md](2026-08-28-uploaded-plugin-metadata-layout.md) — two-line uploaded-plugin metadata with internal IDs hidden.
+- [2026-08-28-release-0.6.0.md](2026-08-28-release-0.6.0.md) — publication of release 0.6.0 through the GitHub deployment pipeline.

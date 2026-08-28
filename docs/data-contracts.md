@@ -136,6 +136,8 @@ OPFS contains the WordPress filesystem and SQLite-backed site state. It is disti
 
 The system protects secrets at rest from casual inspection and keeps them out of normal development artifacts. It does not protect an unlocked key from malicious code already executing in the page, an infected browser, clipboard readers, or a malicious WordPress package after the user pastes a license.
 
+The header requests the repository's public `stargazers_count` from `api.github.com` and links to `github.com`. The application passes no recipe, package, vault, or license data in that request. Normal browser request metadata still reaches GitHub, and a failed request only removes the visible count; it does not disable the repository link.
+
 Do not add secrets to:
 
 - recipe fields;

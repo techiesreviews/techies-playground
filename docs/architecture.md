@@ -84,6 +84,7 @@ The remembered-site list is only an index. Actual WordPress files live in OPFS. 
 | Playground remote | `playground.wordpress.net/remote.html` | Embedded runtime. | Launch closes and surfaces error. |
 | Plugin artwork | `ps.w.org` | Official icons only. | Invalid host becomes no image. |
 | Theme artwork | `ts.w.org` | Official screenshots only. | Invalid host becomes no image. |
+| GitHub repository API | `api.github.com` and `github.com` | Load the public repository star count and link to the repository's star action. | The site-styled repository link remains usable without a count if the API request fails. |
 | User WXR/extension URLs | HTTPS or localhost HTTP | Trusted advanced setup input. | Validation rejects other schemes. |
 
 ## Build and delivery
@@ -92,7 +93,7 @@ Vite produces `dist`. `wrangler.jsonc` binds that directory as `ASSETS`, uses SP
 
 The Worker adds:
 
-- CSP restricting frames to Playground and artwork to WordPress.org image hosts.
+- CSP restricting frames to Playground, artwork to WordPress.org image hosts, and executable scripts to the app itself.
 - `Permissions-Policy` disabling camera, microphone, geolocation, payment, and USB.
 - `Referrer-Policy: no-referrer`.
 - `X-Content-Type-Options: nosniff`.

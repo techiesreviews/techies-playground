@@ -23,6 +23,7 @@ import {
   PlayIcon,
   PlusIcon,
   ShieldCheckIcon,
+  StarIcon,
   TrashIcon,
   XMarkIcon,
 } from '@heroicons/react/16/solid'
@@ -45,6 +46,7 @@ import {
 } from './lib/wordpress-versions'
 import { fetchFeaturedWordPressOrgPlugins, searchWordPressOrgPlugins } from './lib/wordpress-org-plugins'
 import { searchWordPressOrgThemes } from './lib/wordpress-org-themes'
+import { fetchGitHubRepositoryStars } from './lib/github-repository'
 import {
   parseSavedRecipes,
   replaceSavedRecipe,
@@ -99,6 +101,18 @@ const PERSISTED_SITES_KEY = 'private-playground-launcher:persisted-sites'
 const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-storage-default-v1'
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
+  {
+    version: '0.6.0',
+    date: 'August 28, 2026',
+    title: 'Plugin selection and repository stars',
+    summary: 'Plugin discovery and selection now share one clearer visual language.',
+    changes: [
+      'A site-styled GitHub Star link shows the repository’s public star count when available.',
+      'Featured WordPress.org plugins appear before uploaded plugins until a search begins.',
+      'Featured, searched, and uploaded plugins use matching selected cards and round check-circles.',
+      'Uploaded plugin metadata now sits on a clean second line without exposing the internal vault ID.',
+    ],
+  },
   {
     version: '0.5.0',
     date: 'August 28, 2026',
@@ -213,27 +227,46 @@ function TextField({ id, label, value, onChange, type = 'text', placeholder = ''
   )
 }
 
-function Checkbox({ id, checked, onChange, label, description }) {
+function Checkbox({ id, checked, onChange, label, description, indicator = 'square' }) {
   return (
-    <label htmlFor={id} className="flex min-w-0 cursor-pointer items-center gap-3">
+    <label htmlFor={id} className={`flex min-w-0 cursor-pointer gap-3 ${indicator === 'plugin' ? 'items-start' : 'items-center'}`}>
       <span className="flex h-lh shrink-0 items-center text-base sm:text-sm">
-        <span className="group inline-grid size-5 grid-cols-1 sm:size-4">
-          <input
-            id={id}
-            name={id}
-            type="checkbox"
-            checked={checked}
-            onChange={onChange}
-            className="col-start-1 row-start-1 appearance-none rounded-sm border border-neutral-300 bg-white checked:border-teal-700 checked:bg-teal-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 forced-colors:appearance-auto"
-          />
-          <svg viewBox="0 0 14 14" fill="none" className="pointer-events-none col-start-1 row-start-1 size-7/8 self-center justify-self-center stroke-white group-not-has-checked:opacity-0">
-            <path d="M3 8L6 11L11 3.5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </span>
+        {indicator === 'plugin' ? (
+          <span className="inline-grid size-5 grid-cols-1 sm:size-4">
+            <input
+              id={id}
+              name={id}
+              type="checkbox"
+              checked={checked}
+              onChange={onChange}
+              className="peer col-start-1 row-start-1 appearance-none rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 forced-colors:appearance-auto"
+            />
+            <span className="pointer-events-none col-start-1 row-start-1 rounded-full border border-neutral-300 bg-white peer-checked:opacity-0" aria-hidden="true" />
+            <CheckCircleIcon className="pointer-events-none col-start-1 row-start-1 size-full shrink-0 fill-teal-700 opacity-0 peer-checked:opacity-100" aria-hidden="true" />
+          </span>
+        ) : (
+          <span className="group inline-grid size-5 grid-cols-1 sm:size-4">
+            <input
+              id={id}
+              name={id}
+              type="checkbox"
+              checked={checked}
+              onChange={onChange}
+              className="col-start-1 row-start-1 appearance-none rounded-sm border border-neutral-300 bg-white checked:border-teal-700 checked:bg-teal-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 forced-colors:appearance-auto"
+            />
+            <svg viewBox="0 0 14 14" fill="none" className="pointer-events-none col-start-1 row-start-1 size-7/8 self-center justify-self-center stroke-white group-not-has-checked:opacity-0">
+              <path d="M3 8L6 11L11 3.5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </span>
+        )}
       </span>
       <span className="min-w-0">
-        <span className="font-medium text-neutral-900">{label}</span>
-        {description && <span className="text-neutral-600"> — {description}</span>}
+        <span className={`font-medium text-neutral-900 ${indicator === 'plugin' ? 'block' : ''}`}>{label}</span>
+        {description && (
+          <span className={`text-neutral-600 ${indicator === 'plugin' ? 'block' : ''}`}>
+            {indicator === 'plugin' ? description : ` — ${description}`}
+          </span>
+        )}
       </span>
     </label>
   )
@@ -260,6 +293,31 @@ function Radio({ id, name, checked, onChange, label, description }) {
         {description && <span className="text-neutral-600"> — {description}</span>}
       </span>
     </label>
+  )
+}
+
+function GitHubStarButton() {
+  const [stars, setStars] = useState(null)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    fetchGitHubRepositoryStars({ signal: controller.signal }).then(setStars).catch(() => {})
+    return () => controller.abort()
+  }, [])
+
+  return (
+    <a
+      href="https://github.com/techiesreviews/techies-playground"
+      target="_blank"
+      rel="noreferrer"
+      aria-label={`Star Techies Playground on GitHub${stars === null ? '' : ` — ${stars.toLocaleString()} stars`}`}
+      className="relative inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-white py-1.5 pr-2.5 pl-1.5 text-sm/5 font-medium text-neutral-800 ring-1 ring-neutral-950/10 hover:bg-neutral-50 hover:text-neutral-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+    >
+      <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
+      <StarIcon className="size-4 shrink-0 fill-neutral-500" />
+      <span className="max-sm:hidden">Star</span>
+      {stars !== null && <span className="border-l border-neutral-950/10 pl-1.5 tabular-nums text-neutral-500">{stars.toLocaleString()}</span>}
+    </a>
   )
 }
 
@@ -329,6 +387,7 @@ function AppHeader({ onImportRecipe }) {
             <LockClosedIcon className="size-4 shrink-0 fill-teal-700" />
             Browser-local vault
           </p>
+          <GitHubStarButton />
           <button
             ref={changelogButton}
             type="button"
@@ -507,18 +566,28 @@ function PackageArtwork({ src = '', label, kind }) {
   )
 }
 
+function pluginSelectionSurface(selected) {
+  return selected
+    ? 'bg-teal-50 text-teal-950 ring-teal-700/30'
+    : 'bg-white text-neutral-950 ring-neutral-950/8 hover:bg-neutral-50'
+}
+
 function RepositoryPluginRow({ plugin, selected, onToggle }) {
   return (
-    <div className="flex min-w-0 items-start gap-3 border-t border-neutral-950/8 py-4 first:border-t-0 first:pt-0 last:pb-0">
+    <div className={`flex min-w-0 items-start gap-3 rounded-xl p-3 ring-1 ${pluginSelectionSurface(selected)}`}>
       <PackageArtwork src={plugin.image} label={plugin.name} kind="plugin" />
       <button
         type="button"
         onClick={() => onToggle(plugin.slug)}
         aria-pressed={selected}
-        className={`relative mt-0.5 inline-grid size-5 shrink-0 place-items-center rounded border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 sm:size-4 ${selected ? 'border-teal-700 bg-teal-700 text-white' : 'border-neutral-300 bg-white text-transparent hover:border-teal-700'}`}
+        className="relative mt-0.5 inline-grid size-5 shrink-0 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 sm:size-4"
       >
         <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
-        <CheckIcon className="size-3 fill-current" />
+        {selected ? (
+          <CheckCircleIcon className="size-full shrink-0 fill-teal-700" aria-hidden="true" />
+        ) : (
+          <span className="size-full rounded-full border border-neutral-300 bg-white hover:border-teal-700" aria-hidden="true" />
+        )}
         <span className="sr-only">{selected ? 'Remove' : 'Add'} {plugin.name}</span>
       </button>
       <button type="button" onClick={() => onToggle(plugin.slug)} className="min-w-0 flex-1 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600">
@@ -1010,7 +1079,7 @@ function PluginRow({ plugin, selected, onToggle, onReplace, onRemove }) {
   const versionHint = plugin.versionHint || extractVersionHint(plugin.filename)
   const packageDetails = [versionHint && `version ${versionHint}`, size, 'stored only in this browser'].filter(Boolean).join(', ')
   return (
-    <div className="group flex min-w-0 items-start gap-3 border-t border-neutral-950/8 py-4 first:border-t-0 first:pt-0 last:pb-0">
+    <div className={`group flex min-w-0 items-start gap-3 rounded-xl p-3 ring-1 ${pluginSelectionSurface(selected)}`}>
       <PackageArtwork label={plugin.label} kind="plugin" />
       <div className="min-w-0 flex-1 text-base/7 sm:text-sm/6">
         <Checkbox
@@ -1019,8 +1088,8 @@ function PluginRow({ plugin, selected, onToggle, onReplace, onRemove }) {
           onChange={() => onToggle(plugin.id)}
           label={plugin.label}
           description={packageDetails}
+          indicator="plugin"
         />
-        <p className="truncate pl-8 font-mono text-base/7 text-neutral-500 sm:pl-7 sm:text-sm/6">{plugin.id}</p>
       </div>
       <div className="flex shrink-0 items-center gap-1 pointer-fine:pointer-events-none pointer-fine:opacity-0 pointer-fine:group-hover:pointer-events-auto pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:pointer-events-auto pointer-fine:group-focus-within:opacity-100">
         <button
@@ -1170,7 +1239,7 @@ function FeaturedPluginCard({ plugin, selected, onToggle }) {
       type="button"
       onClick={() => onToggle(plugin.slug)}
       aria-pressed={selected}
-      className={`relative flex min-w-0 items-center gap-3 rounded-xl p-3 text-left ring-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 ${selected ? 'bg-teal-50 text-teal-950 ring-teal-700/30' : 'bg-white text-neutral-950 ring-neutral-950/8 hover:bg-neutral-50'}`}
+      className={`relative flex min-w-0 items-center gap-3 rounded-xl p-3 text-left ring-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 ${pluginSelectionSurface(selected)}`}
     >
       <PackageArtwork src={plugin.image} label={plugin.name} kind="plugin" />
       <span className="line-clamp-2 min-w-0 flex-1 pr-3 text-base/6 font-medium sm:text-sm/5" title={plugin.name}>{plugin.name}</span>
@@ -2246,7 +2315,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                 ) : (
                   <div className="pt-5">
                     <div className="grid gap-4">
-                      <p className="max-w-[62ch] text-pretty text-base/7 text-neutral-600 sm:text-sm/6">Search your uploaded premium plugins and the official WordPress.org directory together. Uploaded packages always appear first.</p>
+                      <p className="max-w-[62ch] text-pretty text-base/7 text-neutral-600 sm:text-sm/6">Browse featured WordPress.org plugins, or search your uploaded premium plugins and the official directory together. Uploaded matches appear first when searching.</p>
                       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
                         <div className="relative min-w-0 flex-1">
                           <label htmlFor="plugin-search" className="sr-only">Search uploaded and WordPress.org plugins</label>
@@ -2275,10 +2344,34 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                     </div>
 
                     <div className="grid gap-5 pt-5">
+                      {!pluginSearch.trim() && (
+                        <section aria-labelledby="featured-plugins-heading" className="grid gap-2" aria-live="polite" aria-busy={featuredPluginState.loading}>
+                          <h3 id="featured-plugins-heading" className="font-mono text-base/7 tracking-wide text-neutral-500 sm:text-sm/6">FEATURED ON WORDPRESS.ORG</h3>
+                          {featuredPluginState.loading ? (
+                            <div className="rounded-[min(1vw,var(--radius-xl))] bg-neutral-100 p-5 text-base/7 text-neutral-600 sm:text-sm/6">Loading featured plugins…</div>
+                          ) : featuredPlugins.length ? (
+                            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                              {featuredPlugins.map((plugin) => (
+                                <FeaturedPluginCard
+                                  key={plugin.slug}
+                                  plugin={plugin}
+                                  selected={recipe.repositoryPlugins.includes(plugin.slug)}
+                                  onToggle={toggleRepositoryPlugin}
+                                />
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="rounded-[min(1vw,var(--radius-xl))] bg-neutral-100 p-5">
+                              <p className="text-pretty text-base/7 font-medium text-neutral-900 sm:text-sm/6">{featuredPluginState.message}</p>
+                            </div>
+                          )}
+                        </section>
+                      )}
+
                       <section aria-labelledby="uploaded-plugins-heading" className="grid gap-2">
                         <h3 id="uploaded-plugins-heading" className="font-mono text-base/7 tracking-wide text-neutral-500 sm:text-sm/6">UPLOADED PLUGINS</h3>
                         {visiblePlugins.length ? (
-                          <div className="rounded-[min(1vw,var(--radius-xl))] bg-white p-4 ring-1 ring-neutral-950/8">
+                          <div className="grid gap-3">
                             {visiblePlugins.map((plugin) => (
                               <PluginRow
                                 key={plugin.id}
@@ -2307,35 +2400,13 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                         )}
                       </section>
 
-                      {!pluginSearch.trim() ? (
-                        <section aria-labelledby="featured-plugins-heading" className="grid gap-2" aria-live="polite" aria-busy={featuredPluginState.loading}>
-                          <h3 id="featured-plugins-heading" className="font-mono text-base/7 tracking-wide text-neutral-500 sm:text-sm/6">FEATURED ON WORDPRESS.ORG</h3>
-                          {featuredPluginState.loading ? (
-                            <div className="rounded-[min(1vw,var(--radius-xl))] bg-neutral-100 p-5 text-base/7 text-neutral-600 sm:text-sm/6">Loading featured plugins…</div>
-                          ) : featuredPlugins.length ? (
-                            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                              {featuredPlugins.map((plugin) => (
-                                <FeaturedPluginCard
-                                  key={plugin.slug}
-                                  plugin={plugin}
-                                  selected={recipe.repositoryPlugins.includes(plugin.slug)}
-                                  onToggle={toggleRepositoryPlugin}
-                                />
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="rounded-[min(1vw,var(--radius-xl))] bg-neutral-100 p-5">
-                              <p className="text-pretty text-base/7 font-medium text-neutral-900 sm:text-sm/6">{featuredPluginState.message}</p>
-                            </div>
-                          )}
-                        </section>
-                      ) : pluginSearch.trim().length >= 2 || recipe.repositoryPlugins.length > 0 ? (
+                      {pluginSearch.trim() && (pluginSearch.trim().length >= 2 || recipe.repositoryPlugins.length > 0 ? (
                         <section aria-labelledby="directory-plugins-heading" className="grid gap-2" aria-live="polite" aria-busy={repositoryPluginSearchState.loading}>
                           <h3 id="directory-plugins-heading" className="font-mono text-base/7 tracking-wide text-neutral-500 sm:text-sm/6">WORDPRESS.ORG PLUGINS</h3>
                           {repositoryPluginSearchState.loading ? (
                             <div className="rounded-[min(1vw,var(--radius-xl))] bg-neutral-100 p-5 text-base/7 text-neutral-600 sm:text-sm/6">Searching WordPress.org…</div>
                           ) : visibleRepositoryPlugins.length ? (
-                            <div className="rounded-[min(1vw,var(--radius-xl))] bg-white p-4 ring-1 ring-neutral-950/8">
+                            <div className="grid gap-3">
                               {visibleRepositoryPlugins.map((plugin) => (
                                 <RepositoryPluginRow
                                   key={plugin.slug}
@@ -2353,7 +2424,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                         </section>
                       ) : (
                         <div className="rounded-[min(1vw,var(--radius-xl))] bg-neutral-100 p-5 text-base/7 text-neutral-600 sm:text-sm/6">Type at least 2 characters to search WordPress.org.</div>
-                      )}
+                      ))}
                     </div>
                   </div>
                 )}
