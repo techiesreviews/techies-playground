@@ -33,6 +33,8 @@ Prefer, in order:
 
 ## Index
 
+- [2026-09-09-release-0.7.0-deployed.md](2026-09-09-release-0.7.0-deployed.md) — successful GitHub deployment and live Site/View Ctrl-click verification.
+
 - [2026-09-09-release-0.7.0.md](2026-09-09-release-0.7.0.md) — separate preview tabs and compact reminder release.
 
 - [2026-09-09-wordpress-link-verification.md](2026-09-09-wordpress-link-verification.md) — browser-driven Ctrl-click verification of the WordPress Site and View links; no implementation changes.
