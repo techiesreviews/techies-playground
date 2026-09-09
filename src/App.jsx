@@ -29,6 +29,7 @@ import {
 } from '@heroicons/react/16/solid'
 import { installPlugin, installTheme, zipWpContent } from '@wp-playground/blueprints'
 import { startPlaygroundWeb } from '@wp-playground/client'
+import { buildPreviewPlugin, hostPreviewSession } from './lib/playground-preview'
 import {
   DEFAULT_RECIPE,
   buildPlaygroundBlueprint,
@@ -101,6 +102,17 @@ const PERSISTED_SITES_KEY = 'private-playground-launcher:persisted-sites'
 const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-storage-default-v1'
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
+  {
+    version: '0.7.0',
+    date: 'September 9, 2026',
+    title: 'WordPress previews in separate tabs',
+    summary: 'Open your running WordPress site in another tab while keeping admin in place.',
+    changes: [
+      'Ctrl/Cmd-click and middle-click internal WordPress links to open a separate preview tab.',
+      'The WordPress site-name and View links open the same running site without starting another environment.',
+      'Preview tabs show a compact reminder to keep the original Playground open and explain when it becomes unavailable.',
+    ],
+  },
   {
     version: '0.6.0',
     date: 'August 28, 2026',
@@ -1257,6 +1269,8 @@ export default function App() {
   const themeZipInputRef = useRef(null)
   const replacementThemeZipInputRef = useRef(null)
   const clientRef = useRef(null)
+  const stopPreviewSessionRef = useRef(null)
+  useEffect(() => () => stopPreviewSessionRef.current?.(), [])
   const launchIdRef = useRef(0)
   const [plugins, setPlugins] = useState([])
   const [pluginSearch, setPluginSearch] = useState('')
@@ -1695,6 +1709,8 @@ export default function App() {
   }
 
   function closePlayground() {
+    stopPreviewSessionRef.current?.()
+    stopPreviewSessionRef.current = null
     launchIdRef.current += 1
     setConfirmingPlaygroundClose(false)
     setShowLicenseManager(false)
@@ -1760,6 +1776,7 @@ export default function App() {
       ? { ...launchedRecipe, wordpress: expectedLatestWordPressVersion }
       : launchedRecipe
     const siteId = persistedSiteId(runtimeRecipe)
+    const scope = `launcher-${siteId}-${crypto.randomUUID()}`
     const usesBrowserStorage = launchedRecipe.storage === 'browser'
     const hasPersistedSite = usesBrowserStorage && readPersistedSites().has(siteId)
     const mountDescriptor = {
@@ -1776,7 +1793,7 @@ export default function App() {
       const client = await startPlaygroundWeb({
         iframe: iframeRef.current,
         remoteUrl: 'https://playground.wordpress.net/remote.html',
-        scope: `launcher-${siteId}`,
+        scope,
         blueprint: buildPlaygroundBlueprint(runtimeRecipe, { includeOneTimeSetup: !hasPersistedSite }),
         ...(launchedRecipe.phpExtensionManifestUrl ? {
           extensions: [{ source: { format: 'manifest', manifestUrl: launchedRecipe.phpExtensionManifestUrl } }],
@@ -1808,6 +1825,11 @@ echo 'PLAYGROUND_WORDPRESS_VERSION:' . $wp_version;
         rememberPersistedSite(siteId)
       }
       clientRef.current = client
+      await client.mkdir('/wordpress/wp-content/mu-plugins')
+      await client.writeFile('/wordpress/wp-content/mu-plugins/techies-preview.php', buildPreviewPlugin(window.location.href, scope))
+      if (launchId !== launchIdRef.current) return
+      stopPreviewSessionRef.current?.()
+      stopPreviewSessionRef.current = hostPreviewSession(scope)
       setStatus({ running: true, step: 1, message: `WordPress ${launchedWordPressVersion} is ready.` })
 
       const installedPlugins = launchedRecipe.repositoryPlugins.map((slug) => {
@@ -1871,6 +1893,8 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
       setSpinupHistory((current) => appendSpinup(current, { recipe: historyRecipe, plugins: installedPlugins, theme: installedTheme }))
     } catch (caught) {
       if (launchId !== launchIdRef.current) return
+      stopPreviewSessionRef.current?.()
+      stopPreviewSessionRef.current = null
       clientRef.current = null
       if (iframeRef.current) iframeRef.current.src = 'about:blank'
       setShowPlayground(false)

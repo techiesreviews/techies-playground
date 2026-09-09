@@ -26,7 +26,7 @@ For a deployment preparation, also run `npm run deploy:check`. Per `AGENTS.md`, 
 
 ## Current automated suite
 
-The suite uses Node's built-in test runner and contains 50 tests in the current working tree.
+The suite uses Node's built-in test runner and contains 55 tests in the current working tree.
 
 | Test module | Coverage |
 | --- | --- |
@@ -41,6 +41,7 @@ The suite uses Node's built-in test runner and contains 50 tests in the current 
 | `spinup-history.test.js` | Safe metadata, order/cap, invalid-record dropping, theme metadata, saved-environment deduplication. |
 | `plugin-preferences.test.js` | Recency ordering, multi-field search, valid timestamp persistence and deletion. |
 | `playground-persistence.test.js` | Unload warning, one-time storage-default migration, site identity/persistence labels. |
+| `playground-preview.test.js` | Preview target validation, preserved query/fragment, modified clicks, external/download/ordinary navigation exclusions, direct popup mapping, standalone execution of the generated mu-plugin script. |
 | `sync-wordpress-release.test.mjs` | Stable release selection, branch normalization, minor version bump, no-op and generated release edits. |
 
 The suite does not render React components or start WordPress Playground. It proves pure contracts, not full browser behavior.
@@ -62,6 +63,7 @@ Use synthetic ZIPs/test packages and non-production vendor licenses.
 | Latest WordPress | Launch `latest` with network available, then simulate version API failure. | Exact version is verified when available; launch fails closed if latest cannot be confirmed. |
 | Temporary site | Launch, change WordPress, attempt refresh and close. | Browser unload warning and in-app discard confirmation appear. |
 | Saved site | Launch new browser-saved site, change content, close, relaunch same identity. | Content resumes; one-time imports/Multisite are not repeated. |
+| Preview tabs | Ctrl/Cmd-click or middle-click an internal link; open a `_blank` preview; close the original runtime. Repeat on a resumed site. | A launcher-origin tab displays the same WordPress site, including preview query parameters; closing the owner replaces the iframe with an explanation. Test Firefox/Safari and native popup behavior separately; the initial Chromium smoke used a synthetic Ctrl-click with intercepted `window.open`, then opened the captured URL through browser tooling. |
 | Identity change | Change recipe name, exact WordPress, or PHP and launch. | A distinct OPFS environment is used. |
 | Packages | Launch local and directory plugins plus local/directory theme. | Plugins activate; selected theme is active; local theme verification passes. |
 | History | Launch temporary and saved configurations repeatedly. | Newest first, max 30, saved identity deduplicated, status labels correct. |

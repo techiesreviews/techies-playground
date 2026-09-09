@@ -17,6 +17,8 @@ There is no application server or shared data store.
 | Module | Responsibility | Main callers |
 | --- | --- | --- |
 | `src/main.jsx` | Mount React in strict mode and load global CSS. | `index.html`. |
+| `src/Preview.jsx` | Render a second-tab view of the active runtime and monitor its owner through BroadcastChannel. | `src/main.jsx` for `#preview=` URLs. |
+| `src/lib/playground-preview.js` | Validate preview URLs, answer session probes, and generate the WordPress mu-plugin that redirects new-tab actions. | App, Preview, regression tests. |
 | `src/App.jsx` | Entire UI, application state, effects, launch lifecycle, inline WordPress update PHP. | `src/main.jsx`; calls every `src/lib` module and Playground packages. |
 | `src/lib/recipe.js` | Recipe defaults, validation, stable package IDs, labels/version hints, Blueprint generation, recipe download. | App, saved recipes, history, persistence tests. |
 | `src/lib/wordpress-versions.js` | Runtime WordPress.org version fetch, supported-version normalization, fallback and saved-version preservation. | App; release automation has parallel server-side logic. |
@@ -65,6 +67,14 @@ Recipe + local package IDs
 ```
 
 Directory packages are included as Blueprint resource steps. Local packages cannot be embedded in a serializable recipe, so they are installed after the client is ready using their IndexedDB `File` objects.
+
+## Preview tabs
+
+Each launch receives a unique `launcher-<site-id>-<UUID>` runtime scope; the stable OPFS site identity is unchanged. After readiness, App writes `techies-preview.php` into WordPress's mu-plugins directory on every launch, including resumes. Its admin/frontend script handles Ctrl/Cmd/Shift-click, middle-click, `_blank` links and direct `window.open(scopedUrl)` calls for the current scope. Ordinary navigation, downloads and external links keep their behavior.
+
+New tabs open the launcher origin with `#preview=<encoded scoped URL>`. Preview mounts only the scoped content iframe, never another WordPress runtime or OPFS mount. Keeping the same top-level site preserves the remote service worker's storage partition. An origin-local BroadcastChannel probes the original launcher every three seconds; the iframe mounts after a reply. Explicit close/failure removes it immediately; missing replies show an unavailable message after roughly 15–18 seconds, subject to background timer throttling. A later reply can restore a timed-out view.
+
+The original launcher must remain open. Native context-menu navigation and plugins that open an empty window then assign its location are not covered by the click/direct-window interception. See [the investigation and browser evidence](changes/2026-09-09-preview-tabs.md).
 
 ## Persistence lifecycle
 

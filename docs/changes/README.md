@@ -33,6 +33,12 @@ Prefer, in order:
 
 ## Index
 
+- [2026-09-09-release-0.7.0.md](2026-09-09-release-0.7.0.md) — separate preview tabs and compact reminder release.
+
+- [2026-09-09-wordpress-link-verification.md](2026-09-09-wordpress-link-verification.md) — browser-driven Ctrl-click verification of the WordPress Site and View links; no implementation changes.
+
+- [2026-09-09-preview-tabs.md](2026-09-09-preview-tabs.md) — separate tabs reuse the embedded runtime through launcher-origin preview pages.
+
 - [2026-08-28-current-baseline.md](2026-08-28-current-baseline.md) — reconstructed baseline and documentation pass.
 - [2026-08-28-release-0.5.0.md](2026-08-28-release-0.5.0.md) — publication of release 0.5.0 through the GitHub deployment pipeline.
 - [2026-08-28-featured-plugins-first.md](2026-08-28-featured-plugins-first.md) — featured WordPress.org plugins before uploads in the empty state.

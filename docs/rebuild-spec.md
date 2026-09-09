@@ -142,6 +142,8 @@ The runtime occupies the full viewport. Its dark WordPress-like top bar contains
 
 Snapshot and update actions remain disabled until package setup completes.
 
+Internal Ctrl/Cmd-click, middle-click, Shift-click, `_blank` links and direct script-opened scoped URLs open a separate preview tab on the launcher origin. This tab embeds the existing running site and preserves the full path, query and fragment, including preview parameters. It displays a compact reminder to keep the original Playground tab open (4 px vertical padding, 29 px tall when the text fits on one line). Closing the original session replaces the preview with an unavailable message; preview links do not recreate a site or transfer a site to another browser. Native context-menu links and scripts that navigate an initially empty popup remain limitations.
+
 Closing a running temporary environment first asks **Discard this temporary site?** with Keep open and Discard and close actions. A running temporary environment also installs a browser `beforeunload` warning. Browser-saved environments close immediately.
 
 Export snapshot downloads `<normalized-recipe-name>-wp-content.zip` using Playground's `zipWpContent` helper.
