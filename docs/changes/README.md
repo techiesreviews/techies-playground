@@ -33,6 +33,8 @@ Prefer, in order:
 
 ## Index
 
+- [2026-09-10-release-0.7.1-deployed.md](2026-09-10-release-0.7.1-deployed.md) — verified GitHub deployment and matching live security-release bundle.
+
 - [2026-09-10-security-fixes.md](2026-09-10-security-fixes.md) — 0.7.1 fixes for credential-bearing recipes, vault cancellation, external setup visibility and vulnerable dependencies.
 
 - [2026-09-10-security-review.md](2026-09-10-security-review.md) — Codex and Claude CLI security assessment, dependency audits and synthetic secret-handling probes.
