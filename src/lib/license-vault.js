@@ -171,10 +171,14 @@ export async function addLicense(key, { name, pluginId, licenseKey }) {
   return id
 }
 
-export async function copyLicenseToClipboard(key, id) {
+export async function copyLicenseToClipboard(key, id, signal) {
+  if (!signal) throw new Error('An active vault session is required.')
+  signal.throwIfAborted()
   const record = await getRecord(LICENSE_STORE, id)
+  signal.throwIfAborted()
   if (!record) throw new Error('That license no longer exists.')
   const plaintext = await decryptLicenseSecret(key, record, licenseAdditionalData(record))
+  signal.throwIfAborted()
   await navigator.clipboard.writeText(plaintext)
 }
 

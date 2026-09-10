@@ -113,3 +113,51 @@ test('rejects recipes containing a license key field', () => {
     /may not contain license keys/i,
   )
 })
+
+test('rejects credentials and signed parameters across recipe URLs and persistence', async () => {
+  const { serializeRecipeDraft } = await import('./recipe.js')
+  const { serializeSavedRecipes, parseSavedRecipes } = await import('./saved-recipes.js')
+  const { serializeSpinupHistory, parseSpinupHistory } = await import('./spinup-history.js')
+  for (const field of ['wxrUrl', 'phpExtensionManifestUrl']) {
+    for (const url of [
+      'https://user:synthetic@example.com/file',
+      'https://user@example.com/file',
+      'https://example.com/file?token=synthetic',
+      'https://example.com/file?auth_key=synthetic',
+      'https://example.com/file?_wpnonce=synthetic',
+      'https://example.com/file?jwt=synthetic',
+      'https://example.com/file?%2561pi_key=synthetic',
+      'https://example.com/file?%61PI_Key=synthetic',
+      'https://example.com/file?X-Amz-Signature=synthetic',
+      'https://example.com/file#access_token=synthetic',
+    ]) {
+      const recipe = { name: 'Synthetic', [field]: url }
+      assert.throws(() => validateRecipe(recipe), /credentials/)
+      assert.equal(serializeRecipeDraft(recipe), null)
+      assert.throws(() => buildPlaygroundBlueprint(recipe), /credentials/)
+      const record = { id: 'test', savedAt: '2026-09-10', launchedAt: '2026-09-10', recipe }
+      assert.throws(() => serializeSavedRecipes([record]), /credentials/)
+      assert.throws(() => serializeSpinupHistory([record]), /credentials/)
+      assert.deepEqual(parseSavedRecipes(JSON.stringify([record])), [])
+      assert.deepEqual(parseSpinupHistory(JSON.stringify([record])), [])
+    }
+  }
+})
+
+test('keeps public external setup URLs and ordinary WordPress paths usable', async () => {
+  const { serializeRecipeDraft, externalSetupMessage } = await import('./recipe.js')
+  for (const url of ['https://example.com/file?version=2&locale=en_US', 'http://localhost:8080/file', 'http://127.0.0.1/file', 'http://[::1]/file']) {
+    const recipe = validateRecipe({ name: 'Public setup', wxrUrl: url, phpExtensionManifestUrl: url, landingPage: '/wp-admin/edit.php?post_type=page' })
+    assert.equal(recipe.wxrUrl, url)
+    assert.equal(JSON.parse(serializeRecipeDraft(recipe)).phpExtensionManifestUrl, url)
+    assert.ok(externalSetupMessage(recipe).includes(url))
+    assert.match(externalSetupMessage(recipe), /executable PHP extension/)
+  }
+  assert.equal(externalSetupMessage({ name: 'Default' }), '')
+})
+
+test('rejects external landing paths and credential-bearing landing queries', () => {
+  for (const landingPage of ['//example.com/path', '/\\example.com/path', '/\n/example.com', '/wp-admin/?password=synthetic', '/wp-admin/#token=synthetic']) {
+    assert.throws(() => validateRecipe({ name: 'Unsafe path', landingPage }))
+  }
+})

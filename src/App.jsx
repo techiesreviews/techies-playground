@@ -35,6 +35,8 @@ import {
   buildPlaygroundBlueprint,
   downloadRecipe,
   extractVersionHint,
+  externalSetupMessage,
+  serializeRecipeDraft,
   normalizePluginId,
   pluginLabelFromFilename,
   validateRecipe,
@@ -102,6 +104,18 @@ const PERSISTED_SITES_KEY = 'private-playground-launcher:persisted-sites'
 const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-storage-default-v1'
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
+  {
+    version: '0.7.1',
+    date: 'September 10, 2026',
+    title: 'Safer recipes and license locking',
+    summary: 'Security fixes for saved recipes, external setup sources, and the encrypted license vault.',
+    changes: [
+      'Reject credential-bearing recipe URLs and keep invalid drafts out of browser storage.',
+      'Show external setup sources and ask before importing or launching recipes that use them.',
+      'Cancel pending license copies and discard late unlock results when the vault closes or locks.',
+      'Update vulnerable dependencies and pin the WordPress Playground packages for reviewed updates.',
+    ],
+  },
   {
     version: '0.7.0',
     date: 'September 9, 2026',
@@ -684,6 +698,7 @@ function SpinupHistoryRow({ record, active, missingCount, persistenceLabel, onCh
 
 function LicenseManager({ packages, anchorRef, onClose }) {
   const keyRef = useRef(null)
+  const sessionRef = useRef(new AbortController())
   const closeTimerRef = useRef(null)
   const copyTimerRef = useRef(null)
   const panelRef = useRef(null)
@@ -722,6 +737,7 @@ function LicenseManager({ packages, anchorRef, onClose }) {
 
   useEffect(() => {
     let active = true
+    sessionRef.current = new AbortController()
     getLicenseVaultStatus()
       .then(({ initialized: vaultInitialized }) => {
         if (active) setInitialized(vaultInitialized)
@@ -731,6 +747,7 @@ function LicenseManager({ packages, anchorRef, onClose }) {
       })
     return () => {
       active = false
+      sessionRef.current.abort()
       keyRef.current = null
       if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current)
       if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current)
@@ -755,12 +772,15 @@ function LicenseManager({ packages, anchorRef, onClose }) {
     }
   })
 
-  async function refreshRecords() {
-    setRecords(await listLicenseMetadata())
+  async function refreshRecords(signal) {
+    const metadata = await listLicenseMetadata()
+    if (!signal.aborted) setRecords(metadata)
   }
 
   async function handleCreateVault(event) {
     event.preventDefault()
+    const { signal } = sessionRef.current
+    if (signal.aborted) return
     setMessage('')
     if (password !== passwordConfirmation) {
       setMessage('The master passwords do not match.')
@@ -768,37 +788,52 @@ function LicenseManager({ packages, anchorRef, onClose }) {
     }
     setBusy(true)
     try {
-      keyRef.current = await createLicenseVault(password)
+      const key = await createLicenseVault(password)
+      if (signal.aborted) return
+      keyRef.current = key
       setInitialized(true)
       setUnlocked(true)
       setPassword('')
       setPasswordConfirmation('')
-      await refreshRecords()
+      await refreshRecords(signal)
+      if (signal.aborted) return
     } catch (caught) {
+      if (signal.aborted) return
       setMessage(caught instanceof Error ? caught.message : 'The encrypted vault could not be created.')
     } finally {
-      setBusy(false)
+      if (!signal.aborted) setBusy(false)
     }
   }
 
   async function handleUnlock(event) {
     event.preventDefault()
+    const { signal } = sessionRef.current
+    if (signal.aborted) return
     setBusy(true)
     setMessage('')
     try {
-      keyRef.current = await unlockLicenseVault(password)
+      const key = await unlockLicenseVault(password)
+      if (signal.aborted) return
+      keyRef.current = key
       setUnlocked(true)
       setPassword('')
-      await refreshRecords()
+      await refreshRecords(signal)
+      if (signal.aborted) return
     } catch (caught) {
+      if (signal.aborted) return
       setMessage(caught instanceof Error ? caught.message : 'The encrypted vault could not be unlocked.')
     } finally {
-      setBusy(false)
+      if (!signal.aborted) setBusy(false)
     }
   }
 
   function lockVault() {
+    sessionRef.current.abort()
+    sessionRef.current = new AbortController()
     keyRef.current = null
+    setBusy(false)
+    setPassword('')
+    setPasswordConfirmation('')
     if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current)
     copyTimerRef.current = null
     setUnlocked(false)
@@ -812,7 +847,12 @@ function LicenseManager({ packages, anchorRef, onClose }) {
   }
 
   function closeManager() {
+    sessionRef.current.abort()
     keyRef.current = null
+    setUnlocked(false)
+    setRecords([])
+    setPassword('')
+    setPasswordConfirmation('')
     if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current)
     copyTimerRef.current = null
     setCopiedId('')
@@ -841,61 +881,79 @@ function LicenseManager({ packages, anchorRef, onClose }) {
 
   async function handleAddLicense(event) {
     event.preventDefault()
+    const { signal } = sessionRef.current
+    if (signal.aborted) return
     setBusy(true)
     setMessage('')
     try {
       await addLicense(keyRef.current, { name: licenseName, pluginId: packageId, licenseKey })
+      if (signal.aborted) return
       setLicenseKey('')
       setShowLicenseKey(false)
       setAdding(false)
-      await refreshRecords()
+      await refreshRecords(signal)
+      if (signal.aborted) return
       setMessage('License encrypted and saved locally.')
     } catch (caught) {
+      if (signal.aborted) return
       setMessage(caught instanceof Error ? caught.message : 'The license could not be saved.')
     } finally {
-      setBusy(false)
+      if (!signal.aborted) setBusy(false)
     }
   }
 
   async function handleCopyLicense(id) {
+    const { signal } = sessionRef.current
+    if (signal.aborted) return
     setMessage('')
     if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current)
     try {
-      await copyLicenseToClipboard(keyRef.current, id)
+      await copyLicenseToClipboard(keyRef.current, id, signal)
+      if (signal.aborted) return
       setCopiedId(id)
       copyTimerRef.current = window.setTimeout(() => {
         setCopiedId((currentId) => currentId === id ? '' : currentId)
         copyTimerRef.current = null
       }, 1600)
     } catch (caught) {
+      if (signal.aborted) return
       setCopiedId('')
       setMessage(caught instanceof Error ? caught.message : 'The license could not be copied.')
     }
   }
 
   async function handleDeleteLicense(record) {
+    const { signal } = sessionRef.current
+    if (signal.aborted) return
     if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current)
     copyTimerRef.current = null
     setDeletingId(record.id)
     setMessage('')
     try {
       await deleteLicense(record.id)
-      await refreshRecords()
+      if (signal.aborted) return
+      await refreshRecords(signal)
+      if (signal.aborted) return
       setCopiedId('')
       setConfirmingDeleteId('')
       setMessage(`${record.name} removed from the vault.`)
     } catch (caught) {
+      if (signal.aborted) return
       setMessage(caught instanceof Error ? caught.message : 'The license could not be deleted.')
     } finally {
-      setDeletingId('')
+      if (!signal.aborted) setDeletingId('')
     }
   }
 
   async function handleResetVault() {
+    if (sessionRef.current.signal.aborted) return
     if (!window.confirm('Reset the encrypted vault? Every saved license will be permanently deleted.')) return
+    lockVault()
+    const { signal } = sessionRef.current
     setBusy(true)
     try {
       await resetLicenseVault()
+      if (signal.aborted) return
       keyRef.current = null
       setInitialized(false)
       setUnlocked(false)
@@ -903,9 +961,10 @@ function LicenseManager({ packages, anchorRef, onClose }) {
       setPassword('')
       setMessage('Create a new encrypted vault.')
     } catch (caught) {
+      if (signal.aborted) return
       setMessage(caught instanceof Error ? caught.message : 'The vault could not be reset.')
     } finally {
-      setBusy(false)
+      if (!signal.aborted) setBusy(false)
     }
   }
 
@@ -1437,7 +1496,9 @@ export default function App() {
   }, [themeSearch])
 
   useEffect(() => {
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(recipe))
+    const serialized = serializeRecipeDraft(recipe)
+    if (serialized === null) localStorage.removeItem(DRAFT_KEY)
+    else localStorage.setItem(DRAFT_KEY, serialized)
   }, [recipe])
 
   useEffect(() => {
@@ -1617,6 +1678,8 @@ export default function App() {
     setError('')
     try {
       const imported = validateRecipe(JSON.parse(await event.target.files[0].text()))
+      const warning = externalSetupMessage(imported)
+      if (warning && !window.confirm(`${warning}\n\nImport this recipe?`)) return
       setRecipe(imported)
       saveRecipeToLibrary(imported)
     } catch (caught) {
@@ -1744,6 +1807,8 @@ export default function App() {
     let launchedRecipe
     try {
       launchedRecipe = validateRecipe(recipe)
+      const warning = externalSetupMessage(launchedRecipe)
+      if (warning && !window.confirm(`${warning}\n\nLaunch this recipe?`)) return
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Review the environment settings before launching.')
       return
@@ -2072,7 +2137,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                     </div>
                   </div>
                 </div>
-                <details className="group mt-5 rounded-xl bg-white ring-1 ring-neutral-950/10 open:shadow-sm">
+                <details open={Boolean(recipe.wxrUrl || recipe.phpExtensionManifestUrl)} className="group mt-5 rounded-xl bg-white ring-1 ring-neutral-950/10 open:shadow-sm">
                   <summary className="flex cursor-pointer list-none items-center gap-3 rounded-xl px-4 py-3 text-base/7 font-medium text-neutral-900 outline-none marker:hidden hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 sm:text-sm/6 [&::-webkit-details-marker]:hidden">
                     <span className="min-w-0 flex-1">Advanced settings</span>
                     <span className="font-normal text-neutral-500">Site, storage, debugging, and imports</span>
@@ -2128,7 +2193,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
 
                     <fieldset className="grid gap-4 border-t border-amber-900/15 bg-amber-50/60 p-4">
                       <legend className="px-1 text-base/7 font-semibold text-amber-950 sm:text-sm/6">External setup</legend>
-                      <p className="max-w-[70ch] text-pretty text-base/7 text-amber-900 sm:text-sm/6">These URLs download and execute content inside Playground. Use only sources you trust; they are stored in the recipe, but license keys never belong here.</p>
+                      <p className="max-w-[70ch] text-pretty text-base/7 text-amber-900 sm:text-sm/6">These URLs download content or code into Playground. Use only public sources you trust. Do not include passwords, tokens or signatures. Recognized credential parameters are rejected; invalid drafts are not saved.</p>
                       <TextField id="wxr-url" type="url" label="WXR content URL" value={recipe.wxrUrl} onChange={(event) => updateRecipe({ wxrUrl: event.target.value })} placeholder="https://example.com/content.xml" description="Imported once when a new site is created. Requires networking." />
                       <TextField id="php-extension-manifest" type="url" label="PHP extension manifest" value={recipe.phpExtensionManifestUrl} onChange={(event) => updateRecipe({ phpExtensionManifestUrl: event.target.value })} placeholder="https://example.com/manifest.json" description="Advanced PHP-Wasm extension loaded before WordPress starts." />
                     </fieldset>

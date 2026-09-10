@@ -47,13 +47,14 @@ Important refs are intentionally not state:
 - `launchIdRef`: invalidates stale asynchronous work after close/relaunch.
 - `iframeRef`: runtime host and explicit blanking on close/failure.
 - `license keyRef`: in-memory `CryptoKey`, excluded from rendering and persistence.
+- License session ref: AbortController shared by vault operations; lock starts a fresh session, while close/unmount abort it. Async continuations cannot restore cleared key or UI state.
 - File input refs: enable styled buttons to trigger native file selection.
 
 ## Launch data flow
 
 ```text
 Recipe + local package IDs
-  -> validateRecipe
+  -> validateRecipe and confirm external setup sources when present
   -> resolve `latest` to exact WordPress version
   -> persistedSiteId
   -> buildPlaygroundBlueprint
@@ -119,4 +120,6 @@ The daily WordPress release workflow checks the official API. A new release bran
 - The release sync script edits source text using stable markers. Renaming `CHANGELOG_ENTRIES` or the fallback marker requires updating and testing the script.
 - Site identity intentionally excludes most recipe settings. Changing name, exact WordPress version, or PHP creates a different saved site; changing packages/settings reuses the same site.
 - WordPress update automation is inline PHP in `App.jsx`; it is executed only in the local Playground runtime.
-- Dependencies use broad semver/`latest` declarations while the lockfile provides reproducible installed versions. CI must use `npm ci`.
+- Playground client/Blueprint dependencies are pinned to 3.1.47; other dependencies retain existing semver ranges. The lockfile provides reproducible installed versions and CI uses `npm ci`. fast-uri resolves to patched 3.1.7. A temporary Sharp 0.35.4 override fixes the Miniflare tooling dependency until its upstream pin catches up.
+
+Recipe autosave uses validated serialization; invalid form input removes the stored draft rather than writing raw values. Import confirmation precedes applying/saving external setup recipes, and every launch with external sources asks again. Advanced settings open automatically when those sources are present.

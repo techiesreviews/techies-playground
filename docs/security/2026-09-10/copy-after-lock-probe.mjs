@@ -1,0 +1,13 @@
+import { deriveLicenseVaultKey, encryptLicenseSecret, copyLicenseToClipboard } from '../../../src/lib/license-vault.js';
+const keyRef={current:await deriveLicenseVaultKey('synthetic master password',new Uint8Array(16),1000)};
+const metadata={id:'synthetic-id',name:'synthetic-name',pluginId:'plugin:synthetic'};
+const aad=new TextEncoder().encode(`license-v1\0${metadata.id}\0${metadata.pluginId}\0${metadata.name}`);
+const record={...metadata,...await encryptLicenseSecret(keyRef.current,'synthetic-only',aad)};
+let finishRead;let copied=false;
+globalThis.indexedDB={open(){const request={result:{close(){},transaction(){const tx={objectStore(){return {get(){const read={result:record};finishRead=()=>{read.onsuccess();tx.oncomplete()};return read}}}};return tx}}};queueMicrotask(()=>request.onsuccess());return request}};
+Object.defineProperty(globalThis,'navigator',{configurable:true,value:{clipboard:{async writeText(value){copied=value==='synthetic-only'}}}});
+const pending=copyLicenseToClipboard(keyRef.current,metadata.id);
+await new Promise(resolve=>setImmediate(resolve));
+keyRef.current=null;
+finishRead();await pending;
+console.log(JSON.stringify({keyReferenceCleared:keyRef.current===null,clipboardWriteCompletedAfterLock:copied}));

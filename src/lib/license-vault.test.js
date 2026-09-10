@@ -81,3 +81,65 @@ test('waits for the license deletion transaction to commit', async () => {
     globalThis.indexedDB = originalIndexedDB
   }
 })
+
+test('cancels copy after pending storage or decryption while preserving active copy', async () => {
+  const { copyLicenseToClipboard } = await import('./license-vault.js')
+  const originalIndexedDB = globalThis.indexedDB
+  const originalNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+  const originalDecrypt = crypto.subtle.decrypt
+  const key = await deriveLicenseVaultKey('synthetic master password', new Uint8Array(16), 1000)
+  const metadata = { id: 'test', pluginId: 'plugin:test', name: 'Test' }
+  const aad = new TextEncoder().encode(`license-v1\0${metadata.id}\0${metadata.pluginId}\0${metadata.name}`)
+  const record = { ...metadata, ...await encryptLicenseSecret(key, 'synthetic-only', aad) }
+  let completeRead
+  const writes = []
+  globalThis.indexedDB = { open() {
+    const request = { result: { close() {}, transaction() {
+      const transaction = { objectStore() { return { get() {
+        const read = { result: record }
+        completeRead = () => { read.onsuccess(); transaction.oncomplete() }
+        return read
+      } } } }
+      return transaction
+    } } }
+    queueMicrotask(() => request.onsuccess())
+    return request
+  } }
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { clipboard: { async writeText(value) { writes.push(value) } } } })
+  try {
+    const session = new AbortController()
+    const pending = copyLicenseToClipboard(key, metadata.id, session.signal)
+    const rejected = assert.rejects(pending, { name: 'AbortError' })
+    await new Promise(resolve => setImmediate(resolve))
+    session.abort()
+    completeRead()
+    await rejected
+    assert.deepEqual(writes, [])
+
+    const duringDecrypt = new AbortController()
+    crypto.subtle.decrypt = async function (...args) {
+      const result = await originalDecrypt.apply(this, args)
+      duringDecrypt.abort()
+      return result
+    }
+    const decrypting = copyLicenseToClipboard(key, metadata.id, duringDecrypt.signal)
+    const decryptRejected = assert.rejects(decrypting, { name: 'AbortError' })
+    await new Promise(resolve => setImmediate(resolve))
+    completeRead()
+    await decryptRejected
+    assert.deepEqual(writes, [])
+    crypto.subtle.decrypt = originalDecrypt
+
+    const active = copyLicenseToClipboard(key, metadata.id, new AbortController().signal)
+    await new Promise(resolve => setImmediate(resolve))
+    completeRead()
+    await active
+    assert.deepEqual(writes, ['synthetic-only'])
+    await assert.rejects(copyLicenseToClipboard(key, metadata.id), /active vault session/)
+  } finally {
+    crypto.subtle.decrypt = originalDecrypt
+    globalThis.indexedDB = originalIndexedDB
+    if (originalNavigator) Object.defineProperty(globalThis, 'navigator', originalNavigator)
+    else delete globalThis.navigator
+  }
+})

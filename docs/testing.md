@@ -26,17 +26,17 @@ For a deployment preparation, also run `npm run deploy:check`. Per `AGENTS.md`, 
 
 ## Current automated suite
 
-The suite uses Node's built-in test runner and contains 55 tests in the current working tree.
+The suite uses Node's built-in test runner and contains 59 tests in the current working tree.
 
 | Test module | Coverage |
 | --- | --- |
-| `recipe.test.js` | Stable IDs, version hints, labels, default storage, validation, advanced settings, Blueprint output, directory installs, secret-field rejection. |
+| `recipe.test.js` | Stable IDs, version hints, labels, default storage, validation, advanced settings, Blueprint output, directory installs, secret-field rejection, credential URL aliases, safe/unsafe persistence boundaries, public URL controls and external setup warnings. |
 | `wordpress-versions.test.js` | Live version normalization, exact latest resolution, preserved saved versions, fetch contract. |
 | `wordpress-org-plugins.test.js` | Slugs, normalized/sanitized results, entity decoding, artwork host allowlist, search and featured request parameters. |
 | `wordpress-org-themes.test.js` | Slugs, HTTPS screenshot normalization, artwork host allowlist, search request. |
 | `github-repository.test.js` | Public star-count normalization and the fixed Techies Playground repository API request. |
 | `vault.test.js` | Separate theme storage and IndexedDB transaction completion. |
-| `license-vault.test.js` | Authenticated encryption round trip, wrong-password failure, deletion transaction completion. |
+| `license-vault.test.js` | Authenticated encryption round trip, wrong-password failure, deletion transaction completion, abort during clipboard read/decryption, active-session copy and missing-session rejection. |
 | `saved-recipes.test.js` | Upsert, rename-replace, safe round trip, invalid-record dropping. |
 | `spinup-history.test.js` | Safe metadata, order/cap, invalid-record dropping, theme metadata, saved-environment deduplication. |
 | `plugin-preferences.test.js` | Recency ordering, multi-field search, valid timestamp persistence and deletion. |
@@ -90,3 +90,7 @@ After pushing `main` for deployment:
 - IndexedDB tests use focused fakes and do not exercise every browser lifecycle/blocked-upgrade condition.
 - The local collaborative-browser snapshot failed during this documentation pass, so visual conformance was inspected from source rather than claimed as a browser-tested result.
 - A local Node 24.15.0 build stalled while importing the Tailwind Vite plugin; CI uses Node 22. Treat this as an environment-specific inconclusive result until reproduced or cleared on the supported CI runtime.
+
+## Security remediation evidence (2026-09-10)
+
+See [0.7.1 remediation and release](changes/2026-09-10-security-fixes.md). Chromium checks used a separate localhost:4174 origin and synthetic data: unsafe drafts were not stored, accepted external imports opened Advanced settings, canceled imports/launches had no execution side effects, WordPress 7.1 launched, normal vault unlock/lock worked, and a delayed unlock after close left its key ref null. UI events and dialog responses were driven programmatically. Firefox/Safari behavior was not rerun. Run `npm audit` alongside the normal deployment checks when changing dependencies.

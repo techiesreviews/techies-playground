@@ -33,6 +33,14 @@ const WP_CHANNELS = new Set(['latest', 'beta', 'nightly'])
 const WP_RELEASE = /^\d+\.\d+(?:\.\d+)?(?:-(?:beta\d+|rc\d+))?$/i
 const VERSION_SUFFIX = /(?:[-_.\s]+v?\d+(?:\.\d+){1,3}(?:[-_.]?(?:alpha|beta|rc)(?:[-_.]?\d+)?)?)$/i
 
+function assertPublicUrl(url, label) {
+  const sensitive = /^(?:.*(?:token|secret|password|passwd|signature|credential|apikey|accesskey|authkey|nonce|jwt|sessionid|sessionkey|bearer).*|key|sig|auth|authorization|pwd|pass|code|nonce)$/i
+  const parameters = [...url.searchParams.keys(), ...new URLSearchParams(url.hash.slice(1)).keys()]
+  if (url.username || url.password || parameters.some((name) => name.includes('%') || sensitive.test(name.replace(/[^a-z0-9]/gi, '')))) {
+    throw new Error(`${label} must not contain credentials, tokens, or signed URL parameters. Use a public URL.`)
+  }
+}
+
 export function isWordPressVersion(value) {
   return typeof value === 'string' && (WP_CHANNELS.has(value) || WP_RELEASE.test(value))
 }
@@ -49,7 +57,36 @@ function normalizeOptionalUrl(value, label) {
   }
   const isLocalHttp = parsed.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname)
   if (parsed.protocol !== 'https:' && !isLocalHttp) throw new Error(`${label} must use HTTPS.`)
+  assertPublicUrl(parsed, label)
   return parsed.href
+}
+
+function normalizeLandingPage(value) {
+  if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//') || /[\\\u0000-\u0020\u007f]/.test(value)) {
+    throw new Error('Landing page must be an absolute WordPress path without an external host.')
+  }
+  const url = new URL(value, 'https://recipe.invalid')
+  if (url.origin !== 'https://recipe.invalid') throw new Error('Landing page must stay within WordPress.')
+  assertPublicUrl(url, 'Landing page')
+  return value
+}
+
+export function serializeRecipeDraft(candidate) {
+  try {
+    return JSON.stringify(validateRecipe(candidate))
+  } catch {
+    // Invalid form input stays in memory and must never reach localStorage.
+    return null
+  }
+}
+
+export function externalSetupMessage(candidate) {
+  const recipe = validateRecipe(candidate)
+  const sources = [
+    recipe.wxrUrl && `Import WordPress content: ${recipe.wxrUrl}`,
+    recipe.phpExtensionManifestUrl && `Load executable PHP extension: ${recipe.phpExtensionManifestUrl}`,
+  ].filter(Boolean)
+  return sources.length ? `This recipe downloads external content or code into Playground. Only continue if you trust these sources.\n\n${sources.join('\n\n')}` : ''
 }
 
 export function pluginLabelFromFilename(filename) {
@@ -141,7 +178,7 @@ export function validateRecipe(candidate) {
     wpCli: recipe.wpCli,
     wxrUrl: normalizeOptionalUrl(recipe.wxrUrl, 'WXR import'),
     phpExtensionManifestUrl: normalizeOptionalUrl(recipe.phpExtensionManifestUrl, 'PHP extension manifest'),
-    landingPage: recipe.landingPage,
+    landingPage: normalizeLandingPage(recipe.landingPage),
     plugins: [...new Set(recipe.plugins)],
     repositoryPlugins: [...new Set(recipe.repositoryPlugins)],
     theme: recipe.theme.trim(),

@@ -38,11 +38,11 @@ Primary controls:
 
 The version selector initially uses the source-controlled fallback from 6.3 upward. Page load refreshes it from the WordPress.org core version API. `latest` displays the exact resolved release when available. An exact version from an older saved recipe remains selectable even if the live API omits it.
 
-Advanced settings are collapsed by default and contain:
+Advanced settings are collapsed by default, but open when either external setup URL is present (including imported, saved, history and restored recipes). They contain:
 
 - Site setup: language, post-launch destination, site title, tagline, and permalink format.
 - Runtime features: outbound networking, Multisite, PHP Intl, WP-CLI, WordPress debug mode, debug log, and unminified development scripts.
-- External setup: HTTPS WXR import and PHP-Wasm extension-manifest URLs. Localhost HTTP is allowed for development. These controls visibly warn that downloaded content executes inside Playground.
+- External setup: HTTPS WXR import and PHP-Wasm extension-manifest URLs. Localhost HTTP is allowed for development. These controls visibly warn that downloaded content executes inside Playground. Import and launch both require confirmation listing the external sources. Canceling leaves the import unapplied or the runtime unstarted.
 
 One-time options such as Multisite and WXR import run only for a newly created browser-saved environment, not every resume.
 
@@ -164,6 +164,8 @@ States:
 
 The derived non-exportable AES key exists only in a React ref. Plaintext appears only in the controlled add field or briefly during an explicit copy. Locking/closing clears the key reference, plaintext state, copy status, and timers. Delete uses inline confirmation. Reset uses a destructive browser confirmation and deletes the complete license database; it has no recovery.
 
+Lock, close, unmount and reset invalidate the active vault session. Pending clipboard reads/decryption cannot submit a write afterward, and late unlock/create results cannot restore the key or metadata. Already-submitted OS clipboard writes cannot be recalled.
+
 The manager does not inject a license into WordPress. The user copies it and activates the package inside WordPress.
 
 ## 8. Accessibility and interaction requirements
@@ -192,3 +194,7 @@ A rebuild is not equivalent until it passes the automated contracts and manually
 - Temporary close/unload warnings.
 - License vault create, lock, unlock, copy, delete, reset, and incorrect-password handling without secret leakage.
 - Responsive and keyboard-accessible UI at 320 px, tablet, and desktop widths.
+
+## Recipe URL security (0.7.1)
+
+Recipe URLs reject userinfo and recognized credential/signature query or fragment parameter names, including encoded/case-varied aliases. Public HTTPS URLs, benign query parameters and loopback HTTP remain supported. Landing paths reject external authorities, backslashes and control characters. Invalid form input remains in memory; draft autosave removes the stored draft until validation succeeds. Previously stored invalid draft/library/history recipes are discarded on load. Arbitrary credentials embedded in otherwise ordinary text or URL paths cannot be recognized reliably; users must supply public, credential-free sources.

@@ -24,11 +24,13 @@ Recipes are the only supported portable configuration format. Unknown fields may
 | `wpCli` | boolean | `false` | Adds Playground's `wp-cli` extra library. |
 | `wxrUrl` | string | empty | Empty, HTTPS, or localhost HTTP; one-time import. |
 | `phpExtensionManifestUrl` | string | empty | Empty, HTTPS, or localhost HTTP; passed to Playground startup. |
-| `landingPage` | string | `/wp-admin/plugins.php` | Must begin with `/`. |
+| `landingPage` | string | `/wp-admin/plugins.php` | Must be an internal `/` path; external authorities, backslashes, whitespace/control characters and recognized credential parameters are rejected. |
 | `plugins` | string[] | empty | Unique local plugin vault IDs. |
 | `repositoryPlugins` | string[] | empty | Unique valid WordPress.org plugin slugs, max 100 chars each. |
 | `theme` | string | empty | Local theme vault ID. Mutually exclusive with `repositoryTheme`. |
 | `repositoryTheme` | string | empty | Valid WordPress.org theme slug or empty. |
+
+External URLs and landing paths reject URL userinfo and recognized credential parameters in queries/fragments (including token, API/auth key, signature, password, nonce and JWT aliases). Percent-encoded names are decoded by URLSearchParams; residual percent encodings in names are rejected. Harmless query parameters and loopback HTTP development URLs remain supported. This is not a detector for arbitrary secrets in URL paths or free text. Invalid draft input is never serialized; its localStorage entry is removed. Invalid legacy persisted recipes are dropped by the existing loaders.
 
 Any serialized input containing a field named `licensekey`, `license_key`, `license-key`, `api_key`, `apikey`, or `secret` (case-insensitive) is rejected.
 
@@ -114,7 +116,7 @@ License record:
 
 Key derivation is PBKDF2-HMAC-SHA-256 with 600,000 iterations and a per-vault salt, producing a non-exportable 256-bit AES-GCM key. Each secret has a unique IV. Authenticated additional data binds ciphertext to `id`, `pluginId`, and `name`, so metadata tampering prevents decryption.
 
-The master password, derived key, and plaintext are never stored. The verifier distinguishes a wrong password without persisting a password hash intended for login.
+The master password, derived key, and plaintext are never stored. A per-manager AbortController invalidates pending work on lock, close, unmount and reset. Clipboard copying requires a session signal and checks it before reads, after reads and immediately before submitting the write after decryption. Late create/unlock results and metadata continuations are discarded. Cancellation cannot retract clipboard writes already submitted to the browser. The verifier distinguishes a wrong password without persisting a password hash intended for login.
 
 ## OPFS WordPress data
 

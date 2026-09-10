@@ -1,7 +1,7 @@
 {
   "name": "techies-playground",
   "private": true,
-  "version": "0.7.0",
+  "version": "0.7.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -14,8 +14,8 @@
   "dependencies": {
     "@heroicons/react": "^2.2.0",
     "@tailwindcss/vite": "^4.1.16",
-    "@wp-playground/blueprints": "latest",
-    "@wp-playground/client": "latest",
+    "@wp-playground/blueprints": "3.1.47",
+    "@wp-playground/client": "3.1.47",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "tailwindcss": "^4.1.16"
@@ -24,5 +24,8 @@
     "@vitejs/plugin-react": "^5.0.4",
     "vite": "^7.1.7",
     "wrangler": "^4.122.0"
+  },
+  "overrides": {
+    "sharp": "0.35.4"
   }
 }
