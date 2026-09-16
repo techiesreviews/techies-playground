@@ -33,6 +33,8 @@ Prefer, in order:
 
 ## Index
 
+- [2026-09-16-release-0.8.0-deployed.md](2026-09-16-release-0.8.0-deployed.md) — successful pipeline, matching live assets and Chromium mixed-drop/persistence smoke.
+
 - [2026-09-16-release-0.8.0.md](2026-09-16-release-0.8.0.md) — release preparation and local deployment checks.
 - [2026-09-16-page-wide-package-drops.md](2026-09-16-page-wide-package-drops.md) — mixed plugin/theme ZIP drops and upload overlay.
 

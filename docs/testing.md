@@ -99,3 +99,7 @@ See [0.7.1 remediation and release](changes/2026-09-10-security-fixes.md). Chrom
 ## Page-wide upload checks (2026-09-16)
 
 `npm test`: 62 passed. `npm run build`: passed with a large-chunk warning. Automated drag checks use Node EventTarget, not rendered browser events. Manual follow-up: drag a mixed batch over header, controls, whitespace and dialogs; verify overlay, cancellation, individual errors, selections, persistence after refresh, and successive batches. Cross-origin iframe-first drags require a separate browser check; the parent cannot receive events originating inside that frame.
+
+### Live release verification
+
+A subsequent isolated Chromium smoke on production passed: synthetic drag events displayed the upload-box; a compressed plugin ZIP, invalid middle file, and two compressed theme ZIPs produced one plugin and two themes in their correct IndexedDB stores. Reload preserved plugin selection and the last theme selection with no directory theme. No page errors occurred. See [deployment evidence](changes/2026-09-16-release-0.8.0-deployed.md). This supplements the earlier unit/build-only evidence; physical OS drag and Firefox/Safari were not tested.
