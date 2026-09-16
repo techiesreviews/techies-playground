@@ -24,6 +24,7 @@ There is no application server or shared data store.
 | `src/lib/wordpress-versions.js` | Runtime WordPress.org version fetch, supported-version normalization, fallback and saved-version preservation. | App; release automation has parallel server-side logic. |
 | `src/lib/wordpress-org-plugins.js` | Featured/search requests and safe plugin result normalization. | App. |
 | `src/lib/wordpress-org-themes.js` | Search requests and safe theme result normalization. | App. |
+| `src/lib/package-upload.js` | ZIP header detection with zip.js and global file-drag listener lifecycle. | App and regression tests. |
 | `src/lib/vault.js` | IndexedDB plugin/theme ZIP CRUD and ZIP signature check. | App. |
 | `src/lib/license-vault.js` | IndexedDB encrypted license CRUD, PBKDF2 derivation, AES-GCM, clipboard copy. | `LicenseManager` in App. |
 | `src/lib/saved-recipes.js` | Parse, validate, upsert, rename-replace, and serialize saved recipes. | App. |
@@ -123,3 +124,7 @@ The daily WordPress release workflow checks the official API. A new release bran
 - Playground client/Blueprint dependencies are pinned to 3.1.47; other dependencies retain existing semver ranges. The lockfile provides reproducible installed versions and CI uses `npm ci`. fast-uri resolves to patched 3.1.7. A temporary Sharp 0.35.4 override fixes the Miniflare tooling dependency until its upstream pin catches up.
 
 Recipe autosave uses validated serialization; invalid form input removes the stored draft rather than writing raw values. Import confirmation precedes applying/saving external setup recipes, and every launch with external sources asks again. Advanced settings open automatically when those sources are present.
+
+## Page-wide package drops
+
+App registers capture-phase window drag listeners with cleanup and a nested-entry counter. File drags show a fixed upload overlay above launcher dialogs and the runtime frame; text/link drags retain native behavior. Drop copies FileList immediately and queues sequential imports. Each file is independently classified and persisted, then both libraries refresh. Detection inspects root or single-folder PHP/style.css headers, ignores metadata/hidden paths, limits candidate header files to 2 MiB, and rejects unknown or mixed-type archives. ZIP contents stay local; zip.js workers are disabled. A drag that begins directly inside the cross-origin WordPress iframe cannot be observed by the launcher until it crosses the parent page; once visible, the overlay covers that frame.

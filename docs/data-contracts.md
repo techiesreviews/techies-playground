@@ -82,6 +82,8 @@ Parsers treat malformed records as absent and drop individually invalid saved re
 - Stores: `plugins` and `themes`, both keyed by `id`.
 - Record: `{ id, label, filename, size, file, versionHint, savedAt }`.
 
+Page-wide drops classify archives from WordPress headers before saving into `plugins` or `themes`; filenames still determine stable IDs. There is no schema change or batch-count cap. Invalid/ambiguous archives fail individually. Multiple themes are stored, but only the last successful theme is selected and `repositoryTheme` is cleared. Browser quota failures are reported per file.
+
 `file` is the uploaded browser `File`/Blob. This database is not encrypted because plugin/theme ZIPs must be supplied directly to Playground. It is origin- and browser-profile-local.
 
 ## License vault IndexedDB

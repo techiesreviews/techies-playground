@@ -29,6 +29,7 @@ import {
 } from '@heroicons/react/16/solid'
 import { installPlugin, installTheme, zipWpContent } from '@wp-playground/blueprints'
 import { startPlaygroundWeb } from '@wp-playground/client'
+import { detectPackageType, registerPackageDrop } from './lib/package-upload'
 import { buildPreviewPlugin, hostPreviewSession } from './lib/playground-preview'
 import {
   DEFAULT_RECIPE,
@@ -104,6 +105,18 @@ const PERSISTED_SITES_KEY = 'private-playground-launcher:persisted-sites'
 const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-storage-default-v1'
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
+  {
+    version: '0.8.0',
+    date: 'September 16, 2026',
+    title: 'Drop plugins and themes anywhere',
+    summary: 'Add mixed batches of WordPress ZIPs directly from your desktop.',
+    changes: [
+      'Drag files over the launcher to reveal a page-wide upload box, then drop any number of ZIPs.',
+      'Automatically identify plugins and themes and save each to the correct browser-local library.',
+      'Follow upload progress and individual errors while remaining packages continue importing.',
+      'Select uploaded plugins and the last uploaded theme, keeping theme choices exclusive.',
+    ],
+  },
   {
     version: '0.7.1',
     date: 'September 10, 2026',
@@ -1320,6 +1333,15 @@ function FeaturedPluginCard({ plugin, selected, onToggle }) {
 }
 
 export default function App() {
+  const [isDraggingPackages, setIsDraggingPackages] = useState(false)
+  const [uploadMessage, setUploadMessage] = useState('')
+  const uploadQueueRef = useRef(Promise.resolve())
+  useEffect(() => registerPackageDrop(window, {
+    onActive: setIsDraggingPackages,
+    onFiles: (files) => {
+      uploadQueueRef.current = uploadQueueRef.current.then(() => importDroppedPackages(files))
+    },
+  }), [])
   const iframeRef = useRef(null)
   const launchButtonRef = useRef(null)
   const licenseButtonRef = useRef(null)
@@ -1564,6 +1586,48 @@ export default function App() {
     }
   }
 
+  async function importDroppedPackages(files) {
+    const failures = []
+    let pluginCount = 0
+    let themeCount = 0
+    setError('')
+    for (const [index, file] of files.entries()) {
+      setUploadMessage(`Uploading ${index + 1} of ${files.length}: ${file.name}`)
+      try {
+        const type = await detectPackageType(file)
+        const id = normalizePluginId(file.name)
+        if (!id) throw new Error('Could not create a package ID.')
+        const existing = await (type === 'theme' ? getTheme(id) : getPlugin(id))
+        await (type === 'theme' ? saveTheme : savePlugin)({
+          id, label: existing?.label || pluginLabelFromFilename(file.name),
+          filename: file.name, size: file.size, file,
+          versionHint: extractVersionHint(file.name), savedAt: Date.now(),
+        })
+        setActiveSavedId('')
+        setActiveSpinupId('')
+        if (type === 'theme') {
+          themeCount += 1
+          setThemeRecency((current) => markPluginSelected(current, id))
+          setRecipe((current) => validateRecipe({ ...current, theme: id, repositoryTheme: '' }))
+        } else {
+          pluginCount += 1
+          setPluginRecency((current) => markPluginSelected(current, id))
+          setRecipe((current) => validateRecipe({ ...current, plugins: [...current.plugins, id] }))
+        }
+      } catch (caught) {
+        failures.push(`${file.name}: ${caught.message}`)
+      }
+    }
+    try {
+      setPlugins(await listPlugins())
+      setThemes(await listThemes())
+    } catch (caught) {
+      failures.push(caught.message)
+    }
+    setUploadMessage(`Uploaded ${pluginCount} plugin${pluginCount === 1 ? '' : 's'} and ${themeCount} theme${themeCount === 1 ? '' : 's'} to this browser.${failures.length ? ` ${failures.length} upload error(s). ${failures.join(' ')}` : ''}`)
+    setError(failures.join(' '))
+  }
+
   async function handleZipImport(event) {
     setError('')
     try {
@@ -1638,7 +1702,7 @@ export default function App() {
           savedAt: Date.now(),
         })
         setThemeRecency((current) => markPluginSelected(current, id))
-        setRecipe((current) => validateRecipe({ ...current, theme: id }))
+        setRecipe((current) => validateRecipe({ ...current, theme: id, repositoryTheme: '' }))
       }
       setThemes(await listThemes())
     } catch (caught) {
@@ -2087,6 +2151,21 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
 
   return (
     <div className="isolate min-h-dvh bg-[#f7f8f6] text-neutral-950">
+      {isDraggingPackages && (
+        <div className="upload-box fixed inset-0 z-[1000] grid place-items-center bg-neutral-950/40 p-6 backdrop-blur-sm">
+          <div className="pointer-events-none grid w-full max-w-xl justify-items-center gap-3 rounded-2xl border-2 border-dashed border-teal-600 bg-white p-10 text-center shadow-xl" role="status">
+            <ArrowUpTrayIcon className="size-10 text-teal-700" aria-hidden="true" />
+            <h2 className="text-2xl font-semibold">Drop plugin & theme ZIPs anywhere</h2>
+            <p className="text-neutral-600">Drop as many as you need. We’ll put each package in the right place, privately in this browser.</p>
+          </div>
+        </div>
+      )}
+      {uploadMessage && (
+        <div role="status" className="fixed bottom-5 left-5 right-5 z-[1001] mx-auto flex max-w-xl items-start gap-4 rounded-xl border border-teal-200 bg-white p-4 shadow-lg">
+          <p className="min-w-0 flex-1 break-words">{uploadMessage}</p>
+          <button type="button" onClick={() => setUploadMessage('')} aria-label="Dismiss upload status"><XMarkIcon className="size-5" /></button>
+        </div>
+      )}
       <AppHeader onImportRecipe={handleRecipeImport} />
       <main className="mx-auto max-w-7xl px-5 py-8 sm:px-8 sm:py-10 lg:px-10">
         <div className="grid gap-8 lg:grid-cols-[13fr_7fr] lg:items-start">

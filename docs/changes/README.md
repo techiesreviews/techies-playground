@@ -33,6 +33,9 @@ Prefer, in order:
 
 ## Index
 
+- [2026-09-16-release-0.8.0.md](2026-09-16-release-0.8.0.md) — release preparation and local deployment checks.
+- [2026-09-16-page-wide-package-drops.md](2026-09-16-page-wide-package-drops.md) — mixed plugin/theme ZIP drops and upload overlay.
+
 - [2026-09-10-release-0.7.1-deployed.md](2026-09-10-release-0.7.1-deployed.md) — verified GitHub deployment and matching live security-release bundle.
 
 - [2026-09-10-security-fixes.md](2026-09-10-security-fixes.md) — 0.7.1 fixes for credential-bearing recipes, vault cancellation, external setup visibility and vulnerable dependencies.

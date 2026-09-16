@@ -26,7 +26,7 @@ For a deployment preparation, also run `npm run deploy:check`. Per `AGENTS.md`, 
 
 ## Current automated suite
 
-The suite uses Node's built-in test runner and contains 59 tests in the current working tree.
+The suite uses Node's built-in test runner and contains 62 tests in the current working tree.
 
 | Test module | Coverage |
 | --- | --- |
@@ -35,6 +35,7 @@ The suite uses Node's built-in test runner and contains 59 tests in the current 
 | `wordpress-org-plugins.test.js` | Slugs, normalized/sanitized results, entity decoding, artwork host allowlist, search and featured request parameters. |
 | `wordpress-org-themes.test.js` | Slugs, HTTPS screenshot normalization, artwork host allowlist, search request. |
 | `github-repository.test.js` | Public star-count normalization and the fixed Techies Playground repository API request. |
+| `package-upload.test.js` | Plugin/classic/block-theme header classification, misleading filenames, invalid/nested/ambiguous archives, 150-file drop forwarding, text drags, nested drag state, leave reset and listener cleanup. |
 | `vault.test.js` | Separate theme storage and IndexedDB transaction completion. |
 | `license-vault.test.js` | Authenticated encryption round trip, wrong-password failure, deletion transaction completion, abort during clipboard read/decryption, active-session copy and missing-session rejection. |
 | `saved-recipes.test.js` | Upsert, rename-replace, safe round trip, invalid-record dropping. |
@@ -94,3 +95,7 @@ After pushing `main` for deployment:
 ## Security remediation evidence (2026-09-10)
 
 See [0.7.1 remediation and release](changes/2026-09-10-security-fixes.md). Chromium checks used a separate localhost:4174 origin and synthetic data: unsafe drafts were not stored, accepted external imports opened Advanced settings, canceled imports/launches had no execution side effects, WordPress 7.1 launched, normal vault unlock/lock worked, and a delayed unlock after close left its key ref null. UI events and dialog responses were driven programmatically. Firefox/Safari behavior was not rerun. Run `npm audit` alongside the normal deployment checks when changing dependencies.
+
+## Page-wide upload checks (2026-09-16)
+
+`npm test`: 62 passed. `npm run build`: passed with a large-chunk warning. Automated drag checks use Node EventTarget, not rendered browser events. Manual follow-up: drag a mixed batch over header, controls, whitespace and dialogs; verify overlay, cancellation, individual errors, selections, persistence after refresh, and successive batches. Cross-origin iframe-first drags require a separate browser check; the parent cannot receive events originating inside that frame.
