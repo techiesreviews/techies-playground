@@ -33,6 +33,8 @@ Prefer, in order:
 
 ## Index
 
+- [2026-09-29-release-0.8.1-deployment-blocked.md](2026-09-29-release-0.8.1-deployment-blocked.md) — pipeline tests/build passed; Cloudflare rejected the stored API token.
+
 - [2026-09-29-release-0.8.1.md](2026-09-29-release-0.8.1.md) — release preparation for the Elementor scope fix.
 
 - [2026-09-29-short-playground-scope.md](2026-09-29-short-playground-scope.md) — short random runtime scope so Elementor's IDNA URL encoding no longer fatals at launch.
