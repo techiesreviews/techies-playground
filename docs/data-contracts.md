@@ -50,7 +50,7 @@ Local ZIPs and the PHP extension manifest are not serialized into these steps. T
 
 ## Preview tabs
 
-Preview navigation is an ephemeral UI contract, separate from recipes: `#preview=<encodeURIComponent(https://playground.wordpress.net/scope:launcher-<site-id>-<UUID>/<path>?<query>#<fragment>)>`. The target must use the exact HTTPS Playground origin, contain no URL credentials, and have a launcher scope. The fragment is not sent to the launcher hosting server. WordPress preview nonces, if present in the original link, remain in this browser URL; it is not a public sharing link.
+Preview navigation is an ephemeral UI contract, separate from recipes: `#preview=<encodeURIComponent(https://playground.wordpress.net/scope:launcher-<12 hex>/<path>?<query>#<fragment>)>`. The target must use the exact HTTPS Playground origin, contain no URL credentials, and have a launcher scope. The fragment is not sent to the launcher hosting server. WordPress preview nonces, if present in the original link, remain in this browser URL; it is not a public sharing link.
 
 `BroadcastChannel('techies-preview:<scope>')` carries only `{ type: 'ping' }`, `{ type: 'alive' }`, and `{ type: 'closed' }`. It transports no WordPress data or vault contents. The scope is unique per launch and is not a replacement for WordPress authorization. The preview shares the active site's WordPress permissions and can navigate within it; it is not a read-only sandbox. The generated mu-plugin lives in the site filesystem and is refreshed on launch, so snapshots can include it. No recipe or persisted-site index schema changes.
 

@@ -33,6 +33,10 @@ Prefer, in order:
 
 ## Index
 
+- [2026-09-29-release-0.8.1.md](2026-09-29-release-0.8.1.md) — release preparation for the Elementor scope fix.
+
+- [2026-09-29-short-playground-scope.md](2026-09-29-short-playground-scope.md) — short random runtime scope so Elementor's IDNA URL encoding no longer fatals at launch.
+
 - [2026-09-16-release-0.8.0-deployed.md](2026-09-16-release-0.8.0-deployed.md) — successful pipeline, matching live assets and Chromium mixed-drop/persistence smoke.
 
 - [2026-09-16-release-0.8.0.md](2026-09-16-release-0.8.0.md) — release preparation and local deployment checks.

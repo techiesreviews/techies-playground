@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import vm from 'node:vm'
-import { buildPreviewPlugin, installPreviewLinks, parsePreviewUrl } from './playground-preview.js'
+import { buildPreviewPlugin, createLauncherScope, installPreviewLinks, parsePreviewUrl } from './playground-preview.js'
 
 const scope = 'launcher-test-123'
 const site = `https://playground.wordpress.net/scope:${scope}/`
@@ -76,4 +76,16 @@ test('the generated mu-plugin script executes independently of module scope', ()
   assert.equal(opened[0][0], base + encodeURIComponent(site + 'sample-page/?preview=true#content'))
   assert.match(plugin, /add_action\('admin_head'/)
   assert.match(plugin, /add_action\('wp_head'/)
+})
+
+test('launcher scopes keep Playground URLs within the IDNA label limit', () => {
+  const scopes = new Set(Array.from({ length: 50 }, () => createLauncherScope()))
+  assert.equal(scopes.size, 50)
+  for (const value of scopes) {
+    assert.match(value, /^launcher-[a-f0-9]{12}$/)
+    const url = `https://playground.wordpress.net/scope:${value}/wp-admin/admin.php?page=elementor-connect&app=library&action=authorize`
+    // Mirrors Elementor's Str::encode_idn_url → WpOrg\Requests\IdnaEncoder::encode.
+    for (const label of url.replace(/^https?:\/\//, '').split('.')) assert.ok(label.length < 64, label)
+    assert.deepEqual(parsePreviewUrl(`#preview=${encodeURIComponent(`https://playground.wordpress.net/scope:${value}/`)}`)?.scope, value)
+  }
 })

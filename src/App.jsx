@@ -30,7 +30,7 @@ import {
 import { installPlugin, installTheme, zipWpContent } from '@wp-playground/blueprints'
 import { startPlaygroundWeb } from '@wp-playground/client'
 import { detectPackageType, registerPackageDrop } from './lib/package-upload'
-import { buildPreviewPlugin, hostPreviewSession } from './lib/playground-preview'
+import { buildPreviewPlugin, createLauncherScope, hostPreviewSession } from './lib/playground-preview'
 import {
   DEFAULT_RECIPE,
   buildPlaygroundBlueprint,
@@ -105,6 +105,15 @@ const PERSISTED_SITES_KEY = 'private-playground-launcher:persisted-sites'
 const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-storage-default-v1'
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
+  {
+    version: '0.8.1',
+    date: 'September 29, 2026',
+    title: 'Elementor launches fixed',
+    summary: 'Sites with Elementor start again instead of failing during setup.',
+    changes: [
+      'Use shorter internal site addresses so Elementor no longer stops WordPress with a "string is too long" error.',
+    ],
+  },
   {
     version: '0.8.0',
     date: 'September 16, 2026',
@@ -1905,7 +1914,7 @@ export default function App() {
       ? { ...launchedRecipe, wordpress: expectedLatestWordPressVersion }
       : launchedRecipe
     const siteId = persistedSiteId(runtimeRecipe)
-    const scope = `launcher-${siteId}-${crypto.randomUUID()}`
+    const scope = createLauncherScope()
     const usesBrowserStorage = launchedRecipe.storage === 'browser'
     const hasPersistedSite = usesBrowserStorage && readPersistedSites().has(siteId)
     const mountDescriptor = {
