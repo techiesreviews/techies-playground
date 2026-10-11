@@ -33,6 +33,8 @@ Prefer, in order:
 
 ## Index
 
+- [2026-10-11-release-0.8.2-deployment-blocked.md](2026-10-11-release-0.8.2-deployment-blocked.md) — pipeline install/tests/build passed; Cloudflare rejected the API token and production still serves 0.8.0.
+
 - [2026-10-11-release-0.8.2.md](2026-10-11-release-0.8.2.md) — release preparation for WordPress 7.1.3 fallback selection.
 
 - [2026-10-11-wordpress-7.1.3.md](2026-10-11-wordpress-7.1.3.md) — WordPress 7.1.3 fallback selection; live latest resolution and older branches preserved.
