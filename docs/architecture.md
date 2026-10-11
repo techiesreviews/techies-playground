@@ -99,6 +99,8 @@ The remembered-site list is only an index. Actual WordPress files live in OPFS. 
 | GitHub repository API | `api.github.com` and `github.com` | Load the public repository star count and link to the repository's star action. | The site-styled repository link remains usable without a count if the API request fails. |
 | User WXR/extension URLs | HTTPS or localhost HTTP | Trusted advanced setup input. | Validation rejects other schemes. |
 
+The WordPress selector fallback includes the exact WordPress 7.1.3 release alongside branches 6.3 through 7.1. Its `latest` option has no resolved version; only the live API resolves it, and a `latest` launch fails closed if that resolution fails. Saved-version preservation and OPFS site identity remain unchanged.
+
 ## Build and delivery
 
 Vite produces `dist`. `wrangler.jsonc` binds that directory as `ASSETS`, uses SPA fallback, runs `worker.js` first, enables observability, and maps the custom domain `play.techies.tools`.
@@ -113,7 +115,7 @@ The Worker adds:
 
 The production workflow runs only in `techiesreviews/techies-playground`, for actor `techiesreviews`, with repository variable `CLOUDFLARE_DEPLOY_ENABLED` explicitly set to `true`. It requires the `CLOUDFLARE_ACCOUNT_ID` repository variable and a non-empty `CLOUDFLARE_API_TOKEN` Actions secret. It installs with `npm ci`, tests, builds, then runs Wrangler through the pinned Cloudflare action. Keep the deployment gate disabled when credentials are unavailable; a missing token allows tests/build to pass but makes the Cloudflare action fail before upload.
 
-The daily WordPress release workflow checks the official API. A new release branch causes a minor app-version bump, fallback entry, lockfile update, and changelog entry on a reviewable automation branch. It tests/builds before opening or refreshing a pull request.
+The daily WordPress release workflow checks the official API. A new release branch causes a minor app-version bump, fallback entry, lockfile update, and changelog entry on a reviewable automation branch. It tests/builds before opening or refreshing a pull request. The workflow tracks major/minor branches, so patch releases within an existing branch do not trigger these edits; exact patch fallbacks such as 7.1.3 are maintained manually.
 
 ## Architectural constraints and known coupling
 

@@ -106,6 +106,16 @@ const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-stora
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
   {
+    version: '0.8.2',
+    date: 'October 11, 2026',
+    title: 'WordPress 7.1.3 selection',
+    summary: 'Choose WordPress 7.1.3 even when the version list cannot refresh.',
+    changes: [
+      'Add WordPress 7.1.3 to the fallback version list shown before a refresh or when the version API is unavailable.',
+      'Keep WordPress 7.1 and older release branches available in the fallback list.',
+    ],
+  },
+  {
     version: '0.8.1',
     date: 'September 29, 2026',
     title: 'Elementor launches fixed',

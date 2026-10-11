@@ -36,7 +36,7 @@ Primary controls:
 - PHP: 8.5, 8.4, 8.3, 8.2, 8.1, 8.0, or 7.4.
 - “Save playground in browser”: maps to `browser` storage when checked and `temporary` when unchecked.
 
-The version selector initially uses the source-controlled fallback from 6.3 upward. Page load refreshes it from the WordPress.org core version API. `latest` displays the exact resolved release when available. An exact version from an older saved recipe remains selectable even if the live API omits it.
+The version selector initially uses the source-controlled fallback with WordPress 7.1.3 and release branches from 6.3 through 7.1. Page load refreshes it from the WordPress.org core version API. The fallback leaves `latest` unresolved; `latest` displays the exact resolved release when the API is available and is resolved again at launch. An exact version from an older saved recipe remains selectable even if the live API omits it.
 
 Advanced settings are collapsed by default, but open when either external setup URL is present (including imported, saved, history and restored recipes). They contain:
 

@@ -4,6 +4,7 @@ const MINIMUM_BRANCH = [6, 3]
 
 export const WORDPRESS_VERSION_FALLBACK_OPTIONS = Object.freeze([
   { value: 'latest', label: 'Latest stable — resolved at launch', resolvedVersion: '' },
+  { value: '7.1.3', label: 'WordPress 7.1.3' },
   { value: '7.1', label: 'WordPress 7.1' },
   { value: '7.0', label: 'WordPress 7.0' },
   { value: '6.9', label: 'WordPress 6.9' },
