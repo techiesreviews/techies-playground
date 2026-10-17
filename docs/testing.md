@@ -26,7 +26,7 @@ For a deployment preparation, also run `npm run deploy:check`. Per `AGENTS.md`, 
 
 ## Current automated suite
 
-The suite uses Node's built-in test runner and contains 63 tests in the current working tree.
+The suite uses Node's built-in test runner and contains 65 tests in the current working tree.
 
 Use the project-local [Agent Kit](agents/agent-scripts.md): `scripts/agents/kit doctor`, `scripts/agents/kit specs`, and `scripts/agents/kit build`. Specs run Node tests only; browser specs and `kit shots` are not integrated. Real browser checks below use T3 separately and must not be inferred from the Node results.
 
@@ -46,6 +46,7 @@ Use the project-local [Agent Kit](agents/agent-scripts.md): `scripts/agents/kit 
 | `playground-persistence.test.js` | Unload warning, one-time storage-default migration, site identity/persistence labels. |
 | `playground-preview.test.js` | Preview target validation, preserved query/fragment, modified clicks, external/download/ordinary navigation exclusions, direct popup mapping, standalone execution of the generated mu-plugin script. |
 | `sync-wordpress-release.test.mjs` | Stable release selection, branch normalization, minor version bump, no-op and generated release edits. |
+| `scripts/agents/kit-wait.test.mjs` | Actual CI-wait command over a mocked GitHub CLI: a cancelled explicit SHA fails for that commit; a branch wait can follow its superseding head. |
 
 The suite does not render React components or start WordPress Playground. It proves pure contracts, not full browser behavior.
 
