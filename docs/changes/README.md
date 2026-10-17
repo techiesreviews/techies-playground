@@ -33,6 +33,8 @@ Prefer, in order:
 
 ## Index
 
+- [2026-10-17-release-0.8.3-deployment.md](2026-10-17-release-0.8.3-deployment.md) — 0.8.3 pushed; GitHub tests/build pass, Cloudflare rejects token with 10000/9109, and live domain remains 0.8.0.
+
 - [2026-10-17-release-0.8.3-validation.md](2026-10-17-release-0.8.3-validation.md) — immutable release review, CI-wait correction and additional uploaded-plugin/theme-count browser evidence before publication.
 
 - [2026-10-17-ci-wait-sha.md](2026-10-17-ci-wait-sha.md) — explicit CI SHA waits remain pinned after cancellation; branch waits retain superseded-head following, with mocked-GitHub red/green coverage.

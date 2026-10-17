@@ -126,6 +126,8 @@ The Worker adds:
 
 The production workflow runs only in `techiesreviews/techies-playground`, for actor `techiesreviews`, with repository variable `CLOUDFLARE_DEPLOY_ENABLED` explicitly set to `true`. It requires the `CLOUDFLARE_ACCOUNT_ID` repository variable and a non-empty `CLOUDFLARE_API_TOKEN` Actions secret. It installs with `npm ci`, tests, builds, then runs Wrangler through the pinned Cloudflare action. Keep the deployment gate disabled when credentials are unavailable; a missing token allows tests/build to pass but makes the Cloudflare action fail before upload.
 
+On 2026-10-17, source release 0.8.3 passed GitHub installation/tests/build, but Cloudflare rejected the deployment token with codes 10000 and 9109. The post-run public asset check still identifies live release 0.8.0. The selected-plugin fix is on main but is not verified in production. See [the 0.8.3 deployment outcome](changes/2026-10-17-release-0.8.3-deployment.md).
+
 The daily WordPress release workflow checks the official API. A new release branch causes a minor app-version bump, fallback entry, lockfile update, and changelog entry on a reviewable automation branch. It tests/builds before opening or refreshing a pull request. The workflow tracks major/minor branches, so patch releases within an existing branch do not trigger these edits; exact patch fallbacks such as 7.1.3 are maintained manually.
 
 ## Architectural constraints and known coupling
