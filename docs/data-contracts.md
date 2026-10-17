@@ -36,6 +36,8 @@ Any serialized input containing a field named `licensekey`, `license_key`, `lice
 
 The starter recipe intentionally contains only the original minimal fields. Validation fills all later schema-1 defaults, preserving backward compatibility.
 
+Selected directory-plugin names and artwork are session-only UI metadata. They do not become recipe fields; refreshed or imported recipes can display their public slugs until metadata is available.
+
 ## Generated Blueprint
 
 A validated recipe produces:

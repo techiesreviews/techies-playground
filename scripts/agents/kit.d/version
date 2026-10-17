@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# kit: show the kit's commit, owner and Node version
+set -euo pipefail
+# shellcheck source=scripts/agents/kit-lib.sh
+source "${KIT_LIB:-$(dirname -- "${BASH_SOURCE[0]}")/../kit-lib.sh}"
+case ${1-} in
+  --help|-h)
+    printf "Usage: kit version\nShow the kit's commit, owner and Node version.\n"
+    exit 0
+    ;;
+esac
+sha=$(git -C "$(kit_root)" rev-parse --short HEAD)
+ver=$(node --version 2>/dev/null) || ver=none
+printf 'commit %s\nowner %s\nnode %s\n' "$sha" "$(kit_owner)" "$ver"
+kit_result ok "version $sha node $ver"

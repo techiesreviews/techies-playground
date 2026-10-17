@@ -33,6 +33,20 @@ Prefer, in order:
 
 ## Index
 
+- [2026-10-17-release-0.8.3.md](2026-10-17-release-0.8.3.md) — patch release preparation for visible selected plugins, recognizable summary names and accurate selected counts; production verification is pending.
+
+- [2026-10-17-selected-directory-plugins.md](2026-10-17-selected-directory-plugins.md) — selected repository plugins remain visible after clearing search; summary names and selected counts reflect the recipe; runtime hiccup remains independently unconfirmed.
+
+- [2026-10-17-agent-kit-integration.md](2026-10-17-agent-kit-integration.md) — project-local doctor, Node specs, build, wait and read-only review integration; browser evidence remains separate.
+
+- [2026-10-13-vivaldi-comparison-blocked.md](2026-10-13-vivaldi-comparison-blocked.md) — official Vivaldi 8.2.4133.84 extracted for comparison; headless browser startup fails before page navigation, so no Vivaldi Playground result is claimed.
+
+- [2026-10-13-playground-standalone-chromium.md](2026-10-13-playground-standalone-chromium.md) — standalone Chrome 153/155 boot official WordPress 7.1.3; Chrome 155 also verifies a live temporary launcher setup; original T3 download failure's cause remains inconclusive.
+
+- [2026-10-13-playground-firefox-comparison.md](2026-10-13-playground-firefox-comparison.md) — standalone Firefox 157.0 boots official WordPress 7.1.3 and reads worker ZIP bytes; original T3 Chromium failure's cause remains inconclusive.
+
+- [2026-10-13-playground-download-failure.md](2026-10-13-playground-download-failure.md) — WordPress 7.1.3 worker download fails in both the launcher and official Playground; archive availability confirmed, exact cause and local remediation inconclusive.
+
 - [2026-10-11-release-0.8.2-deployment-blocked.md](2026-10-11-release-0.8.2-deployment-blocked.md) — pipeline install/tests/build passed; Cloudflare rejected the API token and production still serves 0.8.0.
 
 - [2026-10-11-release-0.8.2.md](2026-10-11-release-0.8.2.md) — release preparation for WordPress 7.1.3 fallback selection.

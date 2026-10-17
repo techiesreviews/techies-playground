@@ -26,7 +26,9 @@ For a deployment preparation, also run `npm run deploy:check`. Per `AGENTS.md`, 
 
 ## Current automated suite
 
-The suite uses Node's built-in test runner and contains 62 tests in the current working tree.
+The suite uses Node's built-in test runner and contains 63 tests in the current working tree.
+
+Use the project-local [Agent Kit](agents/agent-scripts.md): `scripts/agents/kit doctor`, `scripts/agents/kit specs`, and `scripts/agents/kit build`. Specs run Node tests only; browser specs and `kit shots` are not integrated. Real browser checks below use T3 separately and must not be inferred from the Node results.
 
 | Test module | Coverage |
 | --- | --- |
@@ -48,6 +50,8 @@ The suite uses Node's built-in test runner and contains 62 tests in the current 
 The suite does not render React components or start WordPress Playground. It proves pure contracts, not full browser behavior.
 
 ## Manual smoke matrix
+
+For selected directory plugins, search `query monitor`, select Query Monitor, and clear search. Its selected row and summary name must remain visible; changing the query must retain the name. Select a featured plugin too and verify two selected packages without a duplicate featured row at empty search. Refresh and confirm the non-featured selected slug remains visible/removable even without cached metadata. Remove it and verify the recipe, selected count, and summary update. See [the 2026-10-17 red/green evidence and mobile check](changes/2026-10-17-selected-directory-plugins.md). This UI check does not start WordPress or establish the cause of a runtime hiccup.
 
 Use synthetic ZIPs/test packages and non-production vendor licenses.
 
@@ -82,6 +86,66 @@ After pushing `main` for deployment:
 3. Open `https://play.techies.tools` and check title, current changelog version, and a non-destructive launch/search smoke.
 4. Inspect response headers for the CSP and other headers defined in `worker.js`.
 5. Record the run URL, live check result, and any rollback/follow-up in the change record.
+
+## Runtime download investigation (2026-10-13)
+
+Latest resolves to WordPress 7.1.3, but the isolated browser reproduced `Failed to fetch` at the remote worker's exact core ZIP download in both the live launcher and `https://playground.wordpress.net/?wp=7.1.3`. Terminal HTTP 200 and a successful main-thread archive fetch did not establish worker-readable bytes or successful boot. The reported service-worker 403 was not reproduced: current `sw.js` returned HTTP 200 and its update completed. See [the complete investigation and limitations](changes/2026-10-13-playground-download-failure.md).
+
+To replay the minimized worker probe, open `https://playground.wordpress.net/remote.html` and run this in its page JavaScript context. The investigation used browser automation to evaluate equivalent inline JavaScript; no helper script was retained. The timeout bounds the probe and `finally` releases the worker and Blob URL. It asserts the exact fetch rejection separately from unrelated worker errors. Run an ordinary main-thread fetch of the same URL separately to compare contexts. An opaque `no-cors` response cannot supply a ZIP for boot.
+
+```js
+await (async () => {
+  const url = 'https://wordpress-playground-cors-proxy.net/?https://wordpress.org/wordpress-7.1.3.zip'
+  const source = `onmessage = async ({ data: url }) => {
+    try {
+      const response = await fetch(url, { cache: 'no-store' })
+      const bytes = (await response.arrayBuffer()).byteLength
+      postMessage({ origin: self.origin, status: response.status, bytes })
+    } catch (error) {
+      postMessage({ origin: self.origin, name: error.name, error: error.message })
+    }
+  }`
+  const workerUrl = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }))
+  const worker = new Worker(workerUrl)
+  let timeout
+  try {
+    const result = await new Promise((resolve, reject) => {
+      timeout = setTimeout(() => reject(new Error('Worker probe timed out')), 30000)
+      worker.onmessage = ({ data }) => resolve(data)
+      worker.onerror = (event) => reject(new Error(event.message))
+      worker.postMessage(url)
+    })
+    console.log(result)
+    if (result.error === 'Failed to fetch') {
+      throw new Error('Reproduced: worker core download rejected with Failed to fetch')
+    }
+    if (result.error || result.status !== 200 || result.bytes <= 0) {
+      throw new Error('Worker probe encountered a different failure')
+    }
+    return result
+  } finally {
+    clearTimeout(timeout)
+    worker.terminate()
+    URL.revokeObjectURL(workerUrl)
+  }
+})()
+```
+
+The documentation snippet is a replay procedure, not an automated regression test or proof that a runtime fix exists. No runtime code changed during this investigation. Its original coverage did not include Firefox, Safari, successful 7.1.3 boot, or OPFS resume.
+
+### Standalone Firefox comparison
+
+In a subsequent fresh-context Playwright 1.64.0 run, Firefox 157.0 boots `https://playground.wordpress.net/?wp=7.1.3`. A second fresh boot confirms the scoped site's generator is `WordPress 7.1.3`; additional About-page navigation times out after 30 seconds. Main-thread and Blob-worker probes both read the full 37,226,383-byte core ZIP with HTTP 200. Cached WebKit could not start because `libevent-2.1.so.7` was missing. No network configuration was changed; identical T3 and standalone-browser network paths were not verified. See [the comparison and exact limitations](changes/2026-10-13-playground-firefox-comparison.md). This verifies the official Playground in Firefox, not the launcher's embedded Firefox flow, OPFS resume, or the cause of the original Chromium failure.
+
+### Standalone Chromium comparison
+
+A subsequent standalone Google Chrome 155.0.8059.39 run through Playwright 1.64.0 also boots the exact official release and verifies `WordPress 7.1.3` in the scoped frontend generator. Its sandbox is enabled; no custom launch arguments or security/network overrides are used. Main-thread and Blob-worker fetches both read 37,226,383 ZIP bytes with HTTP 200. The proxy's allowed origin matches the request origin; a Blob-worker request succeeds without a `Referer`. See [the comparison](changes/2026-10-13-playground-standalone-chromium.md). A universal Chromium failure is not established, and differences between T3 and standalone environments remain unisolated. No application fix is claimed.
+
+Two bounded follow-ups pass: cached standalone Chrome for Testing 153.0.8010.12 boots the same official release, and fresh standalone Chrome 155.0.8059.39 launches `latest` on `play.techies.tools` with browser storage unchecked and no packages selected. The live launcher shows `Ready on WordPress 7.1.3. Activate licenses inside WordPress when needed.` after its PHP version check. Its admin frame has no generator meta value. This demonstrates a working temporary setup, not an OPFS/package test or a proven upgrade/profile repair for the user's original failure. The cached build is not the T3 browser's reported version 154.0.8037.92.
+
+### Vivaldi comparison limitation
+
+The user reports latest Vivaldi with `No blocking` for the launcher and local use on Ubuntu and Windows. The current official Linux asset, Vivaldi 8.2.4133.84, was extracted without system installation for a bounded comparison. Headless Playwright startup never produces a page, including a persistent-profile attempt and a final wrapper-environment correction; native processes exit with `SIGSEGV`. This is a test-environment limitation, not an executed Vivaldi Playground failure. No Vivaldi service-worker response, core ZIP response, user-agent version, shield state, or WordPress readiness result is established. See [the attempted comparison and cleanup](changes/2026-10-13-vivaldi-comparison-blocked.md). The user's exact operating-system versions and normal interactive Vivaldi profiles were not duplicated; VPN/extension status and identical failures on both systems remain unconfirmed.
 
 ## Known coverage gaps at the 2026-08-28 baseline
 

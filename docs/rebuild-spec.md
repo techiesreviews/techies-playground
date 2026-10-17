@@ -69,7 +69,7 @@ Uploaded plugins can be selected independently, replaced in place, or deleted. D
 
 The same search field filters uploaded plugins immediately and queries WordPress.org after 350 ms when the trimmed query contains at least two characters. Uploaded results appear first. Directory results show sanitized name, slug, version, author, active installs, tested WordPress version, and official icon when present.
 
-With an empty search, fetch and show eight featured WordPress.org plugins as selectable cards before the uploaded-plugin section. Uploaded plugins and WordPress.org search results use the same card surface, selected teal background/ring, and round teal check-circle as the featured cards, while uploaded-package replacement and deletion remain separate actions. Once the user enters a query, uploaded matches return to the first position and the featured grid is replaced by the directory search state or results. Failures produce a non-blocking unavailable message. Selected directory slugs remain visible even when they are absent from the latest result set.
+With an empty search, fetch and show eight featured WordPress.org plugins as selectable cards before the uploaded-plugin section. Uploaded plugins and WordPress.org search results use the same card surface, selected teal background/ring, and round teal check-circle as the featured cards, while uploaded-package replacement and deletion remain separate actions. Once the user enters a query, uploaded matches return to the first position and the featured grid is replaced by the directory search state or results. Failures produce a non-blocking unavailable message. Selected directory plugins remain visible and removable when search is cleared or changed, including while a new search loads. At empty search, selected featured plugins remain on their existing cards; other selected directory plugins appear in a selected section. Safe directory metadata is cached in memory during the session so selected names survive query changes; a refreshed or imported slug may appear as its slug until metadata is available. Plugin and theme tabs explicitly count selected packages, including WordPress.org selections.
 
 Multiple WordPress.org plugins may be selected. They never replace similarly named local packages.
 
@@ -101,7 +101,7 @@ Import validates JSON, loads it, and saves it to the library. Missing local pack
 
 ## 4. Launch summary
 
-The desktop summary is sticky and shows recipe name, WordPress/PHP, package counts, storage mode, and networking state. It repeats the launch action and three product assurances: browser-local execution, secret-free recipes, and the official Playground runtime.
+The desktop summary is sticky and shows recipe name, WordPress/PHP, package counts and selected plugin names, storage mode, and networking state. Local plugin names come from the vault; directory names come from session metadata, with IDs or public slugs as fallbacks. Long names wrap within the summary. It repeats the launch action and three product assurances: browser-local execution, secret-free recipes, and the official Playground runtime.
 
 During launch it shows three ordered stages:
 

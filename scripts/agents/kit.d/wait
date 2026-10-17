@@ -1,0 +1,242 @@
+#!/usr/bin/env node
+// kit: wait for a process, an output file or CI checks
+import { execFile } from "node:child_process";
+import { existsSync, readdirSync, readFileSync, readlinkSync, realpathSync, statSync } from "node:fs";
+import { promisify } from "node:util";
+import { setTimeout as delay } from "node:timers/promises";
+import { kitResult, kitOwner } from "../kit-lib.mjs";
+import { summarizeRuns, failingSteps, latestWorkflowRuns } from "../ci-summary.mjs";
+
+const usage = `Usage: kit wait pid <pid> [--timeout D]
+       kit wait output <file> [--until <regex>] [--quiet D] [--timeout D]
+       kit wait ci [--branch B | --pr N | --sha S] [--timeout D]
+Durations: seconds (bare number or s), minutes (m), hours (h). Default timeout: 30m.
+Output without --until finishes when every process seen writing the file has exited and its size
+stayed unchanged for the quiet period (default 5s); a writer never seen holding the file is covered
+only by the quiet period. CI branch: main.`;
+const args = process.argv.slice(2);
+const execute = promisify(execFile);
+const controller = new AbortController();
+let interrupted = false;
+for (const [signal, code] of [["SIGINT", 130], ["SIGTERM", 143]]) {
+  process.on(signal, () => {
+    interrupted = true;
+    process.exitCode = code;
+    controller.abort();
+  });
+}
+
+function duration(value) {
+  const match = /^(\d+(?:\.\d+)?)(s|m|h)?$/.exec(value ?? "");
+  const ms = match && Number(match[1]) * ({ s: 1000, m: 60000, h: 3600000 }[match[2] || "s"]);
+  if (!ms || !Number.isFinite(ms) || ms > Number.MAX_SAFE_INTEGER) throw new Error(`invalid duration: ${value}`);
+  return ms;
+}
+function elapsed(ms) {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  const seconds = Math.floor(ms / 1000);
+  return `${seconds >= 60 ? `${Math.floor(seconds / 60)}m` : ""}${seconds % 60}s`;
+}
+function interval(name, fallback) {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+function parse() {
+  const kind = args.shift();
+  if (!["pid", "output", "ci"].includes(kind)) throw new Error("expected pid, output or ci");
+  const target = kind === "ci" ? null : args.shift();
+  if (!target && kind !== "ci") throw new Error(`missing ${kind} target`);
+  const options = {};
+  const allowed = kind === "output" ? ["timeout", "until", "quiet"] : kind === "ci" ? ["timeout", "branch", "pr", "sha"] : ["timeout"];
+  while (args.length) {
+    const flag = args.shift();
+    const key = flag.slice(2);
+    if (!flag.startsWith("--") || !allowed.includes(key) || key in options || !args.length)
+      throw new Error(`invalid option: ${flag}`);
+    options[key] = args.shift();
+  }
+  if (kind === "pid" && !/^\d+$/.test(target)) throw new Error(`invalid pid: ${target}`);
+  if (kind === "ci") {
+    if (["branch", "pr", "sha"].filter((key) => key in options).length > 1) throw new Error("choose only one of --branch, --pr or --sha");
+    if (options.pr !== undefined && !/^\d+$/.test(options.pr)) throw new Error(`invalid PR: ${options.pr}`);
+    if (options.sha !== undefined && !/^[a-f0-9]{7,40}$/i.test(options.sha)) throw new Error(`invalid SHA: ${options.sha}`);
+    if (options.branch === "") throw new Error("empty branch");
+  }
+  return { kind, target, options, timeout: duration(options.timeout ?? "30m"),
+    quiet: duration(options.quiet ?? "5s"), regex: options.until === undefined ? null : new RegExp(options.until, "m") };
+}
+// A process can exit between opening one of its /proc files and reading it:
+// the read then fails with ESRCH, which means the same as a missing file.
+const gone = (error) => ["ENOENT", "ESRCH"].includes(error.code);
+function running(pid) {
+  if (!existsSync(`/proc/${pid}`)) return false;
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+    return stat.slice(stat.lastIndexOf(")") + 2).split(" ")[0] !== "Z";
+  } catch (error) {
+    if (gone(error)) return false;
+    throw error;
+  }
+}
+function content(file) {
+  try { return readFileSync(file, "utf8"); }
+  catch (error) { if (error.code === "ENOENT") return null; throw error; }
+}
+function tail(text) {
+  if (!text) return;
+  const lines = text.replace(/\r?\n$/, "").split(/\r?\n/).slice(-20);
+  console.log(lines.join("\n"));
+}
+// Return the PIDs that hold the file open for writing right now.
+function writers(file) {
+  const path = realpathSync(file);
+  const found = new Set();
+  for (const pid of readdirSync("/proc").filter((name) => /^\d+$/.test(name) && Number(name) !== process.pid)) {
+    let fds;
+    try {
+      if (!running(pid)) continue;
+      fds = readdirSync(`/proc/${pid}/fd`);
+    }
+    catch (error) { if (error.code === "EACCES" || gone(error)) continue; throw error; }
+    for (const fd of fds) {
+      try {
+        if (readlinkSync(`/proc/${pid}/fd/${fd}`) !== path) continue;
+        const flags = /^flags:\s+([0-7]+)/m.exec(readFileSync(`/proc/${pid}/fdinfo/${fd}`, "utf8"));
+        if (flags && (parseInt(flags[1], 8) & 3)) { found.add(pid); break; }
+      } catch (error) { if (error.code !== "EACCES" && !gone(error)) throw error; }
+    }
+  }
+  return found;
+}
+
+async function wait(config) {
+  const { kind, target, options, timeout, quiet, regex } = config;
+  const label = kind === "ci" ? options.pr !== undefined ? `pr ${options.pr}` : options.sha ?? options.branch ?? "main" : target;
+  console.log(`kit wait ${kind} ${label} (owner ${kitOwner()})`);
+  const started = Date.now();
+  const deadline = started + timeout;
+  const poll = interval("KIT_WAIT_POLL_MS", kind === "ci" ? 30000 : 1000);
+  const status = interval("KIT_WAIT_STATUS_MS", 60000);
+  let lastStatus = started;
+  let head = options.sha ?? "";
+  let branch = options.branch ?? "main";
+  let branchResolved = false;
+  let previous = [];
+  let size = null;
+  let changed = started;
+  let first = true;
+  let outputPrinted = false;
+  // A producer may close the file between writes; keep waiting until every writer seen has exited.
+  const producers = new Set();
+  const finish = (ok, message) => {
+    if (kind === "output") {
+      outputPrinted = true;
+      tail(content(target));
+    }
+    kitResult(ok ? "ok" : "fail", message);
+    process.exitCode = ok ? 0 : 1;
+  };
+  const timeoutMessage = () => `${kind} ${label}${kind === "ci" ? ` ${head.slice(0, 7) || "unknown"}` : kind === "pid" ? " still running," : ""} timed out after ${options.timeout ?? "30m"}`;
+  const gh = async (argv) => {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) throw new Error(timeoutMessage());
+    const { stdout } = await execute("gh", argv, {
+      timeout: Math.min(60000, remaining), signal: controller.signal, maxBuffer: 32 * 1024 * 1024,
+      env: { ...process.env, GH_PAGER: "cat", NO_COLOR: "1" },
+    });
+    return stdout;
+  };
+  const resolveHead = async () => {
+    if (options.pr !== undefined) {
+      const pr = JSON.parse(await gh(["pr", "view", options.pr, "--json", "headRefName,headRefOid"]));
+      branch = pr.headRefName;
+      return pr.headRefOid;
+    }
+    return (await gh(["api", `repos/{owner}/{repo}/commits/${encodeURIComponent(branch)}`, "--jq", ".sha"])).trim();
+  };
+  try {
+    while (!interrupted) {
+      if (!first && Date.now() >= deadline) return finish(false, timeoutMessage());
+      if (kind === "pid") {
+        if (!running(target)) return finish(true, first ? `pid ${target} not running` : `pid ${target} exited after ${elapsed(Date.now() - started)}`);
+      } else if (kind === "output") {
+        const text = content(target);
+        if (text !== null) {
+          if (regex?.test(text)) return finish(true, `output ${target} matched /${options.until}/ after ${elapsed(Date.now() - started)}`);
+          if (!regex) {
+            const nextSize = statSync(target).size;
+            if (size !== nextSize) { size = nextSize; changed = Date.now(); }
+            for (const pid of writers(target)) producers.add(pid);
+            for (const pid of producers) if (!running(pid)) producers.delete(pid);
+            if (!producers.size && Date.now() - changed >= quiet)
+              return finish(true, `output ${target} finished after ${elapsed(Date.now() - started)}`);
+          }
+        } else size = null;
+      } else {
+        if (options.sha && !branchResolved) {
+          const runs = JSON.parse(await gh(["run", "list", "--commit", options.sha, "--limit", "1", "--json", "headBranch"]));
+          if (runs.length) {
+            branch = runs[0].headBranch;
+            if (head.length < 40) head = (await gh(["api", `repos/{owner}/{repo}/commits/${head}`, "--jq", ".sha"])).trim();
+            branchResolved = true;
+          }
+        }
+        if (!options.sha || branchResolved) {
+          // Stay on the starting head; only a cancelled run on a moved head switches it.
+          if (!head) head = await resolveHead();
+          const runs = await latestWorkflowRuns(gh, branch, head);
+          const summary = summarizeRuns(runs, head);
+          // Summary owns run selection; pair its failure IDs with cancellation metadata.
+          const cancelled = runs.some((run) => summary.failedRunIds.includes(run.databaseId) && run.conclusion === "cancelled");
+          const fresh = cancelled ? await resolveHead() : head;
+          if (fresh !== head) {
+            console.log(`superseded by ${fresh.slice(0, 7)}`);
+            head = fresh; previous = []; continue;
+          }
+          for (const line of summary.lines) if (!previous.includes(line)) console.log(line);
+          previous = summary.lines;
+          if (!summary.pending) {
+            if (!summary.exitCode) return finish(true, `ci ${label} ${head.slice(0, 7)} green (${summary.lines.length} workflows) after ${elapsed(Date.now() - started)}`);
+            const names = [];
+            for (const id of summary.failedRunIds) {
+              names.push(runs.find((run) => run.databaseId === id).workflowName);
+              const { jobs } = JSON.parse(await gh(["run", "view", String(id), "--json", "jobs"]));
+              for (const line of failingSteps(jobs)) console.log(line);
+              tail(await gh(["run", "view", String(id), "--log-failed"]));
+            }
+            return finish(false, `ci ${label} ${head.slice(0, 7)} failed: ${names.join(", ")}`);
+          }
+        }
+      }
+      first = false;
+      if (Date.now() >= deadline) return finish(false, timeoutMessage());
+      if (Date.now() - lastStatus >= status) {
+        console.log(`waiting ${elapsed(Date.now() - started)}: ${kind} ${label}`);
+        lastStatus = Date.now();
+      }
+      await delay(Math.min(poll, deadline - Date.now()), undefined, { signal: controller.signal });
+    }
+  } catch (error) {
+    if (interrupted) return;
+    if (kind === "output" && !outputPrinted) {
+      outputPrinted = true;
+      try { tail(content(target)); }
+      catch { /* The original read error is reported below. */ }
+    }
+    const message = Date.now() >= deadline ? timeoutMessage() : (error.stderr?.trim() || error.message).split(/\r?\n/)[0];
+    kitResult("fail", message);
+    process.exitCode = 1;
+  }
+  // A signal leaves the interrupted RESULT to the kit front door.
+}
+if (args.includes("--help") || args.includes("-h")) console.log(usage);
+else {
+  let config;
+  try { config = parse(); }
+  catch (error) {
+    console.error(error.message);
+    kitResult("fail", error.message);
+    process.exitCode = 2;
+  }
+  if (config) await wait(config);
+}

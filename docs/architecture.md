@@ -42,6 +42,8 @@ All `*.test.js` and `*.test.mjs` files are direct Node tests for their sibling m
 
 `App` owns the active recipe and orchestration state. Derived views use `useMemo`; persistent data uses narrow library functions. There is no state context or reducer.
 
+Directory-plugin display metadata is cached in an in-memory `Map` as featured and search results arrive. Selected directory rows survive an empty or changed search, and the launch summary resolves selected plugin names from this cache or local vault metadata. Public slugs/IDs are display fallbacks when metadata is unavailable. Featured cards avoid duplicate rows at empty search. This cache is not persisted and does not alter recipes, Blueprint setup, or OPFS site identity. See [the selected-plugin regression record](changes/2026-10-17-selected-directory-plugins.md).
+
 Important refs are intentionally not state:
 
 - `clientRef`: the ready Playground client.
@@ -94,12 +96,21 @@ The remembered-site list is only an index. Actual WordPress files live in OPFS. 
 | Plugin directory API | `api.wordpress.org/plugins/info/1.2/` | Featured and searched plugins. | Non-blocking unavailable/empty message. |
 | Theme directory API | `api.wordpress.org/themes/info/1.2/` | Searched themes. | Non-blocking unavailable/empty message. |
 | Playground remote | `playground.wordpress.net/remote.html` | Embedded runtime. | Launch closes and surfaces error. |
+| Playground core-download proxy | `wordpress-playground-cors-proxy.net` | The remote runtime downloads numeric WordPress releases that are absent from its bundled releases. | A browser-rejected worker download prevents boot; the launcher closes and surfaces the runtime error. |
 | Plugin artwork | `ps.w.org` | Official icons only. | Invalid host becomes no image. |
 | Theme artwork | `ts.w.org` | Official screenshots only. | Invalid host becomes no image. |
 | GitHub repository API | `api.github.com` and `github.com` | Load the public repository star count and link to the repository's star action. | The site-styled repository link remains usable without a count if the API request fails. |
 | User WXR/extension URLs | HTTPS or localhost HTTP | Trusted advanced setup input. | Validation rejects other schemes. |
 
 The WordPress selector fallback includes the exact WordPress 7.1.3 release alongside branches 6.3 through 7.1. Its `latest` option has no resolved version; only the live API resolves it, and a `latest` launch fails closed if that resolution fails. Saved-version preservation and OPFS site identity remain unchanged.
+
+Archive availability and selector support do not establish runtime availability. On 2026-10-13, a WordPress 7.1.3 worker download failed in both the launcher and official Playground while the same archive was readable from a top-level remote page's main thread. No local remediation or precise upstream/browser cause was established. See [the investigation](changes/2026-10-13-playground-download-failure.md).
+
+A later standalone Firefox 157.0 comparison successfully boots official WordPress 7.1.3 and reads the archive from a dedicated worker. The original T3 Chromium failure's cause remains unestablished; identical network paths across those environments were not verified. See [the comparison](changes/2026-10-13-playground-firefox-comparison.md).
+
+Standalone Chrome 155.0.8059.39 subsequently boots the same official release with its sandbox enabled and reads the exact archive in a dedicated worker. The observed failure is therefore not universal across Chromium environments; no launcher remedy has been verified. See [the standalone Chromium comparison](changes/2026-10-13-playground-standalone-chromium.md).
+
+The same comparison also verifies a live temporary launcher environment in a fresh Chrome 155 context: `latest` starts WordPress 7.1.3 and reaches its PHP-verified ready state. This is a working basic setup; it does not identify or repair the original failing environment, and browser-saved persistence or package setup was not tested.
 
 ## Build and delivery
 

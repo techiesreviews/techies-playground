@@ -106,6 +106,18 @@ const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-stora
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
   {
+    version: '0.8.3',
+    date: 'October 17, 2026',
+    title: 'Keep selected plugins visible',
+    summary: 'See which plugins are selected before launching WordPress.',
+    changes: [
+      'Selected WordPress.org plugins stay visible and removable when you clear or change your search.',
+      'Plugin names stay recognizable across searches during the session. Refreshed or imported recipes can show public slugs until names are available.',
+      'The launch summary lists selected uploaded and WordPress.org plugin names alongside the package count.',
+      'Plugin and theme tabs show selected counts, including WordPress.org choices.',
+    ],
+  },
+  {
     version: '0.8.2',
     date: 'October 11, 2026',
     title: 'WordPress 7.1.3 selection',
@@ -638,7 +650,7 @@ function RepositoryPluginRow({ plugin, selected, onToggle }) {
         type="button"
         onClick={() => onToggle(plugin.slug)}
         aria-pressed={selected}
-        className="relative mt-0.5 inline-grid size-5 shrink-0 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 sm:size-4"
+        className="relative [margin-block-start:0.125rem] inline-grid size-5 shrink-0 place-items-center rounded-full active:bg-teal-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 sm:size-4"
       >
         <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
         {selected ? (
@@ -648,7 +660,7 @@ function RepositoryPluginRow({ plugin, selected, onToggle }) {
         )}
         <span className="sr-only">{selected ? 'Remove' : 'Add'} {plugin.name}</span>
       </button>
-      <button type="button" onClick={() => onToggle(plugin.slug)} className="min-w-0 flex-1 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600">
+      <button type="button" onClick={() => onToggle(plugin.slug)} className="min-w-0 flex-1 text-start [overflow-wrap:break-word] active:text-teal-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600">
         <span className="block font-medium text-neutral-950">{plugin.name}</span>
         <span className="block text-neutral-600">
           {plugin.slug}{plugin.version ? ` — ${plugin.version}` : ''}{plugin.activeInstalls ? ` — ${compactNumberFormatter.format(plugin.activeInstalls)} active installs` : ''}
@@ -1260,7 +1272,7 @@ function ThemeRow({ theme, selected, onSelect, onReplace, onRemove }) {
   )
 }
 
-function LaunchSummary({ recipe, selectedPackageLabel, status, error, onLaunch }) {
+function LaunchSummary({ recipe, selectedPackageLabel, selectedPluginLabels, status, error, onLaunch }) {
   const stages = [
     ['Preparing WordPress', status.step > 0],
     ['Installing selected packages', status.step > 1],
@@ -1278,8 +1290,11 @@ function LaunchSummary({ recipe, selectedPackageLabel, status, error, onLaunch }
             <dd className="text-right text-neutral-600">WordPress {recipe.wordpress}<br />PHP {recipe.php}</dd>
           </div>
           <div className="flex items-start justify-between gap-4">
-            <dt className="font-medium text-neutral-900">Packages</dt>
-            <dd className="text-right text-neutral-600">{selectedPackageLabel || 'WordPress only'}</dd>
+            <dt className="shrink-0 font-medium text-neutral-900">Packages</dt>
+            <dd className="min-w-0 text-end text-neutral-600 [overflow-wrap:break-word]">
+              {selectedPackageLabel || 'WordPress only'}
+              {selectedPluginLabels.length > 0 && <span className="block">{selectedPluginLabels.join(', ')}</span>}
+            </dd>
           </div>
           <div className="flex items-start justify-between gap-4">
             <dt className="font-medium text-neutral-900">Storage</dt>
@@ -1377,6 +1392,7 @@ export default function App() {
   const [featuredPlugins, setFeaturedPlugins] = useState([])
   const [featuredPluginState, setFeaturedPluginState] = useState({ loading: true, message: '' })
   const [repositoryPluginResults, setRepositoryPluginResults] = useState([])
+  const [repositoryPluginMetadata, setRepositoryPluginMetadata] = useState(() => new Map())
   const [repositoryPluginSearchState, setRepositoryPluginSearchState] = useState({ loading: false, message: '' })
   const [pluginRecency, setPluginRecency] = useState(() => parsePluginRecency(localStorage.getItem(PLUGIN_RECENCY_KEY)))
   const [themes, setThemes] = useState([])
@@ -1422,6 +1438,10 @@ export default function App() {
     selectedCount ? `${selectedCount} plugin${selectedCount === 1 ? '' : 's'}` : '',
     recipe.theme || recipe.repositoryTheme ? '1 theme' : '',
   ].filter(Boolean).join(' + ')
+  const selectedPluginLabels = [
+    ...recipe.plugins.map((id) => plugins.find((plugin) => plugin.id === id)?.label || id),
+    ...recipe.repositoryPlugins.map((slug) => repositoryPluginMetadata.get(slug)?.name || slug),
+  ]
   const missingPluginIds = useMemo(
     () => recipe.plugins.filter((id) => !plugins.some((plugin) => plugin.id === id)),
     [plugins, recipe.plugins],
@@ -1444,12 +1464,14 @@ export default function App() {
     [wordpressVersionOptions, recipe.wordpress],
   )
   const visibleRepositoryPlugins = useMemo(() => {
-    const bySlug = new Map(repositoryPluginResults.map((plugin) => [plugin.slug, plugin]))
+    const searching = Boolean(pluginSearch.trim())
+    const bySlug = new Map((searching ? repositoryPluginResults : []).map((plugin) => [plugin.slug, plugin]))
     for (const slug of recipe.repositoryPlugins) {
-      if (!bySlug.has(slug)) bySlug.set(slug, { slug, name: slug, version: '', author: '', activeInstalls: 0, tested: '', image: '' })
+      if (!searching && featuredPlugins.some((plugin) => plugin.slug === slug)) continue
+      if (!bySlug.has(slug)) bySlug.set(slug, repositoryPluginMetadata.get(slug) || { slug, name: slug, version: '', author: '', activeInstalls: 0, tested: '', image: '' })
     }
     return [...bySlug.values()]
-  }, [repositoryPluginResults, recipe.repositoryPlugins])
+  }, [pluginSearch, repositoryPluginResults, recipe.repositoryPlugins, repositoryPluginMetadata, featuredPlugins])
   const visibleRepositoryThemes = useMemo(() => {
     const bySlug = new Map(repositoryThemeResults.map((theme) => [theme.slug, theme]))
     if (recipe.repositoryTheme && !bySlug.has(recipe.repositoryTheme)) {
@@ -1468,6 +1490,7 @@ export default function App() {
     fetchFeaturedWordPressOrgPlugins({ signal: controller.signal })
       .then((results) => {
         setFeaturedPlugins(results)
+        setRepositoryPluginMetadata((current) => new Map([...current, ...results.map((plugin) => [plugin.slug, plugin])]))
         setFeaturedPluginState({ loading: false, message: results.length ? '' : 'No featured plugins are available right now.' })
       })
       .catch((caught) => {
@@ -1498,6 +1521,7 @@ export default function App() {
       searchWordPressOrgPlugins(query, { signal: controller.signal })
         .then((results) => {
           setRepositoryPluginResults(results)
+          setRepositoryPluginMetadata((current) => new Map([...current, ...results.map((plugin) => [plugin.slug, plugin])]))
           setRepositoryPluginSearchState({ loading: false, message: results.length ? '' : 'No WordPress.org plugins matched your search.' })
         })
         .catch((caught) => {
@@ -2322,7 +2346,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                     onClick={() => setSelectionMode('plugins')}
                     className={`shrink-0 rounded-t-lg px-3 py-2 text-sm/5 font-medium focus-visible:outline-2 -outline-offset-1 focus-visible:outline-teal-600 ${selectionMode === 'plugins' ? 'bg-neutral-200/70 text-neutral-950' : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950'}`}
                   >
-                    Choose plugins ({plugins.length})
+                    Choose plugins ({selectedCount} selected)
                   </button>
                   <button
                     type="button"
@@ -2331,7 +2355,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                     onClick={() => setSelectionMode('themes')}
                     className={`shrink-0 rounded-t-lg px-3 py-2 text-sm/5 font-medium focus-visible:outline-2 -outline-offset-1 focus-visible:outline-teal-600 ${selectionMode === 'themes' ? 'bg-neutral-200/70 text-neutral-950' : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950'}`}
                   >
-                    Choose themes ({themes.length})
+                    Choose themes ({recipe.theme || recipe.repositoryTheme ? 1 : 0} selected)
                   </button>
                   <button
                     type="button"
@@ -2587,12 +2611,13 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                         )}
                       </section>
 
-                      {pluginSearch.trim() && (pluginSearch.trim().length >= 2 || recipe.repositoryPlugins.length > 0 ? (
+                      {(pluginSearch.trim().length >= 2 || visibleRepositoryPlugins.length > 0) ? (
                         <section aria-labelledby="directory-plugins-heading" className="grid gap-2" aria-live="polite" aria-busy={repositoryPluginSearchState.loading}>
-                          <h3 id="directory-plugins-heading" className="font-mono text-base/7 tracking-wide text-neutral-500 sm:text-sm/6">WORDPRESS.ORG PLUGINS</h3>
-                          {repositoryPluginSearchState.loading ? (
+                          <h3 id="directory-plugins-heading" className="font-mono text-base/7 tracking-wide text-neutral-500 sm:text-sm/6">{pluginSearch.trim() ? 'WORDPRESS.ORG PLUGINS' : 'SELECTED WORDPRESS.ORG PLUGINS'}</h3>
+                          {repositoryPluginSearchState.loading && (
                             <div className="rounded-[min(1vw,var(--radius-xl))] bg-neutral-100 p-5 text-base/7 text-neutral-600 sm:text-sm/6">Searching WordPress.org…</div>
-                          ) : visibleRepositoryPlugins.length ? (
+                          )}
+                          {visibleRepositoryPlugins.length ? (
                             <div className="grid gap-3">
                               {visibleRepositoryPlugins.map((plugin) => (
                                 <RepositoryPluginRow
@@ -2603,15 +2628,15 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                                 />
                               ))}
                             </div>
-                          ) : (
+                          ) : !repositoryPluginSearchState.loading && (
                             <div className="rounded-[min(1vw,var(--radius-xl))] bg-neutral-100 p-5">
                               <p className="text-pretty text-base/7 font-medium text-neutral-900 sm:text-sm/6">{repositoryPluginSearchState.message || 'No WordPress.org plugins matched your search.'}</p>
                             </div>
                           )}
                         </section>
-                      ) : (
+                      ) : pluginSearch.trim() && (
                         <div className="rounded-[min(1vw,var(--radius-xl))] bg-neutral-100 p-5 text-base/7 text-neutral-600 sm:text-sm/6">Type at least 2 characters to search WordPress.org.</div>
-                      ))}
+                      )}
                     </div>
                   </div>
                 )}
@@ -2684,6 +2709,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
           <LaunchSummary
             recipe={recipe}
             selectedPackageLabel={selectedPackageLabel}
+            selectedPluginLabels={selectedPluginLabels}
             status={status}
             error={error}
             onLaunch={launch}
