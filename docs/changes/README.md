@@ -33,7 +33,7 @@ Prefer, in order:
 
 ## Index
 
-- [2026-10-17-release-0.8.3-token-retry.md](2026-10-17-release-0.8.3-token-retry.md) — retry unchanged 0.8.3 after the user updates the Cloudflare token; a main push triggers the workflow because the CLI cannot rerun Actions.
+- [2026-10-17-release-0.8.3-token-retry.md](2026-10-17-release-0.8.3-token-retry.md) — updated token enables successful 0.8.3 deployment; exact-run checks, live assets and production selected-plugin behavior verified.
 
 - [2026-10-17-release-0.8.3-deployment.md](2026-10-17-release-0.8.3-deployment.md) — 0.8.3 pushed; GitHub tests/build pass, Cloudflare rejects token with 10000/9109, and live domain remains 0.8.0.
 

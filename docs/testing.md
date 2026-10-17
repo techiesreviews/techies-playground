@@ -80,6 +80,8 @@ Use synthetic ZIPs/test packages and non-production vendor licenses.
 
 ## Deployment verification
 
+Latest verified production release: 0.8.3, GitHub run `39069273010`, deployment commit `2b65d41e31f6871afd9808c3176611f8963ded73`. The run passes 65 tests, build and Cloudflare publication; the public module identifies 0.8.3, and live T3 selection/clear-search/removal assertions pass. See [the token retry and exact evidence](changes/2026-10-17-release-0.8.3-token-retry.md). The retry did not execute a full WordPress boot or the user's Vivaldi profile.
+
 After pushing `main` for deployment:
 
 1. Confirm the GitHub `Deploy production` run belongs to the pushed commit.
