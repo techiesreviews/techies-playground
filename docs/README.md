@@ -34,6 +34,6 @@ For any user-visible or architectural change:
 2. Add a dated record under `docs/changes` using `TEMPLATE.md`.
 3. State what was tested, the actual result, and the disposition: `kept`, `reworked`, `removed`, `rejected`, or `inconclusive`.
 4. Link concrete evidence such as tests, a commit, screenshots, or a reproducible manual procedure.
-5. Update `CHANGELOG_ENTRIES` and versions when preparing a deployment.
+5. For a change users can see, update `CHANGELOG_ENTRIES` and versions before it lands (the Release section of `docs/agents/kitchen-extras.md`).
 
 Never rewrite old experiment outcomes to match the current implementation. Add a newer record that supersedes the old one.

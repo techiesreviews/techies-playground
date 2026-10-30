@@ -33,7 +33,7 @@ Prefer, in order:
 
 ## Index
 
-- [2026-10-30-shared-agent-kit.md](2026-10-30-shared-agent-kit.md) — the project-local kit copy replaced by the shared Agent Kit; `npm test` no longer runs kit tests and the built site is unchanged.
+- [2026-10-30-shared-agent-kit.md](2026-10-30-shared-agent-kit.md) — the project-local kit copy replaced by the shared Agent Kit; `npm test` no longer runs kit tests; the built site is expected unchanged (post-merge check pending).
 
 - [2026-10-17-release-0.8.3-token-retry.md](2026-10-17-release-0.8.3-token-retry.md) — updated token enables successful 0.8.3 deployment; exact-run checks, live assets and production selected-plugin behavior verified.
 
