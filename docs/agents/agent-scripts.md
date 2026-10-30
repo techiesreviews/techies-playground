@@ -10,7 +10,7 @@ This project runs the shared Agent Kit ([techiesreviews/agent-kit](https://githu
 
 ## Commands used here
 
-- `kit doctor`: the kit's checks plus this project's (Node 22.12 or newer, the package name, `package.json` agreeing with `package-lock.json`).
+- `kit doctor`: the kit's checks plus this project's (Node 22.12 or newer, the package name, `package.json` agreeing with `package-lock.json`, the installed direct dependencies matching it, and no test file where `npm test` would run it besides the app's). Run `npm ci` in a new worktree first.
 - `kit unit`: the app's Node tests (`src/**/*.test.js`, `scripts/*.test.mjs`) with `node --test`; `--list` shows the files, `--affected` the ones a change reaches. Logs go to `.scratch/unit/`. This replaces the old `kit specs`.
 - `kit build`: the production build without a deploy.
 - `kit review` and `kit pr`: Claude reviews every change, a second look follows, and `kit pr` lands it on `main`, which deploys the site (see the extras).

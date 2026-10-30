@@ -23,7 +23,7 @@ When documentation and implementation disagree, resolve the mismatch instead of 
 - Persistence schemas: `src/lib/vault.js`, `src/lib/license-vault.js`, and the `localStorage` constants.
 - User-facing release notes: `CHANGELOG_ENTRIES` in `src/App.jsx`.
 - Version: `package.json` and `package-lock.json`.
-- Deployment contract: `AGENTS.md` and `.github/workflows/deploy.yml`.
+- Deployment contract: the Release section of `docs/agents/kitchen-extras.md` and `.github/workflows/deploy.yml`.
 - Historical experiment evidence: immutable records in `docs/changes` plus Git history.
 
 ## Documentation maintenance
