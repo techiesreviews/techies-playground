@@ -33,7 +33,7 @@ file wins.
 ## After a merge
 
 - GitHub Actions (`.github/workflows/deploy.yml`) runs `npm ci`, `npm test` and `npm run build` on
-  a push to `main`, then deploys to <https://play.techies.tools>, but only in
+  a push to `main` (or a manual run), then deploys to <https://play.techies.tools>, but only in
   `techiesreviews/techies-playground`, when the push comes from the `techiesreviews` account and the
   repository variable `CLOUDFLARE_DEPLOY_ENABLED` is `true`; otherwise the job is skipped, and a
   skipped run is not a green one. No workflow runs on pull requests, so `kit pr` has no PR checks to

@@ -22,7 +22,7 @@ npm run build
 git diff --check
 ```
 
-For a deployment preparation, also run `npm run deploy:check`. Per the Release section of [the kitchen extras](agents/kitchen-extras.md#release), normal deployment happens only by landing verified changes on `main` through a reviewed `scripts/agents/kit pr`; do not use direct Wrangler deployment unless explicitly requested.
+For a deployment preparation, also run `npm run deploy:check`. Per the Release section of [the kitchen extras](agents/kitchen-extras.md#release), normal deployment happens only by landing verified changes on `main` (agent work through a reviewed `scripts/agents/kit pr`, the WordPress sync PRs merged on GitHub); do not use direct Wrangler deployment unless explicitly requested.
 
 ## Current automated suite
 
