@@ -2,12 +2,7 @@
 
 ## Deployments
 
-- In this repository, "deploy", "redeploy", "publish", and "release" mean: prepare and verify the changes, commit them to `main`, and push `main` to `origin` so the existing GitHub pipeline deploys the site to Cloudflare.
-- Do not run `wrangler deploy` or otherwise publish directly to Cloudflare unless the user explicitly asks for a manual/direct Cloudflare deployment.
-- Before pushing for deployment, update the user-facing `CHANGELOG_ENTRIES` in `src/App.jsx`.
-- Include all relevant changes since the latest changelog entry and bump the semantic version in `package.json`, `package-lock.json`, and the newest changelog entry as appropriate.
-- Verify the changelog is current, the version values agree, and relevant tests/build checks pass before pushing.
-- After pushing, verify the GitHub deployment pipeline and the live domain when the available tooling permits it.
+- Every merge into `main` deploys the site through GitHub Actions. What "deploy", "redeploy", "publish" and "release" mean here, and the changelog and version rule, are in the Release section of [docs/agents/kitchen-extras.md](docs/agents/kitchen-extras.md#release) (also printed by `scripts/agents/kit rulebook`).
 
 ## Documentation and experiment history
 
@@ -17,4 +12,7 @@
 - Record exact tests and observed results. Distinguish source inspection from executed evidence, and do not claim unrun checks passed.
 - Give each completed record one disposition: `kept`, `reworked`, `removed`, `rejected`, or `inconclusive`.
 - Do not erase or rewrite old outcomes when behavior changes. Add a new record that links to and supersedes the old one.
-- A deployment change must update the user-facing changelog/version as described above as well as the relevant current-state documentation and change record.
+- A deployment change must update the user-facing changelog/version as the Release section of `docs/agents/kitchen-extras.md` describes, as well as the relevant current-state documentation and change record.
+
+Kitchen rulebook: `scripts/agents/kit rulebook` (stations, who decides, builder and reviewer pins).
+Agent commands: `scripts/agents/kit --help`; `scripts/agents/kit <command> --help` for one.

@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-# kit: run project Node tests (browser specs unsupported)
-set -euo pipefail
-exec "${KIT_NODE:-node}" "${KIT_ROOT}/scripts/agents/project-kit.mjs" specs "$@"

@@ -1,143 +1,49 @@
 #!/usr/bin/env bash
-# Usage: kit [<command> [args]]; run an agent-kit command from scripts/agents/kit.d/.
+# Usage: kit [<command> [args]] | kit --home; the Agent Kit launcher kit init writes into each project. Runs the
+# machine's newest kit (${XDG_DATA_HOME:-~/.local/share}/agent-kit/current) for the whole command; a person's
+# KIT_HOME wins. --home prints that kit's folder and runs nothing (for a project's own helpers and forwarders).
 set -euo pipefail
-kit_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
-# shellcheck source=scripts/agents/kit-lib.sh
-source "$kit_dir/kit-lib.sh"
-commands_dir=${KIT_COMMANDS_DIR:-"$kit_dir/kit.d"}
-
-names=() files=() summaries=()
-width=0
-for file in "$commands_dir"/*; do
-  base=${file##*/}
-  [[ -f $file && -x $file && $base != [._]* ]] || continue
-  name=${base%.*}
-  summary=''
-  count=0
-  while IFS= read -r line || [[ -n $line ]]; do
-    count=$((count + 1))
-    if [[ $line == *'# kit: '* || $line == *'// kit: '* ]]; then
-      [[ $line =~ (#\ kit:\ |//\ kit:\ ) ]]
-      summary=${line#*"${BASH_REMATCH[0]}"}
-      break
-    fi
-    (( count < 15 )) || break
-  done < "$file"
-  # Sort by the command name, which can differ from the filename's order.
-  position=${#names[@]}
-  while (( position > 0 )) && [[ ${names[position-1]} > "$name" ]]; do
-    names[position]=${names[position-1]}
-    files[position]=${files[position-1]}
-    summaries[position]=${summaries[position-1]}
-    position=$((position - 1))
-  done
-  names[position]=$name files[position]=$file summaries[position]=$summary
-  (( ${#name} <= width )) || width=${#name}
-done
-
-list_commands() {
-  local index
-  printf 'Usage: kit <command> [args]\n\nCommands:\n'
-  for index in "${!names[@]}"; do
-    printf '  %-*s  %s\n' "$width" "${names[index]}" "${summaries[index]}"
-  done
-  printf "Run 'kit <command> --help' for a command's usage.\n"
-}
-
-command=${1-}
-case $command in ''|help|--help|-h) list_commands; exit 0 ;; esac
-shift
-command_file=''
-for index in "${!names[@]}"; do
-  if [[ ${names[index]} == "$command" ]]; then command_file=${files[index]}; break; fi
-done
-if [[ -z $command_file ]]; then
-  printf "kit: unknown command '%s'\n" "$command" >&2
-  list_commands >&2
-  kit_result fail "unknown command $command"
-  exit 2
+export KIT_REPO=${KIT_REPO:-https://github.com/techiesreviews/agent-kit.git}
+data=${XDG_DATA_HOME:-} cache=${XDG_CACHE_HOME:-} why=KIT_HOME clone='' picked=false
+[[ $data == /* ]] || data=${HOME:-$(cd ~ && pwd -P)}/.local/share
+[[ $cache == /* ]] || cache=${HOME:-$(cd ~ && pwd -P)}/.cache
+# A whole kit, as kit update checks it: the front door needs kit-lib.sh beside kit. The hook launcher also needs
+# hooks/run.sh, so a pinned folder missing only that is kept here but looked up again there.
+whole() { [[ -x $1/kit && -f $1/kit-lib.sh ]]; }
+# KIT_HOME_PINNED marks a KIT_HOME a launcher picked, so a child whose folder kit update has since removed
+# picks again instead of treating it as a person's choice.
+if [[ -z ${KIT_HOME:-} || $KIT_HOME == "${KIT_HOME_DEFAULT:-}" ]] || { [[ $KIT_HOME == "${KIT_HOME_PINNED:-}" ]] && ! whole "$KIT_HOME"; }; then
+  picked=true
+  # current is read once: the command keeps this folder while kit update swaps the link.
+  KIT_HOME=$(readlink -- "$data/agent-kit/current" 2>/dev/null) || KIT_HOME=''
+  [[ -z $KIT_HOME || $KIT_HOME == /* ]] || KIT_HOME=$data/agent-kit/$KIT_HOME
+  # No machine copy (CI, a cloud session, a new laptop): one shallow clone in the cache, stamped for kit version;
+  # a clone that is not a whole kit is thrown away. The rename is plain mv (macOS has no mv -T): a launcher that
+  # lost the race moves its clone into the winner's folder, and throws it away from there (one killed in between
+  # leaves that clone inside the winner's folder, unused, where it used to stay beside it).
+  whole "$KIT_HOME" || KIT_HOME=$cache/agent-kit why="$cache/agent-kit exists but holds no kit; remove it"
+  if [[ ! -e $KIT_HOME ]]; then
+    why="no machine copy; cannot clone $KIT_REPO"
+    trap '[[ -z $clone ]] || rm -rf -- "$clone"' EXIT
+    mkdir -p -- "$cache" && clone=$(mktemp -d "$cache/agent-kit.XXXXXX") && git clone -q --depth 1 -- "$KIT_REPO" "$clone" >&2 &&
+      { whole "$clone" || { why="the clone of $KIT_REPO holds no whole kit"; false; }; } &&
+      { date +%s > "$clone/.git/kit-cloned" || { why="cannot stamp the clone in $cache"; false; }; } &&
+      why="cannot place the clone at $KIT_HOME" && mv -- "$clone" "$KIT_HOME" 2>/dev/null &&
+      { if [[ -e $KIT_HOME/${clone##*/} ]]; then clone=$KIT_HOME/${clone##*/}; else clone=''; fi; } || :
+    [[ -z $clone ]] || rm -rf -- "$clone"
+  fi
 fi
-
-last_result=false
-partial=false
-child_pid=''
-signal_status=0
-enforce_result=true
-# Help for a subcommand (`kit wait pid --help`) is usage text, not a run.
-for arg in "$@"; do
-  case $arg in --help|-h) enforce_result=false; break ;; esac
-done
-
-finish() {
-  local status=$?
-  trap - EXIT INT TERM HUP
-  if (( signal_status )); then status=$signal_status; fi
-  if [[ $enforce_result == true && $last_result == false ]]; then
-    [[ $partial == false ]] || printf '\n'
-    if (( signal_status )); then
-      kit_result fail "$command interrupted"
-    elif (( status == 0 )); then
-      kit_result ok "$command finished"
-    else
-      kit_result fail "$command exited $status without a RESULT line"
-    fi
-  fi
-  exit "$status"
-}
-interrupted() {
-  signal_status=$((128 + $2))
-  if [[ -n $child_pid ]]; then
-    kill -s "$1" "$child_pid" 2>/dev/null || :
-  else
-    exit "$signal_status"
-  fi
-}
-trap finish EXIT
-trap 'interrupted INT 2' INT
-trap 'interrupted TERM 15' TERM
-trap 'interrupted HUP 1' HUP
-
-kit_node || :
-KIT_ROOT=$(kit_root)
-KIT_MAIN_ROOT=$(kit_main_root)
-export KIT_ROOT KIT_MAIN_ROOT
-export KIT_LIB="$kit_dir/kit-lib.sh" KIT_LIB_MJS="$kit_dir/kit-lib.mjs"
-
-# A coprocess lets the parent remember the last line without buffering stdout.
-# Preserve stdin explicitly: a coprocess otherwise replaces it with a pipe.
-exec {input_fd}<&0
-coproc KIT_CHILD {
-  # Bash ignores SIGINT in asynchronous jobs; restore it before launching.
-  trap - INT TERM HUP
-  # Wait until the parent has saved the pipe descriptor, even for instant exits.
-  IFS= read -r _start
-  exec "$command_file" "$@" <&"$input_fd"
-}
-child_pid=$!
-exec {output_fd}<&"${KIT_CHILD[0]}"
-control_fd=${KIT_CHILD[1]}
-printf '\n' >&"$control_fd"
-exec {control_fd}>&-
-exec {input_fd}<&-
-pending=''
-while :; do
-  line=''
-  read_status=0
-  IFS= read -r -u "$output_fd" line || read_status=$?
-  # Signals can interrupt read halfway through a line; keep its prefix intact.
-  if (( read_status > 128 )); then pending+=$line; continue; fi
-  line=$pending$line
-  pending=''
-  if [[ -n $line || $read_status == 0 ]]; then
-    printf '%s' "$line"
-    last_result=false
-    [[ $line != 'RESULT: '* ]] || last_result=true
-    partial=true
-    if (( read_status == 0 )); then printf '\n'; partial=false; fi
-  fi
-  (( read_status == 0 )) || break
-done
-exec {output_fd}<&-
-status=0
-wait "$child_pid" || status=$?
-exit "$status"
+whole "$KIT_HOME" || { printf 'RESULT: fail no Agent Kit at %s (%s)\n' "$KIT_HOME" "$why"; exit 2; }
+# The front door resolves KIT_HOME the same way, so the marker still matches it in every child.
+if [[ $picked == true ]]; then
+  folder=$KIT_HOME
+  KIT_HOME=$(cd -- "$folder" 2>/dev/null && pwd -P) || { printf 'RESULT: fail no Agent Kit at %s (removed while starting)\n' "$folder"; exit 2; }
+  export KIT_HOME_PINNED=$KIT_HOME
+fi
+# Outside git the project is the one around this launcher, not around the kit.
+if [[ -z ${KIT_ROOT:-} ]] && ! git rev-parse --show-toplevel > /dev/null 2>&1; then
+  KIT_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P) && export KIT_ROOT
+fi
+export KIT_HOME
+if [[ ${1-} == --home && $# == 1 ]]; then printf '%s\n' "$KIT_HOME"; exit 0; fi
+exec "$KIT_HOME/kit" "$@"

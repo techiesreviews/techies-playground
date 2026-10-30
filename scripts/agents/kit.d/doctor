@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-# kit: check this project's prerequisites
-set -euo pipefail
-exec "${KIT_NODE:-node}" "${KIT_ROOT}/scripts/agents/project-kit.mjs" doctor "$@"
