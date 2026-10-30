@@ -7,14 +7,19 @@
   "checks": {
     "test": "npm test",
     "doctor": [
-      "node -e 'const [a,b]=process.versions.node.split(\".\").map(Number);if(a<22||(a===22&&b<12))throw Error(\"needs Node >=22.12, found \"+process.version);console.log(\"node\",process.version)'",
-      "node -e 'const p=require(\"./package.json\"),l=require(\"./package-lock.json\");if(p.name!==\"techies-playground\")throw Error(\"package name is \"+p.name);if(l.name!==p.name||l.version!==p.version||l.packages[\"\"].version!==p.version)throw Error(\"package.json and package-lock.json name or version differ\");console.log(p.name,p.version)'",
-      "NODE_OPTIONS=--no-deprecation npm ls --package-lock-only --depth=0 >/dev/null && echo 'package-lock.json satisfies package.json'"
+      "node -e 'const [a,b]=process.versions.node.split(\".\").map(Number);if(a<22||(a===22&&b<12)){console.error(\"needs Node >=22.12, found \"+process.version);process.exit(1)};console.log(\"node\",process.version)'",
+      "node -e 'const p=require(\"./package.json\"),l=require(\"./package-lock.json\");if(p.name!==\"techies-playground\"){console.error(\"package name is \"+p.name);process.exit(1)};if(l.name!==p.name||l.version!==p.version||l.packages[\"\"].version!==p.version){console.error(\"package.json and package-lock.json name or version differ\");process.exit(1)};console.log(p.name,p.version)'",
+      "NODE_OPTIONS=--no-deprecation npm ls --package-lock-only --depth=0 >/dev/null && echo 'package-lock.json satisfies package.json'",
+      "node -e 'const fs=require(\"fs\"),p=require(\"./package.json\"),l=require(\"./package-lock.json\"),n=Object.keys({...p.dependencies,...p.devDependencies});for(const d of n){const f=\"node_modules/\"+d+\"/package.json\";if(!fs.existsSync(f)){console.error(d+\" is not installed; run npm ci\");process.exit(1)};const v=JSON.parse(fs.readFileSync(f,\"utf8\")).version,w=l.packages[\"node_modules/\"+d]?.version;if(v!==w){console.error(d+\" \"+v+\" is installed, package-lock.json has \"+w+\"; run npm ci\");process.exit(1)}}console.log(n.length+\" direct dependencies installed as locked\")'",
+      "! git ls-files --cached --others --exclude-standard -- ':(glob)**/*.test.*' ':(glob)**/*-test.*' ':(glob)**/*_test.*' ':(glob)**/test-*.*' ':(glob)**/test.*' ':(glob)**/test/**' | grep -Ev '^(src/.+\\.test\\.js|scripts/[^/]+\\.test\\.mjs)$' && echo 'npm test finds only src/**/*.test.js and scripts/*.test.mjs'"
     ]
   },
   "unit": {
     "run": "node --test",
-    "files": ["src/**/*.test.js", "scripts/*.test.mjs"]
+    "files": [
+      "src/**/*.test.js",
+      "scripts/*.test.mjs"
+    ]
   },
   "commands": "scripts/agents/project.d",
   "maps": "docs/wayfinder",

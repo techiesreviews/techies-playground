@@ -11,8 +11,10 @@ file wins.
   `kit pr`; there is no `check` or `lint` command. `kit unit` runs the same tests through the kit
   (`unit.files`: `src/**/*.test.js` and `scripts/*.test.mjs`); `kit unit --affected` while building.
 - **`kit doctor`** adds this project's lines (`checks.doctor`): Node 22.12 or newer, the package
-  name, and `package.json` agreeing with `package-lock.json`. A new worktree needs `npm ci` before
-  `kit unit` or `kit build`; there is no shared `node_modules`.
+  name, `package.json` agreeing with `package-lock.json`, the installed direct dependencies matching
+  the lockfile, and no test file outside `src/**/*.test.js` and `scripts/*.test.mjs` (`npm test`
+  searches the whole repository). A new worktree needs `npm ci` before `kit doctor` passes; there is
+  no shared `node_modules`.
 - **Own check commands** (`scripts/agents/project.d/`): `kit build` runs `npm run build` and writes
   `dist/` without deploying; run it for any change under `src/`, `public/`, `index.html`,
   `vite.config.js` or `worker.js`.

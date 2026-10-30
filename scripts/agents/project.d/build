@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # kit: build the Vite app with the existing npm script
 set -euo pipefail
+# KIT_ROOT is the project's top folder; the shared kit's front door sets it.
 if [[ ${1-} == --help || ${1-} == -h ]]; then
   printf 'Usage: kit build\nRun npm run build; writes dist/ without deploying.\n'
   exit 0
