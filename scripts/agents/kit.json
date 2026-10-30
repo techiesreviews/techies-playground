@@ -1,0 +1,22 @@
+{
+  "project": "techies-playground",
+  "branches": {
+    "land": "main"
+  },
+  "standards": "AGENTS.md",
+  "checks": {
+    "test": "npm test",
+    "doctor": [
+      "node -e 'const [a,b]=process.versions.node.split(\".\").map(Number);if(a<22||(a===22&&b<12))throw Error(\"needs Node >=22.12, found \"+process.version);console.log(\"node\",process.version)'",
+      "node -e 'const p=require(\"./package.json\"),l=require(\"./package-lock.json\");if(p.name!==\"techies-playground\")throw Error(\"package name is \"+p.name);if(l.name!==p.name||l.version!==p.version||l.packages[\"\"].version!==p.version)throw Error(\"package.json and package-lock.json name or version differ\");console.log(p.name,p.version)'",
+      "NODE_OPTIONS=--no-deprecation npm ls --package-lock-only --depth=0 >/dev/null && echo 'package-lock.json satisfies package.json'"
+    ]
+  },
+  "unit": {
+    "run": "node --test",
+    "files": ["src/**/*.test.js", "scripts/*.test.mjs"]
+  },
+  "commands": "scripts/agents/project.d",
+  "maps": "docs/wayfinder",
+  "rulebookExtras": "docs/agents/kitchen-extras.md"
+}
