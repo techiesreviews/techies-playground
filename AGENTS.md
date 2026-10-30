@@ -2,7 +2,7 @@
 
 ## Deployments
 
-- Every merge into `main` deploys the site through GitHub Actions. What "deploy", "redeploy", "publish" and "release" mean here, and the changelog and version rule, are in the Release section of [docs/agents/kitchen-extras.md](docs/agents/kitchen-extras.md#release) (also printed by `scripts/agents/kit rulebook`).
+- Every merge into `main` deploys the site through GitHub Actions (the extras' After a merge section says when the job is skipped). What "deploy", "redeploy", "publish" and "release" mean here, and the changelog and version rule, are in the Release section of [docs/agents/kitchen-extras.md](docs/agents/kitchen-extras.md#release) (also printed by `scripts/agents/kit rulebook`).
 
 ## Documentation and experiment history
 
@@ -12,7 +12,7 @@
 - Record exact tests and observed results. Distinguish source inspection from executed evidence, and do not claim unrun checks passed.
 - Give each completed record one disposition: `kept`, `reworked`, `removed`, `rejected`, or `inconclusive`.
 - Do not erase or rewrite old outcomes when behavior changes. Add a new record that links to and supersedes the old one.
-- A deployment change must update the user-facing changelog/version as the Release section of `docs/agents/kitchen-extras.md` describes, as well as the relevant current-state documentation and change record.
+- A change users can see must update the user-facing changelog/version as the Release section of `docs/agents/kitchen-extras.md` describes; every meaningful change also updates the relevant current-state documentation and change record.
 
 Kitchen rulebook: `scripts/agents/kit rulebook` (stations, who decides, builder and reviewer pins).
 Agent commands: `scripts/agents/kit --help`; `scripts/agents/kit <command> --help` for one.
