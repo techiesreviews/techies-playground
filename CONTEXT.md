@@ -77,7 +77,7 @@ Git push to `main`
 7. New browser-saved sites run one-time setup, then mount OPFS. Resumed sites mount OPFS before startup and skip WordPress installation and one-time setup.
 8. Temporary running sites warn before page unload and require confirmation before closing from the Playground header.
 9. The license master password and derived `CryptoKey` are never persisted. Locking or closing the manager drops the in-memory key reference.
-10. Deployment means landing verified changes on `main` through a reviewed `kit pr`, with the changelog and version updated for a change users can see (the Release section of `docs/agents/kitchen-extras.md`); the GitHub pipeline deploys every push to `main` to Cloudflare.
+10. Deployment means landing verified changes on `main`, with the changelog and version updated for a change users can see (the Release section of `docs/agents/kitchen-extras.md`): agent work through a reviewed `kit pr`, the daily WordPress sync PRs reviewed and merged on GitHub. The GitHub pipeline deploys pushes to `main` to Cloudflare.
 
 ## Current implementation shape
 
