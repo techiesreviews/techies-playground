@@ -5,8 +5,9 @@ file wins.
 
 ## Branches, checks and the shared file
 
-- **Landing branch `main`, which is also the release branch** (`branches` in `scripts/agents/kit.json`).
-  Every merge into `main` deploys the site (see Release).
+- **Landing branch `dev`, release branch `main`** (`branches` in `scripts/agents/kit.json`). Every
+  change lands on `dev` through `scripts/agents/kit pr`; `main` only takes `dev`, through
+  `scripts/agents/kit pr --release`, and every push to `main` deploys the site (see Release).
 - **Checks:** `npm test` (`checks.test`, Node's test runner over the app's tests) before every
   `kit pr`; there is no `check` or `lint` command. `kit unit` runs the same tests through the kit
   (`unit.files`: `src/**/*.test.js` and `scripts/*.test.mjs`); `kit unit --affected` while building.
@@ -36,14 +37,15 @@ file wins.
   a push to `main` (or a manual run), then deploys to <https://play.techies.tools>, but only in
   `techiesreviews/techies-playground`, when the push comes from the `techiesreviews` account and the
   repository variable `CLOUDFLARE_DEPLOY_ENABLED` is `true`; otherwise the job is skipped, and a
-  skipped run is not a green one. No workflow runs on pull requests, so `kit pr` has no PR checks to
-  wait for: a change's CI result is its deploy run on `main`. The lead checks that run and, for a
-  visible change, the live site.
+  skipped run is not a green one. No workflow runs on pull requests or on `dev`, so `kit pr` has no
+  checks to wait for: a change's CI result is the deploy run on `main` after its release. The lead
+  checks that run and, for a visible change, the live site.
 
 ## Release
 
-Here landing is releasing: "deploy", "redeploy", "publish" and "release" mean prepare and verify
-the changes, land them on `main`, and let the GitHub pipeline deploy the site to Cloudflare.
+"Deploy", "redeploy", "publish" and "release" mean prepare and verify the changes, land them on
+`dev`, release `dev` to `main` (`scripts/agents/kit pr --release`), and let the GitHub pipeline
+deploy the site to Cloudflare.
 
 - Do not run `wrangler deploy` or publish to Cloudflare directly unless Lex asks for a manual
   deployment.
@@ -53,7 +55,7 @@ the changes, land them on `main`, and let the GitHub pipeline deploy the site to
   the tests and build pass before landing.
 - A change users cannot see (agent setup, docs, tests) lands without a changelog entry or version
   bump; its deploy rebuilds the same site.
-- After the merge, check the deploy run and the live domain where the tools allow it. The live
+- After the release, check the deploy run and the live domain where the tools allow it. The live
   version is the newest changelog entry and `version` in `package.json`; each release gets its
   record in `docs/changes/`.
 
