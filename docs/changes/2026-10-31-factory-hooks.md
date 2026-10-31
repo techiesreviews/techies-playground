@@ -5,7 +5,7 @@
 - Status: complete
 - Disposition: kept
 - Related version: unreleased tooling; application unchanged
-- Related commit/issue: branch `kit/init-pieces`, made by `kit init --all` (Agent Kit ed29ab6; agent-kit PRs #14 and #16)
+- Related commit/issue: branch `kit/init-pieces`, made by `kit init --all` at Agent Kit ed29ab6 (agent-kit PR #14); the hooks' scripts as of Agent Kit 44e1a35 (PR #16), which writes the same entries
 
 ## Context
 
@@ -13,7 +13,7 @@ Delegated agents kept ending their turn while their own long job still ran, and 
 
 ## Hypothesis and success criteria
 
-With the entries, a Claude session in this repo cannot hand a coding brief to a child agent unless `kit brief` wrote it (or it starts with `kit-brief: none (<reason>)`), and cannot end its turn while a `kit go` job of its worktree runs. Success: the hook entries match what `kit init` writes, the hooks' own tests pass in the kit, and nothing changes for a person working here.
+With the entries, a Claude session in this repo cannot hand a coding brief to a child agent unless `kit brief` wrote it (or it starts with `kit-brief: none (<reason>)`), and cannot end its turn while a `kit go` job of its worktree runs. Success: the hook entries match what `kit init` writes, the hooks' own tests pass in the kit, and the application and its checks are unchanged.
 
 ## Options considered
 
@@ -22,18 +22,18 @@ With the entries, a Claude session in this repo cannot hand a coding brief to a 
 
 ## Implementation or prototype
 
-`.claude/settings.json` gets `brief-guard` (PreToolUse on `mcp__t3-code__delegate_task|Agent|Task`) and `stop-guard` (Stop); `.codex/hooks.json` gets `stop-guard` (Codex's PreToolUse sees only Bash). Both run the kit's `hooks/run.sh` through `scripts/agents/hooks/run.sh`; on a machine without the kit they print the usual "guards are off" warning and never block. The application is untouched.
+`.claude/settings.json` gets `brief-guard` (PreToolUse on `mcp__t3-code__delegate_task|Agent|Task`) and `stop-guard` (Stop); `.codex/hooks.json` gets `stop-guard` (Codex's PreToolUse sees only Bash). Both run the kit's `hooks/run.sh` through `scripts/agents/hooks/run.sh`. On a machine without the kit they never block, but a Claude Code session there now sees the launcher's "Agent Kit not found: guards are off" warning at the end of every turn, and twice on an Agent call (agent-cap and brief-guard both warn). The kit at ed29ab6 wrote these entries; 44e1a35 (agent-kit PR #16, which lets a project without ticket files write briefs with `kit brief --task`, and stops agent-cap holding a slot for a refused brief) writes the same entries and is the kit the hooks run now. The application is untouched.
 
 ## Tests and evidence
 
 | Environment | Procedure/command | Expected | Actual | Evidence |
 | --- | --- | --- | --- | --- |
 | Agent Kit 44e1a35 | `npm test` in agent-kit (tests/agent-hooks-factory.test.ts and tests/kit-init.test.ts) | brief-guard refuses an unmarked brief and allows a marked one; stop-guard refuses while a kit go job runs and gives way past its time limit, after six refusals or with `KIT_ALLOW_STOP=1`; kit init writes these entries | 1496 passed, 0 failed | agent-kit PR #16 |
-| This repo | `kit pr` checks on branch `kit/init-pieces` | the repo's own checks pass | see the PR's RESULT lines | this PR |
+| This repo, branch `kit/init-pieces` | `scripts/agents/kit pr` (full tier: `checks.test`, `npm test`) | the repo's tests pass | `unit: ok` | this PR's kit pr log |
 
 ## Result
 
-The guards are in place for agent sessions; people's own work in the repo is unchanged.
+The guards are in place for agent sessions; the application and its tests are unchanged. Without the kit, a Claude Code session sees the "guards are off" warning more often (above).
 
 ## Disposition and rationale
 
