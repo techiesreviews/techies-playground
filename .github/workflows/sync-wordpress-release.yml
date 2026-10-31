@@ -20,10 +20,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Check out main
+      - name: Check out dev
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: main
+          ref: dev
 
       - name: Set up Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -62,7 +62,7 @@ jobs:
           existing_pr="$(gh pr list --head "$branch" --state open --json number --jq '.[0].number')"
           if [ -z "$existing_pr" ]; then
             gh pr create \
-              --base main \
+              --base dev \
               --head "$branch" \
               --title "Add WordPress ${WORDPRESS_VERSION} support" \
               --body "Automated synchronization from the official WordPress.org stable-version API. Updates the offline fallback, app version, and user-facing changelog to ${APP_VERSION}."
