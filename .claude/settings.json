@@ -18,6 +18,15 @@
             "command": "bash \"${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel)}\"/scripts/agents/hooks/run.sh agent-cap"
           }
         ]
+      },
+      {
+        "matcher": "mcp__t3-code__delegate_task|Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel)}\"/scripts/agents/hooks/run.sh brief-guard"
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -72,6 +81,16 @@
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel)}\"/scripts/agents/hooks/run.sh context-card"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel)}\"/scripts/agents/hooks/run.sh stop-guard"
           }
         ]
       }
