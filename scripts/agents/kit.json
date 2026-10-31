@@ -1,7 +1,8 @@
 {
   "project": "techies-playground",
   "branches": {
-    "land": "main"
+    "land": "dev",
+    "release": "main"
   },
   "standards": "AGENTS.md",
   "checks": {
