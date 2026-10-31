@@ -59,7 +59,7 @@ jobs:
           git add package.json package-lock.json src/App.jsx src/lib/wordpress-versions.js
           git commit -m "Add WordPress ${WORDPRESS_VERSION} support"
           git push --force origin "$branch"
-          existing_pr="$(gh pr list --head "$branch" --state open --json number --jq '.[0].number')"
+          existing_pr="$(gh pr list --head "$branch" --base dev --state open --json number --jq '.[0].number')"
           if [ -z "$existing_pr" ]; then
             gh pr create \
               --base dev \

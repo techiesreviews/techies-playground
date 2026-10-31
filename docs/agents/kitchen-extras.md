@@ -37,9 +37,9 @@ file wins.
   a push to `main` (or a manual run), then deploys to <https://play.techies.tools>, but only in
   `techiesreviews/techies-playground`, when the push comes from the `techiesreviews` account and the
   repository variable `CLOUDFLARE_DEPLOY_ENABLED` is `true`; otherwise the job is skipped, and a
-  skipped run is not a green one. No workflow runs on pull requests or on `dev`, so `kit pr` has no
-  checks to wait for: a change's CI result is the deploy run on `main` after its release. The lead
-  checks that run and, for a visible change, the live site.
+  skipped run is not a green one. No workflow is triggered by pull requests or by pushes to `dev`,
+  so `kit pr` has no checks to wait for: a change's CI result is the deploy run on `main` after its
+  release. The lead checks that run and, for a visible change, the live site.
 
 ## Release
 
