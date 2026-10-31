@@ -44,8 +44,8 @@ file wins.
 ## Release
 
 "Deploy", "redeploy", "publish" and "release" mean prepare and verify the changes, land them on
-`dev`, release `dev` to `main` (`scripts/agents/kit pr --release --base main`), and let the GitHub pipeline
-deploy the site to Cloudflare.
+`dev`, release `dev` to `main` (`scripts/agents/kit pr --release --base main`), and let the GitHub
+pipeline deploy the site to Cloudflare.
 
 - Do not run `wrangler deploy` or publish to Cloudflare directly unless Lex asks for a manual
   deployment.
