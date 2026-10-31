@@ -8,7 +8,7 @@
   "checks": {
     "test": "npm test",
     "doctor": [
-      "git ls-remote --exit-code --heads origin dev >/dev/null && echo 'origin has dev'",
+      "git ls-remote --exit-code --heads origin dev >/dev/null && echo 'origin has dev' || { echo 'origin has no dev branch (or is unreachable); create it from main' >&2; exit 1; }",
       "node -e 'const [a,b]=process.versions.node.split(\".\").map(Number);if(a<22||(a===22&&b<12)){console.error(\"needs Node >=22.12, found \"+process.version);process.exit(1)};console.log(\"node\",process.version)'",
       "node -e 'const p=require(\"./package.json\"),l=require(\"./package-lock.json\");if(p.name!==\"techies-playground\"){console.error(\"package name is \"+p.name);process.exit(1)}if(l.lockfileVersion!==3||!l.packages?.[\"\"]){console.error(\"expected package-lock.json v3; run npm install\");process.exit(1)}if(l.name!==p.name||l.version!==p.version||l.packages[\"\"].version!==p.version){console.error(\"package.json and package-lock.json name or version differ\");process.exit(1)}console.log(p.name,p.version)'",
       "NODE_OPTIONS=--no-deprecation npm ls --package-lock-only --depth=0 >/dev/null && echo 'package-lock.json satisfies package.json'",
