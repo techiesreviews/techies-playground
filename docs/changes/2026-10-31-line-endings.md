@@ -9,7 +9,7 @@
 
 ## Context
 
-A Windows checkout turned LF into CRLF in the working copy (this project has been worked on from `E:\playground`), and in another project (CamFrame v0.6.0) that broke tests that read files. The shared Agent Kit's `kit init` now writes `* text=auto eol=lf` into `.gitattributes`, and `kit init --all` brings it to every project set up before.
+On Windows, git's usual `core.autocrlf=true` turns LF into CRLF in the working copy; in another project (CamFrame v0.6.0) that broke tests that read files. This project has been worked on from Windows (`E:\playground`), so it was exposed to the same risk. The shared Agent Kit's `kit init` now writes `* text=auto eol=lf` into `.gitattributes`, and `kit init --all` brings it to every project set up before.
 
 ## Hypothesis and success criteria
 
@@ -22,18 +22,19 @@ With the line, every checkout keeps LF endings whatever the platform's `core.aut
 
 ## Implementation or prototype
 
-`.gitattributes` with the one line, added by `kit init --all` with the kit's other missing pieces. No tracked file had CRLF endings, so the renormalize step changed nothing.
+`.gitattributes` with the one line, the only piece `kit init --all` found missing here. No tracked file had CRLF endings, so the renormalize step changed nothing. `scripts/configure-cloudflare-deploy.ps1`, the one Windows-run script, is now checked out with LF too; it is unsigned, and PowerShell reads LF scripts, but it has not been run on Windows since (untested path).
 
 ## Tests and evidence
 
 | Environment | Procedure/command | Expected | Actual | Evidence |
 | --- | --- | --- | --- | --- |
 | Linux, worktree of `origin/main` | `git add --renormalize .` | no file changes | none | `kit init --all` log |
-| Linux | `kit pr` (`npm test`) | pass | see the PR | PR checks |
+| Linux, clones with `core.autocrlf=true` (as on Windows) | `git -c core.autocrlf=true clone -b <branch>`, then `git ls-files --eol` counting `w/crlf` | CRLF before, none after | `main` (278dfca): 112 of 112 files CRLF; `kit/init-pieces`: 0 of 114 | command output, 2026-10-31 |
+| Linux, worktree with the main checkout's dependencies | `kit pr` runs `npm test` (no workflow runs on pull requests here) | pass | pass | `kit pr` log, `unit: ok` |
 
 ## Result
 
-The line is in; nothing else changed.
+The line is in, and a checkout with `core.autocrlf=true` keeps LF; no other file changed.
 
 ## Disposition and rationale
 
@@ -41,7 +42,7 @@ Kept: it is the shared kit's setup for every project.
 
 ## Documentation impact
 
-`docs/agents/agent-scripts.md` names `.gitattributes` among the files `kit init` writes.
+`docs/agents/agent-scripts.md` names `.gitattributes` among the files `kit init` writes; this record is in the index (`docs/changes/README.md`).
 
 ## Follow-ups and open questions
 
