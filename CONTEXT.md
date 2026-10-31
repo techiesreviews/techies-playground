@@ -60,7 +60,8 @@ User
             -> local ZIP install/activation
             -> WordPress.org Blueprint installs
 
-Git push to `main`
+Change lands on `dev` (`kit pr`, or the WordPress sync PR)
+  -> release `dev` to `main` (`kit pr --release --base main`)
   -> GitHub Actions tests and build
   -> Cloudflare Worker and static assets
   -> `https://play.techies.tools`
@@ -77,7 +78,7 @@ Git push to `main`
 7. New browser-saved sites run one-time setup, then mount OPFS. Resumed sites mount OPFS before startup and skip WordPress installation and one-time setup.
 8. Temporary running sites warn before page unload and require confirmation before closing from the Playground header.
 9. The license master password and derived `CryptoKey` are never persisted. Locking or closing the manager drops the in-memory key reference.
-10. Deployment means landing verified changes on `main`, with the changelog and version updated for a change users can see (the Release section of `docs/agents/kitchen-extras.md`): agent work through a reviewed `kit pr`, the daily WordPress sync PRs reviewed and merged on GitHub. The GitHub pipeline deploys pushes to `main` to Cloudflare.
+10. Deployment means landing verified changes on `dev` and releasing `dev` to `main`, with the changelog and version updated for a change users can see (the Release section of `docs/agents/kitchen-extras.md`): agent work through a reviewed `kit pr`, the daily WordPress sync PRs (opened against `dev`) reviewed and merged on GitHub, then `kit pr --release --base main`. `main` only takes `dev`. The GitHub pipeline deploys pushes to `main` to Cloudflare.
 
 ## Current implementation shape
 
