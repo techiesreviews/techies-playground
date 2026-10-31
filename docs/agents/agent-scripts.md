@@ -4,7 +4,7 @@ This project runs the shared Agent Kit ([techiesreviews/agent-kit](https://githu
 
 ## What lives here
 
-- `scripts/agents/kit`, `scripts/agents/hooks/run.sh`: the kit launcher and the hook launcher (`.claude/settings.json`, `.codex/hooks.json`), written by `kit init`.
+- `scripts/agents/kit`, `scripts/agents/hooks/run.sh`: the kit launcher and the hook launcher (`.claude/settings.json`, `.codex/hooks.json`), written by `kit init`, with `.gitattributes` (`* text=auto eol=lf`: LF line endings in every checkout).
 - `scripts/agents/kit.json`: the project's settings: landing branch `main`, `checks.test` (`npm test`), the doctor lines, `unit.run` and `unit.files`, the own-commands folder, maps and the rulebook extras.
 - `scripts/agents/project.d/build`: `kit build`, the project's one own command. It runs `npm run build`, writes `dist/` and does not deploy.
 
