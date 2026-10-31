@@ -2,8 +2,8 @@
 
 - Date: 2026-10-31
 - Owner: ke-81, Claude Opus 5.5 (kitchen-everywhere ticket 81 in native-site-editor)
-- Status: complete
-- Disposition: kept
+- Status: in-progress
+- Disposition: pending
 - Related version: unreleased tooling; application unchanged
 - Related commit/issue: branch `kit/init-pieces`, made by `kit init --all` (Agent Kit c862b8d)
 
@@ -30,7 +30,7 @@ With the line, every checkout keeps LF endings whatever the platform's `core.aut
 | --- | --- | --- | --- | --- |
 | Linux, worktree of `origin/main` | `git add --renormalize .` | no file changes | none | `kit init --all` log |
 | Linux, clones with `core.autocrlf=true` (as on Windows) | `git -c core.autocrlf=true clone -b <branch>`, then `git ls-files --eol` counting `w/crlf` | CRLF before, none after | `main` (278dfca): 112 of 112 files CRLF; `kit/init-pieces`: 0 of 114 | command output, 2026-10-31 |
-| Linux, worktree with the main checkout's dependencies | `kit pr` runs `npm test` (no workflow runs on pull requests here) | pass | pass | `kit pr` log, `unit: ok` |
+| Linux, worktree with the main checkout's dependencies | `kit pr` runs `npm test` (no workflow runs on pull requests here) | pass | `unit: ok` | `kit pr` log, 2026-10-31 |
 
 ## Result
 
@@ -46,4 +46,5 @@ Kept: it is the shared kit's setup for every project.
 
 ## Follow-ups and open questions
 
-None.
+- After the merge: the deploy's CI result, then set Status complete and Disposition kept.
+- Run `scripts/configure-cloudflare-deploy.ps1 -?` once on Windows (Windows PowerShell 5.1) with the LF checkout.
