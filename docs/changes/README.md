@@ -35,6 +35,7 @@ Prefer, in order:
 
 - [2026-10-31-land-on-dev.md](2026-10-31-land-on-dev.md) — changes land on `dev` and `main` only takes `dev` (`kit pr --release --base main`); the WordPress sync opens its PRs against `dev` once the change is released to `main`.
 
+- [2026-10-31-factory-hooks.md](2026-10-31-factory-hooks.md) — the brief-guard and stop-guard hook entries from the shared Agent Kit: a child's brief comes from `kit brief`, and a turn waits for its own `kit go` job.
 - [2026-10-31-line-endings.md](2026-10-31-line-endings.md) — `.gitattributes` `* text=auto eol=lf` from the shared Agent Kit; a `core.autocrlf=true` checkout keeps LF (112 CRLF files before, none after).
 
 - [2026-10-30-shared-agent-kit.md](2026-10-30-shared-agent-kit.md) — the project-local kit copy replaced by the shared Agent Kit; `npm test` no longer runs kit tests; the built site is expected unchanged (post-merge check pending).
