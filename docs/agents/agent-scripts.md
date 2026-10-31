@@ -14,7 +14,7 @@ This project runs the shared Agent Kit ([techiesreviews/agent-kit](https://githu
 - `kit doctor`: the kit's checks plus this project's (Node 22.12 or newer, the package name, `package.json` agreeing with `package-lock.json`, the installed direct dependencies matching it, and no test file where `npm test` would run it besides the app's). Run `npm ci` in a new worktree first.
 - `kit unit`: the app's Node tests (`src/**/*.test.js`, `scripts/*.test.mjs`) with `node --test`; `--list` shows the files, `--affected` the ones a change reaches. Logs go to `.scratch/unit/`. This replaces the old `kit specs`.
 - `kit build`: the production build without a deploy.
-- `kit review` and `kit pr`: Claude reviews every change, a second look follows, and `kit pr` lands it on `main`, which deploys the site (see the extras).
+- `kit review` and `kit pr`: Claude reviews every change, a second look follows, and `kit pr` lands it on `dev`; `kit pr --release --base main` moves `dev` to `main`, which deploys the site (see the extras).
 
 Browser evidence is not part of the kit here: a Node test or a Vite build cannot show that an embedded Playground started. See [testing.md](../testing.md).
 

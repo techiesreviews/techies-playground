@@ -7,7 +7,7 @@ file wins.
 
 - **Landing branch `dev`, release branch `main`** (`branches` in `scripts/agents/kit.json`). Every
   change lands on `dev` through `scripts/agents/kit pr`; `main` only takes `dev`, through
-  `scripts/agents/kit pr --release`, and every push to `main` deploys the site (see Release).
+  `scripts/agents/kit pr --release --base main`, and every push to `main` deploys the site (see Release).
 - **Checks:** `npm test` (`checks.test`, Node's test runner over the app's tests) before every
   `kit pr`; there is no `check` or `lint` command. `kit unit` runs the same tests through the kit
   (`unit.files`: `src/**/*.test.js` and `scripts/*.test.mjs`); `kit unit --affected` while building.
@@ -31,7 +31,7 @@ file wins.
   A Playground change gets real-browser evidence through T3 (selected versions, packages,
   persistence mode, what was seen, console and network errors), as `docs/testing.md` describes.
 
-## After a merge
+## After a release
 
 - GitHub Actions (`.github/workflows/deploy.yml`) runs `npm ci`, `npm test` and `npm run build` on
   a push to `main` (or a manual run), then deploys to <https://play.techies.tools>, but only in
@@ -44,7 +44,7 @@ file wins.
 ## Release
 
 "Deploy", "redeploy", "publish" and "release" mean prepare and verify the changes, land them on
-`dev`, release `dev` to `main` (`scripts/agents/kit pr --release`), and let the GitHub pipeline
+`dev`, release `dev` to `main` (`scripts/agents/kit pr --release --base main`), and let the GitHub pipeline
 deploy the site to Cloudflare.
 
 - Do not run `wrangler deploy` or publish to Cloudflare directly unless Lex asks for a manual
@@ -64,4 +64,5 @@ deploy the site to Cloudflare.
 - **Change records:** every meaningful experiment, behaviour change, architectural decision,
   regression investigation or removal gets a dated record in `docs/changes/` (`AGENTS.md`).
 - **WordPress sync:** `.github/workflows/sync-wordpress-release.yml` opens a daily
-  `automation/wordpress-<version>` PR when WordPress.org ships a new stable release.
+  `automation/wordpress-<version>` PR into `dev` when WordPress.org ships a new stable release; it
+  goes live with the next release.
