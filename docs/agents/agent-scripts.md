@@ -5,6 +5,7 @@ This project runs the shared Agent Kit ([techiesreviews/agent-kit](https://githu
 ## What lives here
 
 - `scripts/agents/kit`, `scripts/agents/hooks/run.sh`: the kit launcher and the hook launcher (`.claude/settings.json`, `.codex/hooks.json`), written by `kit init`. The hooks are the kit's guards: `bash-guard`, `agent-cap`, `session-env`, `context-card`, `brief-guard` (Claude only: a child's coding brief comes from `scripts/agents/kit brief`, or starts with `kit-brief: none (<reason>)`) and `stop-guard` (a turn may not end while a `kit go` job of the worktree runs).
+- `AGENTS.md`, section "Messages to Lex": the kit's rule for messages to Lex, between version markers; `kit init` owns it, so change the text in the kit's `docs/kitchen.md`, not here.
 - `.gitattributes` (`* text=auto eol=lf`): LF line endings in every checkout, written by `kit init`.
 - `scripts/agents/kit.json`: the project's settings: landing branch `dev` and release branch `main`, `checks.test` (`npm test`), the doctor lines, `unit.run` and `unit.files`, the own-commands folder, maps and the rulebook extras.
 - `scripts/agents/project.d/build`: `kit build`, the project's one own command. It runs `npm run build`, writes `dist/` and does not deploy.
