@@ -13,7 +13,7 @@ Lex is not technical and asked for one short rule for every message to him: the 
 
 ## Hypothesis and success criteria
 
-With the section in `AGENTS.md`, every agent working here reads the rule at the start of a session. Success: `scripts/agents/kit init --check` reports nothing missing for the section, and `npm test` passes.
+With the section in `AGENTS.md`, agents that load `AGENTS.md` (Codex, and Claude workers briefed through `kit brief`) see the rule. A Claude session talking to Lex directly does not load `AGENTS.md` by itself in this repo (no `CLAUDE.md`), so it sees the rule only if it opens the file or runs `kit rulebook`. Success: `scripts/agents/kit init --check` reports nothing missing for the section, and `npm test` passes.
 
 ## Options considered
 
@@ -28,7 +28,7 @@ With the section in `AGENTS.md`, every agent working here reads the rule at the 
 
 | Environment | Procedure/command | Expected | Actual | Evidence |
 | --- | --- | --- | --- | --- |
-| Linux, worktree of `origin/dev` | `scripts/agents/kit init --check` | nothing missing for the section | passed after the change | command output, 2026-11-05 |
+| Linux, worktree of `origin/dev` | `scripts/agents/kit init --check` | nothing missing for the section | `RESULT: ok init check: nothing missing` (before the change: `missing: AGENTS.md Messages to Lex (the Messages to Lex section)`) | command output, 2026-11-05 |
 | Linux, worktree with the main checkout's dependencies | `kit pr` runs `npm test` | pass | `unit: ok` | `kit pr` log, 2026-11-05 |
 
 ## Result
@@ -45,4 +45,4 @@ Kept: it is the shared kit's setup for every project.
 
 ## Follow-ups and open questions
 
-- None.
+- A one-line `CLAUDE.md` pointing at `AGENTS.md`, written by `kit init`, would give direct Claude sessions the rule; ticket for the kit.
