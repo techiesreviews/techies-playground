@@ -35,7 +35,9 @@ Prefer, in order:
 
 - [2026-10-31-land-on-dev.md](2026-10-31-land-on-dev.md) — changes land on `dev` and `main` only takes `dev` (`kit pr --release --base main`); the WordPress sync opens its PRs against `dev` once the change is released to `main`.
 
+- [2026-10-31-factory-hooks.md](2026-10-31-factory-hooks.md) — the brief-guard and stop-guard hook entries from the shared Agent Kit: a child's brief comes from `kit brief`, and a turn waits for its own `kit go` job.
 - [2026-10-31-line-endings.md](2026-10-31-line-endings.md) — `.gitattributes` `* text=auto eol=lf` from the shared Agent Kit; a `core.autocrlf=true` checkout keeps LF (112 CRLF files before, none after).
+- [2026-11-05-messages-to-lex.md](2026-11-05-messages-to-lex.md) — the kit's "Messages to Lex" rule added to `AGENTS.md` by `kit init`; application unchanged.
 
 - [2026-10-30-shared-agent-kit.md](2026-10-30-shared-agent-kit.md) — the project-local kit copy replaced by the shared Agent Kit; `npm test` no longer runs kit tests; the built site is expected unchanged (post-merge check pending).
 
@@ -104,3 +106,4 @@ Prefer, in order:
 - [2026-08-28-release-0.6.0.md](2026-08-28-release-0.6.0.md) — publication of release 0.6.0 through the GitHub deployment pipeline.
 - [2026-08-28-release-0.6.0-deployment-blocked.md](2026-08-28-release-0.6.0-deployment-blocked.md) — deployment investigation showing the missing Cloudflare API token and unchanged live bundle.
 - [2026-08-28-release-0.6.0-deployed.md](2026-08-28-release-0.6.0-deployed.md) — successful pipeline rerun and live 0.6.0 bundle verification.
+- [2026-11-07-ci-node-24.md](2026-11-07-ci-node-24.md) — CI moved from Node 22 to Node 24; supersedes the 2026-08-28 Node 24.15.0 inconclusive result.
