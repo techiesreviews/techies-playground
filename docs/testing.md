@@ -156,7 +156,7 @@ The user reports latest Vivaldi with `No blocking` for the launcher and local us
 - No automated Cloudflare header assertion.
 - IndexedDB tests use focused fakes and do not exercise every browser lifecycle/blocked-upgrade condition.
 - The local collaborative-browser snapshot failed during this documentation pass, so visual conformance was inspected from source rather than claimed as a browser-tested result.
-- CI moved from Node 22 to Node 24 on 2026-11-07. The same build passed locally under Node 24.22.2 (see `docs/changes/2026-11-07-ci-node-24.md`), so treat the older Node 24.15.0 stall as environment-specific.
+- CI moved from Node 22 to Node 24 on 2026-11-07; the build passed on Linux under Node 24.22.2 (see `docs/changes/2026-11-07-ci-node-24.md`). The Windows Node 24.15.0 stall was not re-tested on Windows and is still unexplained.
 
 ## Security remediation evidence (2026-09-10)
 
