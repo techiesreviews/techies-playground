@@ -25,3 +25,5 @@ Agent commands: `scripts/agents/kit --help`; `scripts/agents/kit <command> --hel
 - Leave out internal process (review rounds, waivers, SHAs, file paths) unless he must act on it.
 - Example: "Keep the old export button or remove it?" / "Both do the same." / "Recommend: remove it."
 <!-- messages-to-lex:end -->
+
+Review loop: `scripts/agents/kit rulebook`, section "Review loop" (3 fix rounds, 5 only for risk; stop when only nits are left; one reviewer; a findings ledger in the PR).
