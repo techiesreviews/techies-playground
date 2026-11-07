@@ -106,4 +106,4 @@ Prefer, in order:
 - [2026-08-28-release-0.6.0.md](2026-08-28-release-0.6.0.md) — publication of release 0.6.0 through the GitHub deployment pipeline.
 - [2026-08-28-release-0.6.0-deployment-blocked.md](2026-08-28-release-0.6.0-deployment-blocked.md) — deployment investigation showing the missing Cloudflare API token and unchanged live bundle.
 - [2026-08-28-release-0.6.0-deployed.md](2026-08-28-release-0.6.0-deployed.md) — successful pipeline rerun and live 0.6.0 bundle verification.
-- [2026-11-07-ci-node-24.md](2026-11-07-ci-node-24.md) — CI moved from Node 22 to Node 24; clears the 2026-08-28 Node 24.15.0 inconclusive result.
+- [2026-11-07-ci-node-24.md](2026-11-07-ci-node-24.md) — CI moved from Node 22 to Node 24; supersedes the 2026-08-28 Node 24.15.0 inconclusive result.
