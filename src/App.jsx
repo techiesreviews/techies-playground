@@ -1,10 +1,11 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import {
   ArrowDownTrayIcon,
   ArrowLeftIcon,
   ArrowPathIcon,
   ArrowUpTrayIcon,
   BookmarkIcon,
+  ChartBarIcon,
   CheckCircleIcon,
   CheckIcon,
   ChevronDownIcon,
@@ -86,9 +87,27 @@ import {
   deleteLicense,
   getLicenseVaultStatus,
   listLicenseMetadata,
+  readLicenseKeysForPackages,
   resetLicenseVault,
   unlockLicenseVault,
 } from './lib/license-vault'
+import {
+  getVaultSessionKey,
+  isVaultSessionUnlocked,
+  lockVaultSession,
+  startVaultSession,
+  subscribeVaultSession,
+} from './lib/vault-session'
+import {
+  LICENSE_FILL_CODE,
+  licenseFillBody,
+  licenseFillLabel,
+  licenseFillSummary,
+  packagesWithSavedKeys,
+  parseLicenseFillResult,
+  pluginFolderFromAssetPath,
+} from './lib/license-fill'
+import { CHECKS, CHECKS_PLUGIN, CHECKS_PLUGIN_PATH, addCheckToSetup, checkResultsPath, checksInSetup } from './lib/checks'
 import {
   assertZipFile,
   getPlugin,
@@ -595,7 +614,7 @@ function AppHeader({ onImportRecipe }) {
   )
 }
 
-function SavedRecipeRow({ record, active, editing, missingCount, onChoose, onEdit, onRemove }) {
+function SavedRecipeRow({ record, active, editing, missingCount, keyCounts, starting, onChoose, onStart, onEdit, onRemove }) {
   const pluginCount = record.recipe.plugins.length + record.recipe.repositoryPlugins.length
   const themeCount = record.recipe.theme || record.recipe.repositoryTheme ? 1 : 0
   const packageSummary = [
@@ -603,8 +622,8 @@ function SavedRecipeRow({ record, active, editing, missingCount, onChoose, onEdi
     themeCount ? '1 theme' : '',
   ].filter(Boolean).join(', ')
   return (
-    <div className={`group min-w-0 border-t border-neutral-950/8 py-4 first:border-t-0 first:pt-0 last:pb-0 ${active || editing ? 'text-neutral-950' : 'text-neutral-700'}`}>
-      <div className="relative min-w-0">
+    <div className={`group flex min-w-0 items-center gap-2 border-t border-neutral-950/8 py-4 first:border-t-0 first:pt-0 last:pb-0 ${active || editing ? 'text-neutral-950' : 'text-neutral-700'}`}>
+      <div className="relative min-w-0 flex-1">
         <button
           type="button"
           onClick={() => onChoose(record)}
@@ -616,6 +635,9 @@ function SavedRecipeRow({ record, active, editing, missingCount, onChoose, onEdi
               <span className="font-medium">{record.recipe.name}</span>
               <span className="text-neutral-600"> — {packageSummary}, WP {record.recipe.wordpress}, PHP {record.recipe.php}</span>
               {missingCount > 0 && <span className="text-amber-700"> — {missingCount} local ZIP{missingCount === 1 ? '' : 's'} missing</span>}
+              {keyCounts.total > 0 && (keyCounts.saved === keyCounts.total
+                ? <span className="text-teal-700"> — keys ready</span>
+                : <span className="text-amber-700"> — {keyCounts.total - keyCounts.saved} key{keyCounts.total - keyCounts.saved === 1 ? '' : 's'} missing</span>)}
             </span>
           </span>
         </button>
@@ -638,6 +660,17 @@ function SavedRecipeRow({ record, active, editing, missingCount, onChoose, onEdi
           <TrashIcon className="size-4 shrink-0 fill-current" />
         </button>
       </div>
+      <button
+        type="button"
+        disabled={starting || missingCount > 0}
+        onClick={() => onStart(record)}
+        aria-label={`Start ${record.recipe.name}`}
+        className="relative inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-teal-700 py-2 pr-3 pl-2 text-sm/5 font-medium text-white ring-1 ring-teal-700 hover:bg-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
+        <PlayIcon className="size-4 shrink-0 fill-white" />
+        Start
+      </button>
     </div>
   )
 }
@@ -764,14 +797,13 @@ function SpinupHistoryRow({ record, active, missingCount, persistenceLabel, onCh
   )
 }
 
-function LicenseManager({ packages, anchorRef, onClose }) {
-  const keyRef = useRef(null)
+function LicenseManager({ packages, anchorRef, fillResults, onRecordsChange, onClose }) {
   const sessionRef = useRef(new AbortController())
   const closeTimerRef = useRef(null)
   const copyTimerRef = useRef(null)
   const panelRef = useRef(null)
   const [initialized, setInitialized] = useState(null)
-  const [unlocked, setUnlocked] = useState(false)
+  const unlocked = useSyncExternalStore(subscribeVaultSession, isVaultSessionUnlocked)
   const [records, setRecords] = useState([])
   const [password, setPassword] = useState('')
   const [passwordConfirmation, setPasswordConfirmation] = useState('')
@@ -816,7 +848,6 @@ function LicenseManager({ packages, anchorRef, onClose }) {
     return () => {
       active = false
       sessionRef.current.abort()
-      keyRef.current = null
       if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current)
       if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current)
     }
@@ -840,8 +871,21 @@ function LicenseManager({ packages, anchorRef, onClose }) {
     }
   })
 
+  useEffect(() => {
+    if (!unlocked) return
+    const { signal } = sessionRef.current
+    listLicenseMetadata()
+      .then((metadata) => {
+        if (!signal.aborted) setRecords(metadata)
+      })
+      .catch(() => {
+        if (!signal.aborted) setMessage('The encrypted vault could not be opened in this browser.')
+      })
+  }, [unlocked])
+
   async function refreshRecords(signal) {
     const metadata = await listLicenseMetadata()
+    onRecordsChange()
     if (!signal.aborted) setRecords(metadata)
   }
 
@@ -858,9 +902,8 @@ function LicenseManager({ packages, anchorRef, onClose }) {
     try {
       const key = await createLicenseVault(password)
       if (signal.aborted) return
-      keyRef.current = key
+      startVaultSession(key)
       setInitialized(true)
-      setUnlocked(true)
       setPassword('')
       setPasswordConfirmation('')
       await refreshRecords(signal)
@@ -882,11 +925,8 @@ function LicenseManager({ packages, anchorRef, onClose }) {
     try {
       const key = await unlockLicenseVault(password)
       if (signal.aborted) return
-      keyRef.current = key
-      setUnlocked(true)
+      startVaultSession(key)
       setPassword('')
-      await refreshRecords(signal)
-      if (signal.aborted) return
     } catch (caught) {
       if (signal.aborted) return
       setMessage(caught instanceof Error ? caught.message : 'The encrypted vault could not be unlocked.')
@@ -898,13 +938,12 @@ function LicenseManager({ packages, anchorRef, onClose }) {
   function lockVault() {
     sessionRef.current.abort()
     sessionRef.current = new AbortController()
-    keyRef.current = null
+    lockVaultSession()
     setBusy(false)
     setPassword('')
     setPasswordConfirmation('')
     if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current)
     copyTimerRef.current = null
-    setUnlocked(false)
     setRecords([])
     setAdding(false)
     setLicenseKey('')
@@ -916,9 +955,6 @@ function LicenseManager({ packages, anchorRef, onClose }) {
 
   function closeManager() {
     sessionRef.current.abort()
-    keyRef.current = null
-    setUnlocked(false)
-    setRecords([])
     setPassword('')
     setPasswordConfirmation('')
     if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current)
@@ -954,7 +990,7 @@ function LicenseManager({ packages, anchorRef, onClose }) {
     setBusy(true)
     setMessage('')
     try {
-      await addLicense(keyRef.current, { name: licenseName, pluginId: packageId, licenseKey })
+      await addLicense(getVaultSessionKey(), { name: licenseName, pluginId: packageId, licenseKey })
       if (signal.aborted) return
       setLicenseKey('')
       setShowLicenseKey(false)
@@ -976,7 +1012,7 @@ function LicenseManager({ packages, anchorRef, onClose }) {
     setMessage('')
     if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current)
     try {
-      await copyLicenseToClipboard(keyRef.current, id, signal)
+      await copyLicenseToClipboard(getVaultSessionKey(), id, signal)
       if (signal.aborted) return
       setCopiedId(id)
       copyTimerRef.current = window.setTimeout(() => {
@@ -1022,10 +1058,9 @@ function LicenseManager({ packages, anchorRef, onClose }) {
     try {
       await resetLicenseVault()
       if (signal.aborted) return
-      keyRef.current = null
       setInitialized(false)
-      setUnlocked(false)
       setRecords([])
+      onRecordsChange()
       setPassword('')
       setMessage('Create a new encrypted vault.')
     } catch (caught) {
@@ -1091,7 +1126,7 @@ function LicenseManager({ packages, anchorRef, onClose }) {
             <form className="grid gap-5" onSubmit={handleUnlock}>
               <div className="grid gap-1">
                 <h3 className="text-lg font-semibold text-balance">Unlock your licenses</h3>
-                <p className="max-w-[58ch] text-pretty text-base/7 text-neutral-600 sm:text-sm/6">The master password is used only in memory to decrypt a license when you explicitly copy it.</p>
+                <p className="max-w-[58ch] text-pretty text-base/7 text-neutral-600 sm:text-sm/6">Once per session. Your saved keys then go into Freemius plugins by themselves. The password is never stored; Lock or close the tab to forget it.</p>
               </div>
               <label htmlFor="vault-password" className="grid gap-2 text-base/7 font-medium text-neutral-900 sm:text-sm/6">
                 Master password
@@ -1147,7 +1182,7 @@ function LicenseManager({ packages, anchorRef, onClose }) {
           ) : (
             <div className="grid gap-5">
               <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-                <p className="min-w-0 max-w-[52ch] flex-1 text-pretty text-base/7 text-neutral-600 sm:text-sm/6">Names are visible after unlocking; keys remain encrypted until you press Copy.</p>
+                <p className="min-w-0 max-w-[52ch] flex-1 text-pretty text-base/7 text-neutral-600 sm:text-sm/6">Names are visible after unlocking; keys stay encrypted until you press Copy or a launch fills them in.</p>
                 <button type="button" disabled={!packages.length} onClick={beginAdding} className="relative inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-white py-2 pr-3 pl-2 text-sm/5 font-medium text-neutral-800 ring-1 ring-neutral-950/10 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 disabled:cursor-not-allowed disabled:opacity-50">
                   <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
                   <PlusIcon className="size-4 shrink-0 fill-neutral-500" />
@@ -1185,6 +1220,7 @@ function LicenseManager({ packages, anchorRef, onClose }) {
                             ) : (
                               <>
                                 <span className="block truncate">{record.name}</span>
+                                {fillResults.get(record.pluginId) && <LicenseFillLine result={fillResults.get(record.pluginId)} />}
                                 <ClipboardDocumentIcon className="pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100 pointer-fine:opacity-0 absolute top-1/2 right-9 size-4 shrink-0 -translate-y-1/2 fill-neutral-500" />
                               </>
                             )}
@@ -1213,14 +1249,126 @@ function LicenseManager({ packages, anchorRef, onClose }) {
   )
 }
 
-function PluginRow({ plugin, selected, onToggle, onReplace, onRemove }) {
+function LicenseFillLine({ result }) {
+  const { tone, text } = licenseFillLabel(result)
+  return <span className={`block text-base/7 font-normal [overflow-wrap:anywhere] sm:text-sm/6 ${tone === 'ok' ? 'text-teal-700' : tone === 'warn' ? 'text-amber-700' : 'text-neutral-500'}`}>{text}</span>
+}
+
+const inputClassName = 'w-full rounded-lg bg-white px-3 py-2.5 text-base/7 font-normal text-neutral-900 ring-1 ring-neutral-950/10 outline-none focus-visible:outline-2 -outline-offset-1 focus-visible:outline-teal-600 sm:py-2 sm:text-sm/6'
+
+// Lives inside the launch form, so it is a group of fields with its own Save button
+// instead of a nested <form>; Enter in a field saves instead of launching.
+function AddKeyForm({ plugin, onSaved, onCancel }) {
+  const [vaultState, setVaultState] = useState(() => (isVaultSessionUnlocked() ? 'unlocked' : 'checking'))
+  const [password, setPassword] = useState('')
+  const [confirmation, setConfirmation] = useState('')
+  const [licenseKey, setLicenseKey] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState('')
+  const firstFieldRef = useRef(null)
+  const fieldId = `add-key-${plugin.id}`
+
+  useEffect(() => {
+    if (vaultState !== 'checking') return undefined
+    let active = true
+    getLicenseVaultStatus()
+      .then(({ initialized }) => {
+        if (active) setVaultState(initialized ? 'locked' : 'none')
+      })
+      .catch(() => {
+        if (!active) return
+        setVaultState('locked')
+        setMessage('The encrypted vault could not be opened in this browser.')
+      })
+    return () => {
+      active = false
+    }
+  }, [vaultState])
+
+  useEffect(() => {
+    if (vaultState !== 'checking') firstFieldRef.current?.focus()
+  }, [vaultState])
+
+  async function save() {
+    if (busy || vaultState === 'checking') return
+    setMessage('')
+    if (vaultState === 'none' && password !== confirmation) {
+      setMessage('The master passwords do not match.')
+      return
+    }
+    if (!licenseKey.trim()) {
+      setMessage('Enter a license key.')
+      return
+    }
+    setBusy(true)
+    try {
+      let key = getVaultSessionKey()
+      if (!key) {
+        key = vaultState === 'none' ? await createLicenseVault(password) : await unlockLicenseVault(password)
+        startVaultSession(key)
+      }
+      await addLicense(key, { name: plugin.label, pluginId: `plugin:${plugin.id}`, licenseKey })
+      setLicenseKey('')
+      setPassword('')
+      setConfirmation('')
+      onSaved()
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : 'The license could not be saved.')
+      setBusy(false)
+    }
+  }
+
+  function saveOnEnter(event) {
+    if (event.key !== 'Enter') return
+    event.preventDefault()
+    save()
+  }
+
+  if (vaultState === 'checking') return <p className="text-base/7 text-neutral-600 sm:text-sm/6">Opening the encrypted vault.</p>
+  const locked = vaultState !== 'unlocked'
+  return (
+    <div role="group" aria-label={`Add a license key for ${plugin.label}`} className="grid gap-3 rounded-lg bg-white p-3 ring-1 ring-neutral-950/10">
+      <div className="grid gap-3 sm:grid-cols-2">
+        {locked && (
+          <label htmlFor={`${fieldId}-password`} className="grid gap-1.5 text-base/7 font-medium text-neutral-900 sm:text-sm/6">
+            {vaultState === 'none' ? 'New master password' : 'Master password'}
+            <input ref={firstFieldRef} id={`${fieldId}-password`} type="password" autoComplete={vaultState === 'none' ? 'new-password' : 'current-password'} minLength={vaultState === 'none' ? 12 : undefined} value={password} onChange={(event) => setPassword(event.target.value)} onKeyDown={saveOnEnter} className={inputClassName} />
+          </label>
+        )}
+        {vaultState === 'none' && (
+          <label htmlFor={`${fieldId}-confirm`} className="grid gap-1.5 text-base/7 font-medium text-neutral-900 sm:text-sm/6">
+            Confirm master password
+            <input id={`${fieldId}-confirm`} type="password" autoComplete="new-password" minLength={12} value={confirmation} onChange={(event) => setConfirmation(event.target.value)} onKeyDown={saveOnEnter} className={inputClassName} />
+          </label>
+        )}
+        <label htmlFor={`${fieldId}-key`} className="grid gap-1.5 text-base/7 font-medium text-neutral-900 sm:text-sm/6">
+          License key
+          <input ref={locked ? undefined : firstFieldRef} id={`${fieldId}-key`} type="password" autoComplete="off" spellCheck="false" value={licenseKey} onChange={(event) => setLicenseKey(event.target.value)} onKeyDown={saveOnEnter} className={`${inputClassName} font-mono`} />
+        </label>
+      </div>
+      {message && <p role="alert" className="text-pretty text-base/7 text-red-700 sm:text-sm/6">{message}</p>}
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" disabled={busy} onClick={save} className="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 py-2 pr-3 pl-2 text-sm/5 font-medium text-white ring-1 ring-teal-700 hover:bg-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 disabled:cursor-not-allowed disabled:opacity-50">
+          <LockClosedIcon className="size-4 shrink-0 fill-white" />
+          {busy ? 'Saving…' : 'Save key'}
+        </button>
+        <button type="button" disabled={busy} onClick={onCancel} className="relative rounded-lg px-3 py-2 text-sm/5 font-medium text-neutral-700 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 disabled:opacity-50">
+          <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
+          Cancel
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function PluginRow({ plugin, selected, keySaved, addingKey, onToggle, onReplace, onRemove, onAddKey, onCancelKey, onKeySaved }) {
   const size = `${(plugin.size / 1024 / 1024).toFixed(1)} MB`
   const versionHint = plugin.versionHint || extractVersionHint(plugin.filename)
   const packageDetails = [versionHint && `version ${versionHint}`, size, 'stored only in this browser'].filter(Boolean).join(', ')
   return (
-    <div className={`group flex min-w-0 items-start gap-3 rounded-xl p-3 ring-1 ${pluginSelectionSurface(selected)}`}>
+    <div className={`group flex min-w-0 flex-wrap items-start gap-3 rounded-xl p-3 ring-1 ${pluginSelectionSurface(selected)}`}>
       <PackageArtwork label={plugin.label} kind="plugin" />
-      <div className="min-w-0 flex-1 text-base/7 sm:text-sm/6">
+      <div className="min-w-0 flex-1 basis-40 text-base/7 sm:text-sm/6">
         <Checkbox
           id={`plugin-${plugin.id}`}
           checked={selected}
@@ -1230,6 +1378,23 @@ function PluginRow({ plugin, selected, onToggle, onReplace, onRemove }) {
           indicator="plugin"
         />
       </div>
+      {keySaved ? (
+        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white py-0.5 pr-2 pl-1.5 text-sm/5 font-medium text-teal-800 ring-1 ring-teal-700/20">
+          <KeyIcon className="size-3.5 shrink-0 fill-teal-700" />
+          Key saved
+        </span>
+      ) : !addingKey && (
+        <button
+          type="button"
+          onClick={() => onAddKey(plugin.id)}
+          aria-label={`Add a license key for ${plugin.label}`}
+          className="relative inline-flex shrink-0 items-center gap-1 rounded-lg bg-white py-1 pr-2.5 pl-1.5 text-sm/5 font-medium text-neutral-800 ring-1 ring-neutral-950/10 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+        >
+          <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
+          <PlusIcon className="size-4 shrink-0 fill-neutral-500" />
+          Add key
+        </button>
+      )}
       <div className="flex shrink-0 items-center gap-1 pointer-fine:pointer-events-none pointer-fine:opacity-0 pointer-fine:group-hover:pointer-events-auto pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:pointer-events-auto pointer-fine:group-focus-within:opacity-100">
         <button
           type="button"
@@ -1250,6 +1415,11 @@ function PluginRow({ plugin, selected, onToggle, onReplace, onRemove }) {
           <TrashIcon className="size-4 shrink-0 fill-current" />
         </button>
       </div>
+      {addingKey && (
+        <div className="basis-full">
+          <AddKeyForm plugin={plugin} onSaved={onKeySaved} onCancel={onCancelKey} />
+        </div>
+      )}
     </div>
   )
 }
@@ -1296,7 +1466,7 @@ function ThemeRow({ theme, selected, onSelect, onReplace, onRemove }) {
   )
 }
 
-function LaunchSummary({ recipe, selectedPackageLabel, selectedPluginLabels, status, error, onLaunch }) {
+function LaunchSummary({ recipe, selectedPackageLabel, selectedPluginLabels, keyCounts, checks, status, error, onLaunch }) {
   const stages = [
     ['Preparing WordPress', status.step > 0],
     ['Installing selected packages', status.step > 1],
@@ -1319,6 +1489,16 @@ function LaunchSummary({ recipe, selectedPackageLabel, selectedPluginLabels, sta
               {selectedPackageLabel || 'WordPress only'}
               {selectedPluginLabels.length > 0 && <span className="block">{selectedPluginLabels.join(', ')}</span>}
             </dd>
+          </div>
+          {keyCounts.total > 0 && (
+            <div className="flex items-start justify-between gap-4">
+              <dt className="font-medium text-neutral-900">Licenses</dt>
+              <dd className="text-right text-neutral-600">{keyCounts.saved} of {keyCounts.total} keys saved</dd>
+            </div>
+          )}
+          <div className="flex items-start justify-between gap-4">
+            <dt className="font-medium text-neutral-900">Checks</dt>
+            <dd className="text-right text-neutral-600">{checks.length ? checks.map((check) => check.name).join(' + ') : 'None'}</dd>
           </div>
           <div className="flex items-start justify-between gap-4">
             <dt className="font-medium text-neutral-900">Storage</dt>
@@ -1375,6 +1555,53 @@ function LaunchSummary({ recipe, selectedPackageLabel, selectedPluginLabels, sta
   )
 }
 
+function ChecksMenu({ checks, anchorRef, onOpenCheck, onClose }) {
+  const menuRef = useRef(null)
+
+  useEffect(() => {
+    menuRef.current?.querySelector('[role="menuitem"]')?.focus()
+    function handleKey(event) {
+      if (event.key === 'Escape') {
+        onClose()
+        anchorRef.current?.focus()
+        return
+      }
+      if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+      const items = [...(menuRef.current?.querySelectorAll('[role="menuitem"]') || [])]
+      const index = items.indexOf(document.activeElement)
+      event.preventDefault()
+      items[(index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus()
+    }
+    function handleOutsidePointer(event) {
+      if (menuRef.current?.contains(event.target) || anchorRef.current?.contains(event.target)) return
+      onClose()
+    }
+    window.addEventListener('keydown', handleKey)
+    document.addEventListener('pointerdown', handleOutsidePointer)
+    return () => {
+      window.removeEventListener('keydown', handleKey)
+      document.removeEventListener('pointerdown', handleOutsidePointer)
+    }
+  }, [anchorRef, onClose])
+
+  return (
+    <div ref={menuRef} role="menu" aria-label="Checks" className="license-popover-enter absolute top-full right-0 z-60 mt-1.5 grid w-[min(20rem,calc(100vw-1rem))] gap-1 rounded-[min(2vw,var(--radius-xl))] bg-white p-1.5 text-neutral-950 shadow-2xl ring-1 ring-neutral-950/10">
+      {checks.map((check) => (
+        <button
+          key={check.id}
+          type="button"
+          role="menuitem"
+          onClick={() => onOpenCheck(check)}
+          className="grid rounded-lg px-3 py-2 text-left text-base/7 hover:bg-neutral-100 focus-visible:bg-neutral-100 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-teal-600 sm:text-sm/6"
+        >
+          <span className="font-medium">{check.name}</span>
+          <span className="text-neutral-600">{check.summary}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function FeaturedPluginCard({ plugin, selected, onToggle }) {
   return (
     <button
@@ -1388,6 +1615,72 @@ function FeaturedPluginCard({ plugin, selected, onToggle }) {
       {selected && <CheckCircleIcon className="absolute top-2 right-2 size-4 shrink-0 fill-teal-700" />}
     </button>
   )
+}
+
+function VaultUnlockPrompt({ onUnlocked }) {
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState('')
+
+  async function handleSubmit(event) {
+    event.preventDefault()
+    if (busy) return
+    setBusy(true)
+    setMessage('')
+    try {
+      startVaultSession(await unlockLicenseVault(password))
+      setPassword('')
+      onUnlocked()
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : 'The encrypted vault could not be unlocked.')
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="absolute inset-0 z-10 grid place-items-center bg-neutral-950/40 p-4">
+      <form role="dialog" aria-labelledby="vault-unlock-title" onSubmit={handleSubmit} className="grid w-full max-w-md gap-4 rounded-[min(2vw,var(--radius-xl))] bg-white p-5 shadow-2xl ring-1 ring-neutral-950/10">
+        <div className="grid gap-1">
+          <h2 id="vault-unlock-title" className="text-lg font-semibold text-balance">Unlock your license vault</h2>
+          <p className="text-pretty text-base/7 text-neutral-600 sm:text-sm/6">Once per session. Your saved keys then go in by themselves.</p>
+        </div>
+        <label htmlFor="launch-vault-password" className="grid gap-2 text-base/7 font-medium text-neutral-900 sm:text-sm/6">
+          Master password
+          <input id="launch-vault-password" name="launch-vault-password" type="password" autoComplete="current-password" required autoFocus value={password} onChange={(event) => setPassword(event.target.value)} className={inputClassName} />
+        </label>
+        {message && <p role="alert" className="text-pretty text-base/7 text-red-700 sm:text-sm/6">{message}</p>}
+        <button type="submit" disabled={busy} className="inline-flex w-fit items-center gap-1.5 rounded-lg bg-teal-700 py-2.5 pr-4 pl-2.5 text-sm/5 font-medium text-white ring-1 ring-teal-700 hover:bg-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 disabled:cursor-not-allowed disabled:opacity-50">
+          <LockOpenIcon className="size-4 shrink-0 fill-white" />
+          {busy ? 'Unlocking…' : 'Unlock and start'}
+        </button>
+      </form>
+    </div>
+  )
+}
+
+// Decrypts the saved keys of the launched plugins and lets each plugin's own Freemius SDK
+// activate its key inside the running site. Keys travel only in the PHP request body.
+async function fillSavedLicenseKeys({ client, packages, folders, signal }) {
+  const failAll = (message) => packages.map((entry) => ({ ...entry, status: 'failed', message }))
+  const vaultKey = getVaultSessionKey()
+  if (!vaultKey) return failAll('The license vault is locked.')
+  try {
+    const keys = await readLicenseKeysForPackages(vaultKey, packages.map((entry) => entry.vaultId), signal)
+    const entries = packages.flatMap((entry) => (
+      folders.get(entry.id) && keys.get(entry.vaultId) ? [{ folder: folders.get(entry.id), licenseKey: keys.get(entry.vaultId) }] : []
+    ))
+    if (!entries.length) return failAll('The plugin folder could not be found.')
+    const response = await client.run({ code: LICENSE_FILL_CODE, method: 'POST', body: licenseFillBody(entries) })
+    signal.throwIfAborted()
+    const results = parseLicenseFillResult(response.text)
+    return packages.map((entry) => ({
+      ...entry,
+      ...(results[folders.get(entry.id)] || { status: 'failed', message: 'WordPress did not report this plugin.' }),
+    }))
+  } catch (caught) {
+    if (caught?.name === 'AbortError') throw caught
+    return failAll(caught instanceof Error ? caught.message.slice(0, 200) : 'The saved keys could not be filled in.')
+  }
 }
 
 export default function App() {
@@ -1458,6 +1751,23 @@ export default function App() {
   const [snapshotExporting, setSnapshotExporting] = useState(false)
   const [error, setError] = useState('')
   const [wordpressVersionOptions, setWordPressVersionOptions] = useState(WORDPRESS_VERSION_FALLBACK_OPTIONS)
+  const [licenseRecords, setLicenseRecords] = useState([])
+  const [addingKeyFor, setAddingKeyFor] = useState('')
+  const [unlockPending, setUnlockPending] = useState(false)
+  const unlockResolveRef = useRef(null)
+  const [licenseFill, setLicenseFill] = useState([])
+  const [launchedChecks, setLaunchedChecks] = useState([])
+  const [showChecksMenu, setShowChecksMenu] = useState(false)
+  const checksButtonRef = useRef(null)
+  const launchedRecipeRef = useRef(null)
+  const launchAbortRef = useRef(null)
+  const savedKeyPackages = useMemo(() => packagesWithSavedKeys(licenseRecords), [licenseRecords])
+  const keyCountsFor = (candidate) => ({
+    total: candidate.plugins.length,
+    saved: candidate.plugins.filter((id) => savedKeyPackages.has(`plugin:${id}`)).length,
+  })
+  const activeChecks = useMemo(() => checksInSetup(recipe), [recipe])
+  const fillResults = useMemo(() => new Map(licenseFill.map((result) => [result.vaultId, result])), [licenseFill])
 
   const selectedCount = recipe.plugins.length + recipe.repositoryPlugins.length
   const selectedPackageCount = selectedCount + (recipe.theme || recipe.repositoryTheme ? 1 : 0)
@@ -1469,15 +1779,10 @@ export default function App() {
     ...recipe.plugins.map((id) => plugins.find((plugin) => plugin.id === id)?.label || id),
     ...recipe.repositoryPlugins.map((slug) => repositoryPluginMetadata.get(slug)?.name || slug),
   ]
-  const missingPluginIds = useMemo(
-    () => recipe.plugins.filter((id) => !plugins.some((plugin) => plugin.id === id)),
-    [plugins, recipe.plugins],
-  )
   const visiblePlugins = useMemo(
     () => sortAndFilterPlugins(plugins, pluginRecency, pluginSearch),
     [plugins, pluginRecency, pluginSearch],
   )
-  const missingThemeId = recipe.theme && !themes.some((theme) => theme.id === recipe.theme) ? recipe.theme : ''
   const visibleThemes = useMemo(
     () => sortAndFilterPlugins(themes, themeRecency, themeSearch),
     [themes, themeRecency, themeSearch],
@@ -1510,7 +1815,12 @@ export default function App() {
   useEffect(() => {
     listPlugins().then(setPlugins).catch((caught) => setError(caught.message))
     listThemes().then(setThemes).catch((caught) => setError(caught.message))
+    refreshLicenseRecords()
   }, [])
+
+  function refreshLicenseRecords() {
+    listLicenseMetadata().then(setLicenseRecords).catch(() => setLicenseRecords([]))
+  }
 
   useEffect(() => {
     const controller = new AbortController()
@@ -1837,6 +2147,35 @@ export default function App() {
     setActiveSpinupId('')
   }
 
+  const closeChecksMenu = useCallback(() => setShowChecksMenu(false), [])
+
+  function startSavedRecipe(record) {
+    chooseSavedRecipe(record)
+    launch(validateRecipe(record.recipe))
+  }
+
+  function addCheck(check) {
+    const slug = check.slug
+    setRepositoryPluginMetadata((current) => current.has(slug)
+      ? current
+      : new Map([...current, [slug, { slug, name: check.name, version: '', author: '', activeInstalls: 0, tested: '', image: '' }]]))
+    updateRecipe({ repositoryPlugins: addCheckToSetup(recipe, check.id).repositoryPlugins })
+  }
+
+  async function openCheck(check) {
+    setShowChecksMenu(false)
+    const client = clientRef.current
+    if (!client || !launchedRecipeRef.current) return
+    let currentPath = ''
+    try {
+      currentPath = await client.getCurrentURL()
+    } catch {
+      currentPath = ''
+    }
+    if (client !== clientRef.current) return
+    await client.goTo(checkResultsPath(check, launchedRecipeRef.current, currentPath))
+  }
+
   function chooseSpinup(record) {
     setRecipe(validateRecipe(record.recipe))
     setActiveSavedId('')
@@ -1906,6 +2245,13 @@ export default function App() {
   }
 
   function closePlayground() {
+    unlockResolveRef.current?.(false)
+    unlockResolveRef.current = null
+    setUnlockPending(false)
+    launchAbortRef.current?.abort()
+    setShowChecksMenu(false)
+    setLaunchedChecks([])
+    setLicenseFill([])
     stopPreviewSessionRef.current?.()
     stopPreviewSessionRef.current = null
     launchIdRef.current += 1
@@ -1929,19 +2275,20 @@ export default function App() {
     closePlayground()
   }
 
-  async function launch() {
-    if (missingPluginIds.length) {
-      setError(`Import the missing ZIP${missingPluginIds.length === 1 ? '' : 's'} first: ${missingPluginIds.join(', ')}`)
+  async function launch(candidate = recipe) {
+    const missingPlugins = candidate.plugins.filter((id) => !plugins.some((plugin) => plugin.id === id))
+    if (missingPlugins.length) {
+      setError(`Import the missing ZIP${missingPlugins.length === 1 ? '' : 's'} first: ${missingPlugins.join(', ')}`)
       return
     }
-    if (missingThemeId) {
-      setError(`Import the missing theme ZIP first: ${missingThemeId}`)
+    if (candidate.theme && !themes.some((theme) => theme.id === candidate.theme)) {
+      setError(`Import the missing theme ZIP first: ${candidate.theme}`)
       return
     }
 
     let launchedRecipe
     try {
-      launchedRecipe = validateRecipe(recipe)
+      launchedRecipe = validateRecipe(candidate)
       const warning = externalSetupMessage(launchedRecipe)
       if (warning && !window.confirm(`${warning}\n\nLaunch this recipe?`)) return
     } catch (caught) {
@@ -1953,6 +2300,24 @@ export default function App() {
     setError('')
     setConfirmingPlaygroundClose(false)
     setShowPlayground(true)
+    setLicenseFill([])
+    setShowChecksMenu(false)
+    setLaunchedChecks(checksInSetup(launchedRecipe))
+    launchedRecipeRef.current = launchedRecipe
+    launchAbortRef.current?.abort()
+    const launchAbort = new AbortController()
+    launchAbortRef.current = launchAbort
+    const keyPackageIds = launchedRecipe.plugins.filter((id) => savedKeyPackages.has(`plugin:${id}`))
+    if (keyPackageIds.length && !isVaultSessionUnlocked()) {
+      setStatus({ running: true, step: 0, message: 'Unlock the license vault to fill in saved keys.' })
+      const unlocked = await new Promise((resolve) => {
+        unlockResolveRef.current = resolve
+        setUnlockPending(true)
+      })
+      unlockResolveRef.current = null
+      setUnlockPending(false)
+      if (!unlocked || launchId !== launchIdRef.current) return
+    }
     setStatus({ running: true, step: 0, message: launchedRecipe.wordpress === 'latest' ? 'Confirming the latest stable WordPress release…' : 'Starting the local WordPress runtime…' })
 
     let expectedLatestWordPressVersion = ''
@@ -2036,6 +2401,7 @@ echo 'PLAYGROUND_WORDPRESS_VERSION:' . $wp_version;
       clientRef.current = client
       await client.mkdir('/wordpress/wp-content/mu-plugins')
       await client.writeFile('/wordpress/wp-content/mu-plugins/techies-preview.php', buildPreviewPlugin(window.location.href, scope))
+      if (checksInSetup(launchedRecipe).some((check) => check.id === 'query-monitor')) await client.writeFile(CHECKS_PLUGIN_PATH, CHECKS_PLUGIN)
       if (launchId !== launchIdRef.current) return
       stopPreviewSessionRef.current?.()
       stopPreviewSessionRef.current = hostPreviewSession(scope)
@@ -2049,17 +2415,20 @@ echo 'PLAYGROUND_WORDPRESS_VERSION:' . $wp_version;
           version: metadata?.version || '',
         }
       })
+      const pluginFolders = new Map()
       for (const [index, id] of launchedRecipe.plugins.entries()) {
         const plugin = await getPlugin(id)
         installedPlugins.push(plugin)
         const pluginFile = new File([plugin.file], plugin.filename, { type: 'application/zip' })
         setStatus({ running: true, step: 1, message: `Installing ${plugin.label} (${index + 1} of ${launchedRecipe.plugins.length})…` })
-        await installPlugin(client, {
+        const installed = await installPlugin(client, {
           pluginData: pluginFile,
           options: { activate: true },
           ifAlreadyInstalled: 'overwrite',
         })
         if (launchId !== launchIdRef.current) return
+        const folder = pluginFolderFromAssetPath(installed?.assetPath)
+        if (folder) pluginFolders.set(id, folder)
       }
 
       let installedTheme = launchedRecipe.repositoryTheme ? (() => {
@@ -2091,6 +2460,18 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
         if (activeThemeId !== launchedRecipe.theme) throw new Error(`${installedTheme.label} was installed but could not be activated.`)
       } else {
         setStatus({ running: true, step: 2, message: 'Selected packages are installed.' })
+      }
+
+      if (keyPackageIds.length) {
+        setStatus({ running: true, step: 2, message: 'Filling in saved license keys…' })
+        const results = await fillSavedLicenseKeys({
+          client,
+          packages: keyPackageIds.map((id) => ({ id, vaultId: `plugin:${id}`, label: installedPlugins.find((plugin) => plugin.id === id)?.label || id })),
+          folders: pluginFolders,
+          signal: launchAbort.signal,
+        })
+        if (launchId !== launchIdRef.current) return
+        setLicenseFill(results)
       }
 
       setStatus({ running: true, step: 3, message: `Ready on WordPress ${launchedWordPressVersion}. Activate licenses inside WordPress when needed.` })
@@ -2417,7 +2798,10 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                             active={activeSavedId === record.id}
                             editing={editingSavedId === record.id}
                             missingCount={record.recipe.plugins.filter((id) => !plugins.some((plugin) => plugin.id === id)).length + (record.recipe.theme && !themes.some((theme) => theme.id === record.recipe.theme) ? 1 : 0)}
+                            keyCounts={keyCountsFor(record.recipe)}
+                            starting={status.running}
                             onChoose={chooseSavedRecipe}
+                            onStart={startSavedRecipe}
                             onEdit={editSavedRecipe}
                             onRemove={removeSavedRecipe}
                           />
@@ -2626,9 +3010,17 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                                 key={plugin.id}
                                 plugin={plugin}
                                 selected={recipe.plugins.includes(plugin.id)}
+                                keySaved={savedKeyPackages.has(`plugin:${plugin.id}`)}
+                                addingKey={addingKeyFor === plugin.id}
                                 onToggle={togglePlugin}
                                 onReplace={replacePluginZip}
                                 onRemove={handleRemovePlugin}
+                                onAddKey={setAddingKeyFor}
+                                onCancelKey={() => setAddingKeyFor('')}
+                                onKeySaved={() => {
+                                  setAddingKeyFor('')
+                                  refreshLicenseRecords()
+                                }}
                               />
                             ))}
                           </div>
@@ -2685,9 +3077,51 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                 <input ref={replacementThemeZipInputRef} type="file" name="replacement-theme-zip" accept="application/zip,.zip" className="hidden" onChange={handleReplacementThemeZip} />
               </section>
 
+              <section aria-labelledby="checks-heading" className="border-t border-neutral-950/10 pt-6">
+                <div>
+                  <h2 id="checks-heading" className="text-xl font-semibold text-balance">3. Checks</h2>
+                  <p className="max-w-[56ch] text-pretty text-base/7 text-neutral-600 sm:text-sm/6">A check shows up when its plugin is in this setup. Free or paid version both count.</p>
+                </div>
+                <div className="grid gap-3 pt-5">
+                  {CHECKS.map((check) => {
+                    const inSetup = activeChecks.includes(check)
+                    return (
+                      <div key={check.id} className={`flex min-w-0 flex-wrap items-center gap-3 rounded-xl p-3 ring-1 ${inSetup ? 'bg-teal-50 text-teal-950 ring-teal-700/30' : 'bg-white text-neutral-950 ring-neutral-950/8'}`}>
+                        <span className="grid size-12 shrink-0 place-items-center rounded-lg bg-neutral-100 ring-1 ring-neutral-950/8" aria-hidden="true">
+                          <ChartBarIcon className="size-5 fill-neutral-400" />
+                        </span>
+                        <div className="min-w-0 flex-1 basis-40 text-base/7 sm:text-sm/6">
+                          <p className="font-medium text-neutral-950">{check.name}</p>
+                          <p className="text-neutral-600">{check.summary}</p>
+                        </div>
+                        {inSetup ? (
+                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white py-0.5 pr-2 pl-1.5 text-sm/5 font-medium text-teal-800 ring-1 ring-teal-700/20">
+                            <CheckIcon className="size-3.5 shrink-0 fill-teal-700" />
+                            Runs after start
+                          </span>
+                        ) : (
+                          <span className="flex shrink-0 flex-wrap items-center gap-2">
+                            <span className="text-sm/5 text-neutral-500">Not in this setup</span>
+                            <button
+                              type="button"
+                              onClick={() => addCheck(check)}
+                              className="relative inline-flex items-center gap-1 rounded-lg bg-white py-1 pr-2.5 pl-1.5 text-sm/5 font-medium text-neutral-800 ring-1 ring-neutral-950/10 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+                            >
+                              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
+                              <PlusIcon className="size-4 shrink-0 fill-neutral-500" />
+                              Add {check.name}
+                            </button>
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </section>
+
               <section aria-labelledby="recipe-heading" className="border-t border-neutral-950/10 pt-6">
                 <div className="grid gap-2">
-                  <label htmlFor="recipe-name" id="recipe-heading" className="text-xl font-semibold">3. Name and save</label>
+                  <label htmlFor="recipe-name" id="recipe-heading" className="text-xl font-semibold">4. Name and save</label>
                   {editingSavedId && (
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-teal-50 px-3 py-2 text-base/7 text-teal-900 ring-1 ring-teal-700/15 sm:text-sm/6">
                       <span>Editing saved recipe. Updating also applies a renamed recipe without leaving the old copy behind.</span>
@@ -2748,9 +3182,11 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
             recipe={recipe}
             selectedPackageLabel={selectedPackageLabel}
             selectedPluginLabels={selectedPluginLabels}
+            keyCounts={keyCountsFor(recipe)}
+            checks={activeChecks}
             status={status}
             error={error}
-            onLaunch={launch}
+            onLaunch={() => launch()}
           />
         </div>
       </main>
@@ -2790,7 +3226,27 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
               <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
               <KeyIcon className="size-4 shrink-0 fill-neutral-300" />
               Licenses
+              {licenseFill.length > 0 && <span className="font-normal text-neutral-300">· {licenseFillSummary(licenseFill)}</span>}
             </button>
+            {launchedChecks.length > 0 && (
+              <span className="relative shrink-0">
+                <button
+                  ref={checksButtonRef}
+                  type="button"
+                  aria-haspopup="menu"
+                  aria-expanded={showChecksMenu}
+                  disabled={status.step <= 2}
+                  title={status.step <= 2 ? 'Available when setup finishes' : undefined}
+                  onClick={() => setShowChecksMenu((open) => !open)}
+                  className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-50 aria-expanded:bg-white/15"
+                >
+                  <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
+                  <ChartBarIcon className="size-4 shrink-0 fill-neutral-300" />
+                  Checks
+                </button>
+                {showChecksMenu && <ChecksMenu checks={launchedChecks} anchorRef={checksButtonRef} onOpenCheck={openCheck} onClose={closeChecksMenu} />}
+              </span>
+            )}
             <button
               type="button"
               disabled={status.step <= 2 || snapshotExporting}
@@ -2826,10 +3282,13 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
               </>
             )}
           </div>
-          <iframe key={playgroundFrameKey} ref={iframeRef} title="WordPress Playground" className="size-full bg-white" />
+          <div className="relative min-h-0">
+            <iframe key={playgroundFrameKey} ref={iframeRef} title="WordPress Playground" className="size-full bg-white" />
+            {unlockPending && <VaultUnlockPrompt onUnlocked={() => unlockResolveRef.current?.(true)} />}
+          </div>
         </div>
       </section>
-      {showLicenseManager && <LicenseManager packages={licensePackages} anchorRef={licenseButtonRef} onClose={() => setShowLicenseManager(false)} />}
+      {showLicenseManager && <LicenseManager packages={licensePackages} anchorRef={licenseButtonRef} fillResults={fillResults} onRecordsChange={refreshLicenseRecords} onClose={() => setShowLicenseManager(false)} />}
     </div>
   )
 }
