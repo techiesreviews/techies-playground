@@ -149,3 +149,16 @@ test('closing the Playground ends a fill whose PHP run never answers', async () 
   setImmediate(() => controller.abort())
   await assert.rejects(pending, { name: 'AbortError' })
 })
+
+test('a failure after the keys were read still names the record of each key', async () => {
+  const { fillSavedLicenseKeys } = await import('./license-fill.js')
+  const results = await fillSavedLicenseKeys({
+    client: { async run() { throw new Error('boom') } },
+    packages: [{ id: 'menu-image', vaultId: 'plugin:menu-image', label: 'Menu Image' }],
+    folders: new Map([['menu-image', 'menu-image']]),
+    signal: new AbortController().signal,
+    getVaultKey: () => 'k',
+    readKeys: async (key, ids) => new Map(ids.map((id) => [id, { recordId: 'record-1', licenseKey: 'secret' }])),
+  })
+  assert.deepEqual(results.map((result) => [result.recordId, result.status, result.message]), [['record-1', 'failed', 'boom']])
+})

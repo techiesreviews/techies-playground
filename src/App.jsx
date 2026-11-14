@@ -896,6 +896,15 @@ function LicenseManager({ packages, anchorRef, fillResults, onRecordsChange, onC
       })
   }, [unlocked])
 
+  // A result shows on the record whose key the launch used; one that failed before any key
+  // was read shows on the plugin's newest record (records arrive newest first).
+  function showsFillResult(record) {
+    const result = fillResults.get(record.pluginId)
+    if (!result) return false
+    if (result.recordId) return result.recordId === record.id
+    return records.find((candidate) => candidate.pluginId === record.pluginId)?.id === record.id
+  }
+
   async function refreshRecords(signal) {
     const metadata = await listLicenseMetadata()
     onRecordsChange()
@@ -1222,7 +1231,7 @@ function LicenseManager({ packages, anchorRef, fillResults, onRecordsChange, onC
                           <button
                             type="button"
                             aria-label={copiedId === record.id ? `${record.name} license copied` : `Copy ${record.name} license key`}
-                            aria-describedby={fillResults.get(record.pluginId)?.recordId === record.id ? `license-fill-${record.id}` : undefined}
+                            aria-describedby={showsFillResult(record) ? `license-fill-${record.id}` : undefined}
                             onClick={() => handleCopyLicense(record.id)}
                             className={`w-full min-w-0 rounded-lg py-2 pr-20 pl-2 text-left text-base/7 font-medium hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 sm:text-sm/6 ${copiedId === record.id ? 'text-teal-700' : 'text-neutral-900'}`}
                           >
@@ -1242,7 +1251,7 @@ function LicenseManager({ packages, anchorRef, fillResults, onRecordsChange, onC
                             <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
                             <TrashIcon className="size-4 shrink-0 fill-current" />
                           </button>
-                          {fillResults.get(record.pluginId)?.recordId === record.id && <LicenseFillLine id={`license-fill-${record.id}`} result={fillResults.get(record.pluginId)} />}
+                          {showsFillResult(record) && <LicenseFillLine id={`license-fill-${record.id}`} result={fillResults.get(record.pluginId)} />}
                         </>
                       )}
                       <span className="sr-only" aria-live="polite">{copiedId === record.id ? `${record.name} copied.` : ''}</span>
@@ -2347,7 +2356,6 @@ export default function App() {
       unlockResolveRef.current = null
       setUnlockPending(false)
       if (answer === 'closed' || launchId !== launchIdRef.current) return
-      window.requestAnimationFrame(() => licenseButtonRef.current?.focus())
       if (answer === 'skip') keyPackageIds = []
     }
     setStatus({ running: true, step: 0, message: launchedRecipe.wordpress === 'latest' ? 'Confirming the latest stable WordPress release…' : 'Starting the local WordPress runtime…' })
@@ -3328,7 +3336,17 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
           </div>
           <div className="relative min-h-0">
             <iframe key={playgroundFrameKey} ref={iframeRef} title="WordPress Playground" className="size-full bg-white" />
-            {unlockPending && <VaultUnlockPrompt onUnlocked={() => unlockResolveRef.current?.('unlocked')} onSkip={() => unlockResolveRef.current?.('skip')} onCancel={closePlayground} />}
+            {unlockPending && <VaultUnlockPrompt
+              onUnlocked={() => {
+                unlockResolveRef.current?.('unlocked')
+                window.requestAnimationFrame(() => licenseButtonRef.current?.focus())
+              }}
+              onSkip={() => {
+                unlockResolveRef.current?.('skip')
+                window.requestAnimationFrame(() => licenseButtonRef.current?.focus())
+              }}
+              onCancel={closePlayground}
+            />}
           </div>
         </div>
       </section>

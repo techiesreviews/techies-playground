@@ -127,11 +127,12 @@ function untilAborted(promise, signal) {
 // activate its key inside the running site. Keys travel only in the PHP request body. A
 // failure is reported per package and never fails the launch; closing it aborts.
 export async function fillSavedLicenseKeys({ client, packages, folders, signal, getVaultKey, readKeys }) {
-  const failAll = (message) => packages.map((entry) => ({ ...entry, status: 'failed', message }))
+  let keys = new Map()
+  const failAll = (message) => packages.map((entry) => ({ ...entry, recordId: keys.get(entry.vaultId)?.recordId || '', status: 'failed', message }))
   const vaultKey = getVaultKey()
   if (!vaultKey) return failAll('The license vault is locked.')
   try {
-    const keys = await readKeys(vaultKey, packages.map((entry) => entry.vaultId), signal)
+    keys = await readKeys(vaultKey, packages.map((entry) => entry.vaultId), signal)
     // Lock forgets the key; a lock while the keys were read must stop them here.
     if (getVaultKey() !== vaultKey) return failAll('The license vault was locked.')
     const entries = packages.flatMap((entry) => (
