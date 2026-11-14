@@ -40,7 +40,7 @@ Code Profiler profiles by requesting the site from itself. In browser Playground
 
 | Environment | Procedure/command | Expected | Actual | Evidence |
 | --- | --- | --- | --- | --- |
-| Node 24, worktree | `npm test` (final run before the PR update, five runs in a row) | all pass | 158 tests, 0 failures each time | local run |
+| Node 24, worktree | `npm test` (final run before the PR update, five runs in a row) | all pass | 159 tests, 0 failures each time | local run |
 | New tests before the change | `node --test` on `checks`, `license-fill`, `vault-session`, `license-vault`, `playground-persistence` tests | fail first | failed (module or export missing), then passed | local run |
 | Chromium, local build against preview-wp | Spike: launch Query Monitor + Code Profiler + Menu Image, run Code Profiler | profile result | chart shown | screenshot in PR |
 | Chromium, local build | Fake 32-character key for Menu Image (free, ships the Freemius SDK 2.12.1) run through the fill code | Freemius answers | `Invalid license key.` (a short key gave `License key too short`) | script output |
