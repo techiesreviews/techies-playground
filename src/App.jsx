@@ -1079,10 +1079,11 @@ function LicenseManager({ packages, anchorRef, fillResults, onRecordsChange, onC
     setBusy(true)
     try {
       await resetLicenseVault()
+      // The keys are gone even if the manager closed meanwhile, so Key saved must update.
+      onRecordsChange()
       if (signal.aborted) return
       setInitialized(false)
       setRecords([])
-      onRecordsChange()
       setPassword('')
       setMessage('Create a new encrypted vault.')
     } catch (caught) {
