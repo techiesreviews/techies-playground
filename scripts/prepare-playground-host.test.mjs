@@ -62,6 +62,7 @@ test('headers allow framing only by the launcher and cache hashed assets for a y
   })
   assert.match(headers, /^\/\*\n {2}Content-Security-Policy: frame-ancestors 'self' https:\/\/play\.techies\.tools\n/)
   assert.match(headers, /\n\/assets\/\*\n {2}Cache-Control: public, max-age=31536000, immutable\n/)
+  assert.match(headers, /\n\/client\/\*\n {2}Access-Control-Allow-Origin: \*\n/)
   assert.match(headers, /\n\/wp-6\.9\/\*\n {2}Cache-Control: public, max-age=3600\n/)
   assert.match(headers, /\n\/wp-7\.1\/\*\n {2}Cache-Control: public, max-age=3600\n/)
   assert.doesNotMatch(headers, /Cross-Origin-(Opener|Embedder)-Policy/)
