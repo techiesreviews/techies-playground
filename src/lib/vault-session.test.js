@@ -49,3 +49,18 @@ test('a launch waits for an unlock from anywhere, a skip or a close, then stops 
   assert.equal(stops, 2)
   lockVaultSession()
 })
+
+test('an unlock that finishes after its prompt closed does not unlock the session', async () => {
+  const { unlockVaultSessionIfCurrent } = await import('./vault-session.js')
+  lockVaultSession()
+  let finish
+  let current = true
+  const pending = unlockVaultSessionIfCurrent(() => new Promise((resolve) => { finish = resolve }), () => current)
+  current = false
+  finish({ type: 'secret' })
+  assert.equal(await pending, false)
+  assert.equal(isVaultSessionUnlocked(), false)
+  assert.equal(await unlockVaultSessionIfCurrent(async () => ({ type: 'secret' }), () => true), true)
+  assert.equal(isVaultSessionUnlocked(), true)
+  lockVaultSession()
+})

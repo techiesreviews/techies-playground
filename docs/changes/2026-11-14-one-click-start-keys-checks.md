@@ -51,6 +51,7 @@ Code Profiler profiles by requesting the site from itself. In browser Playground
 | Firefox, preview-play (dev before this change) | Upload ZIP, browser storage on, Launch | WordPress with plugin | frame blank after 5 min | script output |
 | Firefox, local build with the fix | Same, then reload and launch again | plugin installed both times | `menu-image:active` both times (one earlier run timed out on the second launch; the rerun passed) | script output |
 | Firefox, local build | Full flow | as Chromium | everything as in Chromium except the fill: Freemius answered `ApiBlocked` (its SDK got a Freemius web page back). Probe: a proxied POST to `api.freemius.com` echoes `uid` and `license_key` in Chromium but only the query string in Firefox, so Firefox drops the request body when Playground retries through the CORS proxy. This also blocks Freemius activation typed into WordPress in Firefox; it is outside this change. The long refusal is now cut to 200 characters of plain text. | script output |
+| Chromium, 320 px (after the GPT second look) | Open Checks with Query Monitor and Code Profiler in the setup, choose Query Monitor | menu inside the screen, focus back on Checks | menu at x 8, width 304; focus on Checks | screenshot |
 | Deployed preview | Proof run after merge | see PR | recorded in the PR and the lead's report | pending at time of writing |
 
 ## Result
