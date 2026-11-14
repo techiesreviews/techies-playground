@@ -107,6 +107,17 @@ const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-stora
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
   {
+    version: '0.9.1',
+    date: 'November 14, 2026',
+    title: 'Freemius licences activate',
+    summary: 'Plugins that sell licences through Freemius, such as WP Activity Log, can activate their licence in Playground.',
+    changes: [
+      'Licence activation for Freemius-based plugins no longer fails with "You must provide valid formatted date stamp".',
+      'Their licence calls go through the Playground host, which now passes licence updates on to Freemius and to no other site.',
+      'Other licence systems that sign their requests, such as WooCommerce.com updates, are not covered yet.',
+    ],
+  },
+  {
     version: '0.9.0',
     date: 'November 14, 2026',
     title: 'Playground runs from our own copy',
