@@ -26,7 +26,7 @@ For a deployment preparation, also run `npm run deploy:check`. Per the Release s
 
 ## Current automated suite
 
-The suite uses Node's built-in test runner and contains 119 tests in 20 files in the current working tree. `npm test` names its files (`src/**/*.test.js`, `scripts/*.test.mjs`), so a locally prepared `playground-host/dist` adds none.
+The suite uses Node's built-in test runner and contains 122 tests in 20 files in the current working tree. `npm test` names its files (`src/**/*.test.js`, `scripts/*.test.mjs`), so a locally prepared `playground-host/dist` adds none.
 
 Use the shared [Agent Kit](agents/agent-scripts.md): `scripts/agents/kit doctor`, `scripts/agents/kit unit` (the same files as `npm test`), and `scripts/agents/kit build`. The unit tests are Node tests only; browser specs and `kit shots` are not integrated. Real browser checks below use T3 separately and must not be inferred from the Node results.
 
@@ -50,7 +50,8 @@ Use the shared [Agent Kit](agents/agent-scripts.md): `scripts/agents/kit doctor`
 | `launcher-worker.test.mjs` | The launcher CSP allows scripts and frames from its own environment's Playground host and the public one, not the other environment's. |
 | `prepare-playground-host.test.mjs` | Which Playground build files the host keeps (offered PHP and WordPress builds, offline-cache files) or drops, the `_headers` rules, splitting files above the per-file limit, the file-count limit. |
 | `playground-host-worker.test.mjs` | Joining split files (GET, HEAD, cache headers, missing parts, manifest retry), 404 and 405 answers, routing to the CORS proxy. |
-| `playground-host-cors-proxy.test.mjs` | Same-origin gate, target validation (schemes, credentials, private and reserved addresses, the host itself with or without a trailing dot), header rules, POST bodies, redirects through the proxy, authorized cross-origin redirects followed without Authorization, size cap for declared and streamed sizes, the per-visitor rate limit, unreachable targets. |
+| `playground-host-cors-proxy.test.mjs` | Same-origin gate, target validation (schemes, credentials, private and reserved addresses, the host itself with or without a trailing dot), header rules, POST bodies, redirects through the proxy, authorized cross-origin redirects followed without Authorization, size cap for declared and streamed sizes, the per-visitor rate limit, unreachable targets, the `.php` proxy path, refusing URLs that contain `wordpress-static.zip`. |
+| `deploy-workflow.test.mjs` | Every Cloudflare deploy job in `deploy-site.yml` needs the `test` job, the `test` job runs `npm ci` and `npm test`, and the Playground build's `CORS_PROXY_URL` matches the path the host answers. |
 
 The suite does not render React components or start WordPress Playground. It proves pure contracts, not full browser behavior.
 

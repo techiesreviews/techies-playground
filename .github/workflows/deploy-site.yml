@@ -110,7 +110,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .playground-build/wasm-wordpress-net
-          key: playground-website-${{ needs.settings.outputs.playground_version }}-cors-proxy-v1
+          key: playground-website-${{ needs.settings.outputs.playground_version }}-cors-proxy-v2
 
       # Upstream requires Node 24.18+ and npm 11.16+ (engine-strict); the runner's default
       # Node and npm may be older.
@@ -125,9 +125,10 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
         env:
           PLAYGROUND_VERSION: ${{ needs.settings.outputs.playground_version }}
-          # Our host answers /cors-proxy/ (playground-host/cors-proxy.js); the public
-          # proxy only serves playground.wordpress.net. Change the cache key with it.
-          CORS_PROXY_URL: /cors-proxy/?
+          # Our host answers /cors-proxy.php (playground-host/cors-proxy.js); the public
+          # proxy only serves playground.wordpress.net. Playground's service worker never
+          # caches a .php path, so the name must end in .php. Change the cache key with it.
+          CORS_PROXY_URL: /cors-proxy.php?
         run: |
           git clone --branch "v${PLAYGROUND_VERSION}" --single-branch --depth 1 \
             --recurse-submodules --shallow-submodules \
@@ -166,7 +167,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .playground-build/wasm-wordpress-net
-          key: playground-website-${{ needs.settings.outputs.playground_version }}-cors-proxy-v1
+          key: playground-website-${{ needs.settings.outputs.playground_version }}-cors-proxy-v2
           fail-on-cache-miss: true
 
       - name: Prepare the Playground host folder
@@ -176,7 +177,7 @@ jobs:
           # LAUNCHER_ORIGINS holds several --launcher-origin flags; split them on purpose.
           # shellcheck disable=SC2086
           node scripts/prepare-playground-host.mjs .playground-build/wasm-wordpress-net playground-host/dist $LAUNCHER_ORIGINS
-          grep -rqF '"/cors-proxy/?"' playground-host/dist/assets || { echo "The Playground build does not use /cors-proxy/." >&2; exit 1; }
+          grep -rqF '"/cors-proxy.php?"' playground-host/dist/assets || { echo "The Playground build does not use /cors-proxy.php." >&2; exit 1; }
 
       - name: Deploy the Playground host
         uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3
