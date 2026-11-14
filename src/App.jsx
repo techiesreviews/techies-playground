@@ -1608,6 +1608,7 @@ function ChecksMenu({ checks, anchorRef, onOpenCheck, onClose }) {
         return
       }
       if (event.key === 'Tab') {
+        anchorRef.current?.focus()
         onClose()
         return
       }
@@ -1676,6 +1677,15 @@ function VaultUnlockPrompt({ onUnlocked, onSkip, onCancel }) {
     }
   }, [])
 
+  // Not modal, so the bar's Close stays reachable; Escape cancels from anywhere on the page.
+  useEffect(() => {
+    function handleEscape(event) {
+      if (event.key === 'Escape') onCancel()
+    }
+    window.addEventListener('keydown', handleEscape)
+    return () => window.removeEventListener('keydown', handleEscape)
+  }, [onCancel])
+
   async function handleSubmit(event) {
     event.preventDefault()
     if (busy) return
@@ -1694,7 +1704,7 @@ function VaultUnlockPrompt({ onUnlocked, onSkip, onCancel }) {
 
   return (
     <div className="absolute inset-0 z-10 grid place-items-center bg-neutral-950/40 p-4">
-      <form role="dialog" aria-modal="true" aria-labelledby="vault-unlock-title" aria-describedby="vault-unlock-description" onSubmit={handleSubmit} onKeyDown={(event) => { if (event.key === 'Escape') onCancel() }} className="grid w-full max-w-md gap-4 rounded-[min(2vw,var(--radius-xl))] bg-white p-5 shadow-2xl ring-1 ring-neutral-950/10">
+      <form role="dialog" aria-labelledby="vault-unlock-title" aria-describedby="vault-unlock-description" onSubmit={handleSubmit} className="grid w-full max-w-md gap-4 rounded-[min(2vw,var(--radius-xl))] bg-white p-5 shadow-2xl ring-1 ring-neutral-950/10">
         <div className="grid gap-1">
           <h2 id="vault-unlock-title" className="text-lg font-semibold text-balance">Unlock your license vault</h2>
           <p id="vault-unlock-description" className="text-pretty text-base/7 text-neutral-600 sm:text-sm/6">Once per session. Your saved keys then go in by themselves.</p>
@@ -3267,7 +3277,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
               aria-expanded={showLicenseManager}
               title="Licenses"
               onClick={() => setShowLicenseManager(true)}
-              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-sm:px-1.5 [anchor-name:--license-trigger]"
+              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-sm:px-2.5 [anchor-name:--license-trigger]"
             >
               <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:w-[calc(100%+0.625rem)]" aria-hidden="true" />
               <KeyIcon className="size-4 shrink-0 fill-neutral-300" />
@@ -3289,7 +3299,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                   disabled={status.step <= 2}
                   title={status.step <= 2 ? 'Available when setup finishes' : 'Checks'}
                   onClick={() => setShowChecksMenu((open) => !open)}
-                  className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-sm:px-1.5 disabled:cursor-not-allowed disabled:opacity-50 aria-expanded:bg-white/15"
+                  className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-sm:px-2.5 disabled:cursor-not-allowed disabled:opacity-50 aria-expanded:bg-white/15"
                 >
                   <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:w-[calc(100%+0.625rem)]" aria-hidden="true" />
                   <ChartBarIcon className="size-4 shrink-0 fill-neutral-300" />
@@ -3303,7 +3313,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
               disabled={status.step <= 2 || snapshotExporting}
               title={status.step <= 2 ? 'Available when setup finishes' : 'Export snapshot'}
               onClick={exportSiteSnapshot}
-              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-sm:px-1.5 disabled:cursor-not-allowed disabled:opacity-50"
+              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-sm:px-2.5 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:w-[calc(100%+0.625rem)]" aria-hidden="true" />
               <ArrowDownTrayIcon className="size-4 shrink-0 fill-neutral-300" />
@@ -3314,7 +3324,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
               disabled={status.step <= 2 || updateCheck.checking}
               title={status.step <= 2 ? 'Available when setup finishes' : 'Update all'}
               onClick={updateAllPackages}
-              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-sm:px-1.5 disabled:cursor-not-allowed disabled:opacity-50"
+              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-sm:px-2.5 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:w-[calc(100%+0.625rem)]" aria-hidden="true" />
               <ArrowPathIcon className="size-4 shrink-0 fill-neutral-300" />
@@ -3326,7 +3336,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
               type="button"
               aria-label="Close Playground"
               onClick={requestPlaygroundClose}
-              className="relative shrink-0 rounded-md p-1.5 text-neutral-300 hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
+              className="relative shrink-0 rounded-md p-1.5 text-neutral-300 max-sm:p-2.5 hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
             >
               <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:w-[calc(100%+0.625rem)]" aria-hidden="true" />
               <XMarkIcon className="size-4 shrink-0 fill-current" />
