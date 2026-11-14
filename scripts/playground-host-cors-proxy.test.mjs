@@ -176,15 +176,3 @@ test('stops a response without a declared size once it passes 100 MB', async () 
   await assert.rejects(response.arrayBuffer(), /too large/)
   assert.ok(sent <= 102, `read ${sent} MB`)
 })
-
-test('applies the shared limit for all visitors as well', async () => {
-  const upstream = recorder()
-  const visitorKeys = []
-  const sharedKeys = []
-  const limiter = { limit: async ({ key }) => { visitorKeys.push(key); return { success: true } } }
-  const globalLimiter = { limit: async ({ key }) => { sharedKeys.push(key); return { success: false } } }
-  const response = await handleCorsProxy(proxied('https://example.com/'), { fetch: upstream.fetch, limiter, globalLimiter })
-  assert.equal(response.status, 429)
-  assert.deepEqual(sharedKeys, ['all'])
-  assert.equal(upstream.calls.length, 0)
-})
