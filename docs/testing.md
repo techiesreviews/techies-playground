@@ -32,7 +32,8 @@ Use the shared [Agent Kit](agents/agent-scripts.md): `scripts/agents/kit doctor`
 
 | Test module | Coverage |
 | --- | --- |
-| `recipe.test.js` | Stable IDs, version hints, labels, default storage, validation, advanced settings, Blueprint output, directory installs, secret-field rejection, credential URL aliases, safe/unsafe persistence boundaries, public URL controls and external setup warnings. |
+| `freemius-plugin.test.js` | Runs the Freemius must-use plugin in PHP 8.3 (php-wasm) against stubbed WordPress functions: `auth_date` from the `Date` header, the proxy opt-in for Authorization, only the two Freemius API hosts, no double stamping, untouched string headers and preempted answers. |
+| `recipe.test.js` | Stable IDs, version hints, labels, default storage, validation, advanced settings, Blueprint output (the Freemius plugin written before installs), directory installs, secret-field rejection, credential URL aliases, safe/unsafe persistence boundaries, public URL controls and external setup warnings. |
 | `wordpress-versions.test.js` | Live version normalization, exact latest resolution, preserved saved versions, fetch contract. |
 | `wordpress-org-plugins.test.js` | Slugs, normalized/sanitized results, entity decoding, artwork host allowlist, search and featured request parameters. |
 | `wordpress-org-themes.test.js` | Slugs, HTTPS screenshot normalization, artwork host allowlist, search request. |
@@ -50,7 +51,7 @@ Use the shared [Agent Kit](agents/agent-scripts.md): `scripts/agents/kit doctor`
 | `launcher-worker.test.mjs` | The launcher CSP allows scripts and frames from its own environment's Playground host and the public one, not the other environment's. |
 | `prepare-playground-host.test.mjs` | Which Playground build files the host keeps (offered PHP and WordPress builds, offline-cache files) or drops, the `_headers` rules, splitting files above the per-file limit, the file-count limit. |
 | `playground-host-worker.test.mjs` | Joining split files (GET, HEAD, cache headers, missing parts, manifest retry), 404 and 405 answers, routing to the CORS proxy. |
-| `playground-host-cors-proxy.test.mjs` | Same-origin gate, target validation (schemes, credentials, private and reserved addresses, the host itself with or without a trailing dot), header rules, POST bodies, redirects through the proxy, authorized cross-origin redirects followed without Authorization, size cap for declared and streamed sizes, the per-visitor rate limit, unreachable targets, the `.php` proxy path, refusing URLs that contain `wordpress-static.zip`, uncompressed (`identity`) HEAD and range requests, dropping `Clear-Site-Data`, `NEL`, `Report-To` and `Set-Login` from answers. |
+| `playground-host-cors-proxy.test.mjs` | Same-origin gate, target validation (schemes, credentials, private and reserved addresses, the host itself with or without a trailing dot), header rules, POST bodies, PUT, PATCH and DELETE for the Freemius licence API hosts only (with their bodies and every other protection), redirects through the proxy, authorized cross-origin redirects followed without Authorization, size cap for declared and streamed sizes, the per-visitor rate limit, unreachable targets, the `.php` proxy path, refusing URLs that contain `wordpress-static.zip`, uncompressed (`identity`) HEAD and range requests, dropping `Clear-Site-Data`, `NEL`, `Report-To` and `Set-Login` from answers. |
 | `deploy-workflow.test.mjs` | Every Cloudflare deploy job in `deploy-site.yml` needs the `test` job, the `test` job runs `npm ci` and `npm test`, and the Playground build's `CORS_PROXY_URL` matches the path the host answers. |
 
 The suite does not render React components or start WordPress Playground. It proves pure contracts, not full browser behavior.
