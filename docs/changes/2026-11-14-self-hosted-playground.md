@@ -46,7 +46,10 @@ Serving Playground's website from our own Cloudflare Worker removes the dependen
 | Same at f7012d5, Chromium | WordPress.org plugins in the Blueprint: query-monitor + wordpress-seo; woocommerce | Installed and active | Ready in 16.7 s and 28 s; all listed plugins active (direct downloads, no proxy needed) | Local run |
 | Same at f7012d5, launcher built with the deadline lowered to 15 s (not committed) | woocommerce + query-monitor + wordpress-seo | The deadline stops before Blueprint installs | Ready in 27.3 s, past the 15 s deadline; all three active | Local run |
 | Host whose `remote.html` answers 403, at f7012d5 | Launch | Timeout message | After 120.3 s: the two-minute message | Local run |
-| Same at f7012d5, Chromium | woocommerce + jetpack + elementor + wordpress-seo + query-monitor together | Installed | Ready in 39.4 s, but `wp-admin/plugins.php` answers HTTP 500 (PHP exit 255) with all five; each smaller set above works. Not investigated further; not caused by hosting | Local run |
+| Same at f7012d5, Chromium | woocommerce + jetpack + elementor + wordpress-seo + query-monitor together | Installed | Ready in 39.4 s, but one `wp-admin/plugins.php` request answers HTTP 500, then Elementor's onboarding redirect loads. With `WP_DEBUG_LOG` the log shows `Allowed memory size of 268435456 bytes exhausted` in Playground's SQLite layer (`class-wp-mysql-on-sqlite.php`) | Local run |
+| Launcher at f7012d5 pointed at `https://playground.wordpress.net` (its remote reports build `ada3b06`, newer than the 3.1.64 release) | Same five plugins | Compare | Ready in 40.9 s; all five active; no 500. The difference is the Playground build, not the trimming or the split files: 3.1.64 is the newest release tag, and the next bump (follow-up below) should pick up the fix | Local run |
+| Local at f7012d5, Chromium | Browser-saved site: change Reading → posts per page, close, reload, relaunch | Setting kept | First launch 15.1 s, resume 5.4 s, setting kept | Local run |
+| Local at f7012d5, Playwright Firefox | Plain; uploaded ZIP; resume | Ready; plugin active; setting kept | 11.9 s; 11.8 s with the plugin active; 19.6 s then resume 6.5 s with the setting kept. Each run logs one Firefox service-worker message, "Failed to load ''", with no visible effect | Local run |
 | Deployed preview | Five launches per scenario in Chromium and Firefox | All succeed | Pending until the preview deploys from `dev` | — |
 
 ## Result
@@ -65,3 +68,4 @@ Pending the preview proof and the user's go for production.
 
 - A scheduled workflow that bumps `@wp-playground/blueprints` and the self-hosted build together and joins the security checks (not built here).
 - Firefox asks before granting persistent storage; a launch with browser storage waits for that answer (unchanged behaviour).
+- Five heavy WordPress.org plugins together exhaust PHP's 256 MB in the 3.1.64 build's SQLite layer on one admin request; the public site's newer build does not. The scheduled bump should fix it.
