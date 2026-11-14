@@ -100,12 +100,10 @@ import {
   subscribeVaultSession,
 } from './lib/vault-session'
 import {
-  LICENSE_FILL_CODE,
-  licenseFillBody,
+  fillSavedLicenseKeys,
   licenseFillLabel,
   licenseFillSummary,
   packagesWithSavedKeys,
-  parseLicenseFillResult,
   pluginFolderFromAssetPath,
 } from './lib/license-fill'
 import { CHECKS, CHECKS_PLUGIN, CHECKS_PLUGIN_PATH, addCheckToSetup, checkResultsPath, checksInSetup } from './lib/checks'
@@ -650,7 +648,7 @@ function SavedRecipeRow({ record, active, editing, missingCount, keyCounts, star
               {missingCount > 0 && <span className="text-amber-700"> — {missingCount} local ZIP{missingCount === 1 ? '' : 's'} missing</span>}
               {keyCounts.total > 0 && (keyCounts.saved === keyCounts.total
                 ? <span className="text-teal-700"> — keys ready</span>
-                : <span className="text-amber-700"> — {keyCounts.total - keyCounts.saved} key{keyCounts.total - keyCounts.saved === 1 ? '' : 's'} missing</span>)}
+                : <span className="text-neutral-500"> — {keyCounts.total - keyCounts.saved} key{keyCounts.total - keyCounts.saved === 1 ? '' : 's'} missing</span>)}
             </span>
           </span>
         </button>
@@ -1222,6 +1220,7 @@ function LicenseManager({ packages, anchorRef, fillResults, onRecordsChange, onC
                           <button
                             type="button"
                             aria-label={copiedId === record.id ? `${record.name} license copied` : `Copy ${record.name} license key`}
+                            aria-describedby={fillResults.get(record.pluginId) ? `license-fill-${record.id}` : undefined}
                             onClick={() => handleCopyLicense(record.id)}
                             className={`w-full min-w-0 rounded-lg py-2 pr-20 pl-2 text-left text-base/7 font-medium hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 sm:text-sm/6 ${copiedId === record.id ? 'text-teal-700' : 'text-neutral-900'}`}
                           >
@@ -1233,15 +1232,15 @@ function LicenseManager({ packages, anchorRef, fillResults, onRecordsChange, onC
                             ) : (
                               <>
                                 <span className="block truncate">{record.name}</span>
-                                {fillResults.get(record.pluginId) && <LicenseFillLine result={fillResults.get(record.pluginId)} />}
-                                <ClipboardDocumentIcon className="pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100 pointer-fine:opacity-0 absolute top-1/2 right-9 size-4 shrink-0 -translate-y-1/2 fill-neutral-500" />
+                                <ClipboardDocumentIcon className="pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100 pointer-fine:opacity-0 absolute top-4.5 right-9 size-4 shrink-0 fill-neutral-500" />
                               </>
                             )}
                           </button>
-                          <button type="button" aria-label={`Delete ${record.name}`} onClick={() => { setConfirmingDeleteId(record.id); setMessage('') }} className="absolute top-1/2 right-1 -translate-y-1/2 rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-red-700 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:opacity-100">
+                          <button type="button" aria-label={`Delete ${record.name}`} onClick={() => { setConfirmingDeleteId(record.id); setMessage('') }} className="absolute top-2.5 right-1 rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-red-700 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:opacity-100">
                             <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
                             <TrashIcon className="size-4 shrink-0 fill-current" />
                           </button>
+                          {fillResults.get(record.pluginId) && <LicenseFillLine id={`license-fill-${record.id}`} result={fillResults.get(record.pluginId)} />}
                         </>
                       )}
                       <span className="sr-only" aria-live="polite">{copiedId === record.id ? `${record.name} copied.` : ''}</span>
@@ -1251,7 +1250,7 @@ function LicenseManager({ packages, anchorRef, fillResults, onRecordsChange, onC
               ) : (
                 <div className="rounded-lg bg-neutral-100 p-4">
                   <p className="text-pretty text-base/7 font-medium text-neutral-900 sm:text-sm/6">No licenses saved.</p>
-                  <p className="text-pretty text-base/7 text-neutral-600 sm:text-sm/6">Add one when you are ready. This launcher never sends the key to a server.</p>
+                  <p className="text-pretty text-base/7 text-neutral-600 sm:text-sm/6">Add one when you are ready. A key leaves this browser only when a launch fills it into a Freemius plugin, which sends it to Freemius.</p>
                 </div>
               )}
             </div>
@@ -1262,9 +1261,9 @@ function LicenseManager({ packages, anchorRef, fillResults, onRecordsChange, onC
   )
 }
 
-function LicenseFillLine({ result }) {
+function LicenseFillLine({ id, result }) {
   const { tone, text } = licenseFillLabel(result)
-  return <span className={`block text-base/7 font-normal [overflow-wrap:anywhere] sm:text-sm/6 ${tone === 'ok' ? 'text-teal-700' : tone === 'warn' ? 'text-amber-700' : 'text-neutral-500'}`}>{text}</span>
+  return <span id={id} className={`block px-2 pb-1 text-base/7 font-normal [overflow-wrap:anywhere] sm:text-sm/6 ${tone === 'ok' ? 'text-teal-700' : tone === 'warn' ? 'text-amber-700' : 'text-neutral-500'}`}>{text}</span>
 }
 
 const inputClassName = 'w-full rounded-lg bg-white px-3 py-2.5 text-base/7 font-normal text-neutral-900 ring-1 ring-neutral-950/10 outline-none focus-visible:outline-2 -outline-offset-1 focus-visible:outline-teal-600 sm:py-2 sm:text-sm/6'
@@ -1304,6 +1303,10 @@ function AddKeyForm({ plugin, onSaved, onCancel }) {
 
   async function save() {
     if (busy || vaultState === 'checking') return
+    if (vaultState === 'unlocked' && !isVaultSessionUnlocked()) {
+      setVaultState('checking')
+      return
+    }
     setMessage('')
     if (vaultState === 'none' && password !== confirmation) {
       setMessage('The master passwords do not match.')
@@ -1398,6 +1401,7 @@ function PluginRow({ plugin, selected, keySaved, addingKey, onToggle, onReplace,
         </span>
       ) : !addingKey && (
         <button
+          id={`add-key-button-${plugin.id}`}
           type="button"
           onClick={() => onAddKey(plugin.id)}
           aria-label={`Add a license key for ${plugin.label}`}
@@ -1630,7 +1634,7 @@ function FeaturedPluginCard({ plugin, selected, onToggle }) {
   )
 }
 
-function VaultUnlockPrompt({ onUnlocked }) {
+function VaultUnlockPrompt({ onUnlocked, onSkip }) {
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
@@ -1662,38 +1666,19 @@ function VaultUnlockPrompt({ onUnlocked }) {
           <input id="launch-vault-password" name="launch-vault-password" type="password" autoComplete="current-password" required autoFocus value={password} onChange={(event) => setPassword(event.target.value)} className={inputClassName} />
         </label>
         {message && <p role="alert" className="text-pretty text-base/7 text-red-700 sm:text-sm/6">{message}</p>}
+        <div className="flex flex-wrap items-center gap-2">
         <button type="submit" disabled={busy} className="inline-flex w-fit items-center gap-1.5 rounded-lg bg-teal-700 py-2.5 pr-4 pl-2.5 text-sm/5 font-medium text-white ring-1 ring-teal-700 hover:bg-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 disabled:cursor-not-allowed disabled:opacity-50">
           <LockOpenIcon className="size-4 shrink-0 fill-white" />
           {busy ? 'Unlocking…' : 'Unlock and start'}
         </button>
+        <button type="button" disabled={busy} onClick={onSkip} className="relative w-fit rounded-lg px-3 py-2 text-sm/5 font-medium text-neutral-700 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 disabled:opacity-50">
+          <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
+          Start without keys
+        </button>
+        </div>
       </form>
     </div>
   )
-}
-
-// Decrypts the saved keys of the launched plugins and lets each plugin's own Freemius SDK
-// activate its key inside the running site. Keys travel only in the PHP request body.
-async function fillSavedLicenseKeys({ client, packages, folders, signal }) {
-  const failAll = (message) => packages.map((entry) => ({ ...entry, status: 'failed', message }))
-  const vaultKey = getVaultSessionKey()
-  if (!vaultKey) return failAll('The license vault is locked.')
-  try {
-    const keys = await readLicenseKeysForPackages(vaultKey, packages.map((entry) => entry.vaultId), signal)
-    const entries = packages.flatMap((entry) => (
-      folders.get(entry.id) && keys.get(entry.vaultId) ? [{ folder: folders.get(entry.id), licenseKey: keys.get(entry.vaultId) }] : []
-    ))
-    if (!entries.length) return failAll('The plugin folder could not be found.')
-    const response = await client.run({ code: LICENSE_FILL_CODE, method: 'POST', body: licenseFillBody(entries) })
-    signal.throwIfAborted()
-    const results = parseLicenseFillResult(response.text)
-    return packages.map((entry) => ({
-      ...entry,
-      ...(results[folders.get(entry.id)] || { status: 'failed', message: 'WordPress did not report this plugin.' }),
-    }))
-  } catch (caught) {
-    if (caught?.name === 'AbortError') throw caught
-    return failAll(caught instanceof Error ? caught.message.slice(0, 200) : 'The saved keys could not be filled in.')
-  }
 }
 
 export default function App() {
@@ -2258,7 +2243,7 @@ export default function App() {
   }
 
   function closePlayground() {
-    unlockResolveRef.current?.(false)
+    unlockResolveRef.current?.('closed')
     unlockResolveRef.current = null
     setUnlockPending(false)
     launchAbortRef.current?.abort()
@@ -2320,16 +2305,24 @@ export default function App() {
     launchAbortRef.current?.abort()
     const launchAbort = new AbortController()
     launchAbortRef.current = launchAbort
-    const keyPackageIds = launchedRecipe.plugins.filter((id) => savedKeyPackages.has(`plugin:${id}`))
+    let keyPackageIds = launchedRecipe.plugins.filter((id) => savedKeyPackages.has(`plugin:${id}`))
     if (keyPackageIds.length && !isVaultSessionUnlocked()) {
       setStatus({ running: true, step: 0, message: 'Unlock the license vault to fill in saved keys.' })
-      const unlocked = await new Promise((resolve) => {
+      let stopWatching = () => {}
+      // 'unlocked' from the prompt or an unlock in the Licenses manager, 'skip' to start
+      // without keys, 'closed' when the Playground closes.
+      const answer = await new Promise((resolve) => {
         unlockResolveRef.current = resolve
+        stopWatching = subscribeVaultSession(() => {
+          if (isVaultSessionUnlocked()) resolve('unlocked')
+        })
         setUnlockPending(true)
       })
+      stopWatching()
       unlockResolveRef.current = null
       setUnlockPending(false)
-      if (!unlocked || launchId !== launchIdRef.current) return
+      if (answer === 'closed' || launchId !== launchIdRef.current) return
+      if (answer === 'skip') keyPackageIds = []
     }
     setStatus({ running: true, step: 0, message: launchedRecipe.wordpress === 'latest' ? 'Confirming the latest stable WordPress release…' : 'Starting the local WordPress runtime…' })
 
@@ -2477,6 +2470,8 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
         setStatus({ running: true, step: 2, message: 'Filling in saved license keys…' })
         const results = await fillSavedLicenseKeys({
           client,
+          getVaultKey: getVaultSessionKey,
+          readKeys: readLicenseKeysForPackages,
           packages: keyPackageIds.map((id) => ({ id, vaultId: `plugin:${id}`, label: installedPlugins.find((plugin) => plugin.id === id)?.label || id })),
           folders: pluginFolders,
           signal: launchAbort.signal,
@@ -3027,10 +3022,14 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                                 onReplace={replacePluginZip}
                                 onRemove={handleRemovePlugin}
                                 onAddKey={setAddingKeyFor}
-                                onCancelKey={() => setAddingKeyFor('')}
+                                onCancelKey={() => {
+                                  setAddingKeyFor('')
+                                  window.requestAnimationFrame(() => document.getElementById(`add-key-button-${plugin.id}`)?.focus())
+                                }}
                                 onKeySaved={() => {
                                   setAddingKeyFor('')
                                   refreshLicenseRecords()
+                                  window.requestAnimationFrame(() => document.getElementById(`plugin-${plugin.id}`)?.focus())
                                 }}
                               />
                             ))}
@@ -3232,12 +3231,17 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
               aria-haspopup="dialog"
               aria-expanded={showLicenseManager}
               onClick={() => setShowLicenseManager(true)}
-              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white [anchor-name:--license-trigger]"
+              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-sm:px-1.5 [anchor-name:--license-trigger]"
             >
               <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
               <KeyIcon className="size-4 shrink-0 fill-neutral-300" />
-              Licenses
-              {licenseFill.length > 0 && <span className="font-normal text-neutral-300">· {licenseFillSummary(licenseFill)}</span>}
+              <span className="max-sm:sr-only">Licenses</span>
+              {licenseFill.length > 0 && (
+                <span className="font-normal text-neutral-300">
+                  <span className="max-sm:hidden">· {licenseFillSummary(licenseFill)}</span>
+                  <span className="sm:hidden" aria-hidden="true">{licenseFillSummary(licenseFill).replace(/ of (\d+) active$/, '/$1')}</span>
+                </span>
+              )}
             </button>
             {launchedChecks.length > 0 && (
               <span className="relative shrink-0">
@@ -3249,11 +3253,11 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                   disabled={status.step <= 2}
                   title={status.step <= 2 ? 'Available when setup finishes' : undefined}
                   onClick={() => setShowChecksMenu((open) => !open)}
-                  className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-50 aria-expanded:bg-white/15"
+                  className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-sm:px-1.5 disabled:cursor-not-allowed disabled:opacity-50 aria-expanded:bg-white/15"
                 >
                   <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
                   <ChartBarIcon className="size-4 shrink-0 fill-neutral-300" />
-                  Checks
+                  <span className="max-sm:sr-only">Checks</span>
                 </button>
                 {showChecksMenu && <ChecksMenu checks={launchedChecks} anchorRef={checksButtonRef} onOpenCheck={openCheck} onClose={closeChecksMenu} />}
               </span>
@@ -3263,24 +3267,25 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
               disabled={status.step <= 2 || snapshotExporting}
               title={status.step <= 2 ? 'Available when setup finishes' : undefined}
               onClick={exportSiteSnapshot}
-              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-50"
+              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-sm:px-1.5 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
               <ArrowDownTrayIcon className="size-4 shrink-0 fill-neutral-300" />
-              {snapshotExporting ? 'Exporting…' : 'Export snapshot'}
+              <span className="max-sm:sr-only">{snapshotExporting ? 'Exporting…' : 'Export snapshot'}</span>
             </button>
             <button
               type="button"
               disabled={status.step <= 2 || updateCheck.checking}
               title={status.step <= 2 ? 'Available when setup finishes' : undefined}
               onClick={updateAllPackages}
-              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-50"
+              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-sm:px-1.5 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
               <ArrowPathIcon className="size-4 shrink-0 fill-neutral-300" />
-              {updateCheck.checking ? 'Updating…' : 'Update all'}
+              <span className="max-sm:sr-only">{updateCheck.checking ? 'Updating…' : 'Update all'}</span>
             </button>
             <span className="sr-only" aria-live="polite">{updateCheck.message}</span>
+            <span className="sr-only" aria-live="polite">{licenseFill.length > 0 ? `Saved license keys: ${licenseFillSummary(licenseFill)}.` : ''}</span>
             <button
               type="button"
               aria-label="Close Playground"
@@ -3295,7 +3300,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
           </div>
           <div className="relative min-h-0">
             <iframe key={playgroundFrameKey} ref={iframeRef} title="WordPress Playground" className="size-full bg-white" />
-            {unlockPending && <VaultUnlockPrompt onUnlocked={() => unlockResolveRef.current?.(true)} />}
+            {unlockPending && <VaultUnlockPrompt onUnlocked={() => unlockResolveRef.current?.('unlocked')} onSkip={() => unlockResolveRef.current?.('skip')} />}
           </div>
         </div>
       </section>

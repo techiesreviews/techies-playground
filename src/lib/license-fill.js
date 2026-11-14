@@ -112,3 +112,29 @@ export function licenseFillLabel({ status, message }) {
   if (status === 'not-freemius') return { tone: 'muted', text: 'Not filled in: enter it in WordPress' }
   return { tone: 'warn', text: `Not filled in: ${message || 'WordPress did not answer.'}` }
 }
+
+// Decrypts the saved keys of the launched plugins and lets each plugin's own Freemius SDK
+// activate its key inside the running site. Keys travel only in the PHP request body. A
+// failure is reported per package and never fails the launch; closing it aborts.
+export async function fillSavedLicenseKeys({ client, packages, folders, signal, getVaultKey, readKeys }) {
+  const failAll = (message) => packages.map((entry) => ({ ...entry, status: 'failed', message }))
+  const vaultKey = getVaultKey()
+  if (!vaultKey) return failAll('The license vault is locked.')
+  try {
+    const keys = await readKeys(vaultKey, packages.map((entry) => entry.vaultId), signal)
+    const entries = packages.flatMap((entry) => (
+      folders.get(entry.id) && keys.get(entry.vaultId) ? [{ folder: folders.get(entry.id), licenseKey: keys.get(entry.vaultId) }] : []
+    ))
+    if (!entries.length) return failAll('The plugin folder could not be found.')
+    const response = await client.run({ code: LICENSE_FILL_CODE, method: 'POST', body: licenseFillBody(entries) })
+    signal.throwIfAborted()
+    const results = parseLicenseFillResult(response.text)
+    return packages.map((entry) => ({
+      ...entry,
+      ...(results[folders.get(entry.id)] || { status: 'failed', message: 'WordPress did not report this plugin.' }),
+    }))
+  } catch (caught) {
+    if (caught?.name === 'AbortError') throw caught
+    return failAll(caught instanceof Error ? caught.message.slice(0, 200) : 'The saved keys could not be filled in.')
+  }
+}

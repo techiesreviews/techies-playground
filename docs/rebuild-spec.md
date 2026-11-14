@@ -121,7 +121,7 @@ Launch must perform this sequence:
 
 1. Refuse to proceed if a referenced local ZIP is absent.
 2. Validate and normalize the complete recipe.
-3. Show the full-screen Playground shell and start progress reporting. When an uploaded plugin of the recipe has a saved key and the vault session is locked, show **Unlock your license vault** over the frame (master password, **Unlock and start**) and wait; closing the shell abandons the launch.
+3. Show the full-screen Playground shell and start progress reporting. When an uploaded plugin of the recipe has a saved key and the vault session is locked, show **Unlock your license vault** over the frame (master password, **Unlock and start**, **Start without keys**) and wait; an unlock in the Licenses manager also continues the launch, Start without keys launches without the fill, and closing the shell abandons the launch.
 4. If WordPress is `latest`, fetch the WordPress.org version list again. Abort if the exact stable version cannot be confirmed.
 5. Resolve the runtime site identity from name, exact WordPress version, and PHP version.
 6. Request persistent browser storage when storage is `browser` without waiting for the answer (Firefox keeps the request pending until the visitor answers its prompt); failure to grant persistence is non-fatal.
@@ -140,7 +140,7 @@ Any exception invalidates the active client, blanks the iframe and replaces it w
 
 The runtime occupies the full viewport. Its dark WordPress-like top bar contains the recipe name and:
 
-- Licenses, followed after a fill by `· N of M active`.
+- Licenses, followed after a fill by `· N of M active` (also announced politely to screen readers). Below the `sm` breakpoint the Licenses, Checks, Export snapshot and Update all buttons show only their icons (their names stay for screen readers) and the fill shows as `N/M`, so Close stays on screen on a phone.
 - Checks, only when a check is in the launched setup; disabled until setup finishes. It opens a menu (Escape and outside click close it, arrow keys move) with one item per check: Query Monitor reloads the current WordPress page with `techies-check=query-monitor`, where the checks must-use plugin clicks Query Monitor's admin-bar link to open its panel; Code Profiler opens `admin.php?page=code-profiler` (`code-profiler-pro` when only the Pro ZIP is in the setup) with `techies-check=code-profiler`, where the must-use plugin clears Query Monitor's remembered panel so it does not cover the profiler.
 - Export snapshot.
 - Update all.

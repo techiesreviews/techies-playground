@@ -70,3 +70,46 @@ test('names each fill result in plain words', () => {
   assert.deepEqual(licenseFillLabel({ status: 'not-freemius', message: '' }), { tone: 'muted', text: 'Not filled in: enter it in WordPress' })
   assert.deepEqual(licenseFillLabel({ status: 'failed', message: 'Vault locked.' }), { tone: 'warn', text: 'Not filled in: Vault locked.' })
 })
+
+test('fills saved keys through one PHP run and reports every package', async () => {
+  const { fillSavedLicenseKeys } = await import('./license-fill.js')
+  const packages = [
+    { id: 'menu-image', vaultId: 'plugin:menu-image', label: 'Menu Image' },
+    { id: 'wsal', vaultId: 'plugin:wsal', label: 'WP Activity Log' },
+  ]
+  const folders = new Map([['menu-image', 'menu-image'], ['wsal', 'wsal-premium']])
+  const runs = []
+  const client = { async run(request) {
+    runs.push(request)
+    return { text: 'TECHIES_LICENSE_FILL:{"menu-image":{"status":"rejected","message":"Invalid license key."}}' }
+  } }
+  const readKeys = async (key, ids) => new Map(ids.map((id) => [id, `key-for-${id}`]))
+  const signal = new AbortController().signal
+
+  const results = await fillSavedLicenseKeys({ client, packages, folders, signal, getVaultKey: () => 'vault-key', readKeys })
+  assert.equal(runs.length, 1)
+  assert.equal(runs[0].method, 'POST')
+  assert.deepEqual(JSON.parse(runs[0].body), { 'menu-image': 'key-for-plugin:menu-image', 'wsal-premium': 'key-for-plugin:wsal' })
+  assert.deepEqual(results.map((result) => [result.id, result.status, result.message]), [
+    ['menu-image', 'rejected', 'Invalid license key.'],
+    ['wsal', 'failed', 'WordPress did not report this plugin.'],
+  ])
+
+  const locked = await fillSavedLicenseKeys({ client, packages, folders, signal, getVaultKey: () => null, readKeys })
+  assert.deepEqual(locked.map((result) => result.message), ['The license vault is locked.', 'The license vault is locked.'])
+
+  runs.length = 0
+  const noFolders = await fillSavedLicenseKeys({ client, packages, folders: new Map(), signal, getVaultKey: () => 'k', readKeys })
+  assert.equal(runs.length, 0)
+  assert.equal(noFolders[0].message, 'The plugin folder could not be found.')
+
+  const failing = { async run() { throw new Error('x'.repeat(500)) } }
+  const failed = await fillSavedLicenseKeys({ client: failing, packages, folders, signal, getVaultKey: () => 'k', readKeys })
+  assert.equal(failed[0].status, 'failed')
+  assert.equal(failed[0].message.length, 200)
+
+  const aborted = new AbortController()
+  aborted.abort()
+  const abortingRead = async (key, ids, abortSignal) => { abortSignal.throwIfAborted(); return new Map() }
+  await assert.rejects(fillSavedLicenseKeys({ client, packages, folders, signal: aborted.signal, getVaultKey: () => 'k', readKeys: abortingRead }), { name: 'AbortError' })
+})
