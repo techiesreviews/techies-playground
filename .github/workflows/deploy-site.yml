@@ -92,12 +92,13 @@ jobs:
           key: playground-website-${{ needs.settings.outputs.playground_version }}-cors-proxy-v1
 
       # Upstream requires Node 24.18+ and npm 11.16+ (engine-strict); the runner's default
-      # Node may be older.
+      # Node and npm may be older.
       - name: Set up Node.js for the upstream build
         if: steps.cache.outputs.cache-hit != 'true'
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: 24
+          node-version: '>=24.18.0 <25'
+          check-latest: true
 
       - name: Build Playground ${{ needs.settings.outputs.playground_version }}
         if: steps.cache.outputs.cache-hit != 'true'
@@ -111,6 +112,7 @@ jobs:
             --recurse-submodules --shallow-submodules \
             https://github.com/WordPress/wordpress-playground.git "$RUNNER_TEMP/wordpress-playground"
           cd "$RUNNER_TEMP/wordpress-playground"
+          npm install --global npm@^11.16.0 --no-audit --no-fund
           echo "Node $(node --version), npm $(npm --version)"
           npm ci --no-audit --no-fund
           npm run build:website

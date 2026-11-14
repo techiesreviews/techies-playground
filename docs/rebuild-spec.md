@@ -129,7 +129,7 @@ Launch must perform this sequence:
 12. Navigate to the recipe landing page.
 13. Record the successful spin-up. A `latest` recipe is recorded with the exact launched WordPress version for reproducibility.
 
-Any exception invalidates the active client, blanks the iframe, closes the full-screen shell, and surfaces a readable error.
+Any exception invalidates the active client, blanks the iframe and replaces it with a new element, closes the full-screen shell, and surfaces a readable error. A launch closed or replaced while the Playground client loads never starts Playground.
 
 ## 6. Playground shell
 
