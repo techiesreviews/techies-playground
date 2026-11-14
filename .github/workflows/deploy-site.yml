@@ -1,7 +1,8 @@
 name: Deploy site
 
 # Shared by deploy.yml (production, from main) and deploy-preview.yml (preview, from dev).
-# Deploys our copy of WordPress Playground first, then the launcher that embeds it.
+# Runs the tests first; only when they pass does it deploy our copy of WordPress Playground,
+# then the launcher that embeds it.
 on:
   workflow_call:
     inputs:
@@ -74,6 +75,26 @@ jobs:
               ;;
           esac
 
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
   # Upstream's build installs thousands of third-party packages with install scripts, so it
   # runs in a job with no token permissions and no secrets. The deploy job only restores
   # its output from the cache.
@@ -124,7 +145,8 @@ jobs:
 
   playground-host:
     name: Deploy Playground host
-    needs: [settings, playground-build]
+    # Nothing goes live unless the tests passed.
+    needs: [settings, test, playground-build]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -179,8 +201,8 @@ jobs:
           fi
 
   launcher:
-    name: Test and deploy launcher
-    needs: [settings, playground-host]
+    name: Deploy launcher
+    needs: [settings, test, playground-host]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -195,9 +217,6 @@ jobs:
 
       - name: Install locked dependencies
         run: npm ci
-
-      - name: Run tests
-        run: npm test
 
       - name: Build launcher assets
         env:
