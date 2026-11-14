@@ -2,8 +2,8 @@
 
 - Date: 2026-11-14
 - Owner: fleet-lead build agent (Claude Opus 5.5)
-- Status: in-progress
-- Disposition: pending
+- Status: complete (preview); production waits for the user's go
+- Disposition: kept
 - Related version: 0.9.0
 - Related commit/issue: Orbit TOOLS-236; upstream WordPress/wordpress-playground#4419 (fix PR #4557 open)
 
@@ -53,15 +53,18 @@ Serving Playground's website from our own Cloudflare Worker removes the dependen
 | Local at f7012d5, Playwright Firefox | Plain; uploaded ZIP; resume | Ready; plugin active; setting kept | 11.9 s; 11.8 s with the plugin active; 19.6 s then resume 6.5 s with the setting kept. Each run logs one Firefox service-worker message, "Failed to load ''", with no visible effect | Local run |
 | Local at b8a1537, Chromium | Beta + query-monitor; Nightly + query-monitor; plain | Ready, styled | Beta ready in 7.1 s, first page styled (four non-minified files load after the backfill); before the fix its first page had no CSS or JS and became styled about 20 s later. Nightly ready in 14.2 s. Plain ready in 10 s | Local run |
 | Local, Chromium, five heavy plugins with exact WordPress `7.1` (bundled build) instead of `latest` (exact 7.1.4 full download) | Same five plugins | Compare | No 500 and no fatal with the bundled build; the 500 appears only with the full 7.1.4 download, on 127.0.0.1, and the site works on every later page (plugins, dashboard, WooCommerce setup) | Local run |
-| Deployed preview | Five launches per scenario in Chromium and Firefox | All succeed | Pending until the preview deploys from `dev` | — |
+| GitHub Actions run 43600851472 (`deploy-preview.yml`, push of 2445dc3 to `dev`), cold cache | Build, cache hand-off, deploy | All jobs pass | Build job: cache miss, Node v24.22.3 and npm 11.21.2, upstream build passes, cache saved (`playground-website-3.1.64-cors-proxy-v1`). Host job: cache restored, "Prepared 19136 files", 7,772 uploaded (11,363 already uploaded), preview-wp.techies.tools custom domain created by the deploy, `frame-ancestors` header present, split ICU file "200 30782896 bytes". Launcher job: tests, build, preview-play.techies.tools deployed | https://github.com/techiesreviews/techies-playground/actions/runs/43600851472 |
+| Deployed preview, Google Chrome 157.0.8103.78 (Playwright 1.63, headless) | Five launches in a row each: plain WordPress (temporary); uploaded plugin ZIP; browser-saved site with a changed Reading setting, closed, page reloaded, relaunched | All succeed | 15/15. Plain 14.4, 8.9, 9.4, 8.9, 11.9 s; ZIP 10.4, 9.9, 10.4, 10.0, 9.4 s, plugin active each time; resume first launch 10.9–12.9 s, relaunch 4.3–4.9 s, setting kept each time. No console errors, no failed requests | Run on 2026-11-14 |
+| Deployed preview, Playwright Firefox 155.0 (headless; persistent-storage prompt answered by test preferences) | Same fifteen launches | All succeed | 15/15. Plain 14.2, 10.2, 11.2, 11.1, 11.1 s; ZIP 11.7, 10.1, 11.2, 11.7, 10.2 s, plugin active; resume first launch 15.7–23.4 s, relaunch 5.5–10.4 s, setting kept. Each run logs Firefox's service-worker message "Failed to load ''" with no visible effect | Run on 2026-11-14 |
+| Deployed preview, Chrome, with `WP_DEBUG_LOG` | The five heavy WordPress.org plugins (`latest`) | Compare with local | Ready in 39.2 s; no failed request; plugins, dashboard and WooCommerce setup all answer 200. The debug log still holds one "Allowed memory size of 268435456 bytes exhausted (tried to allocate 37289984 bytes)" from a background request. The same launcher pointed at playground.wordpress.net logs none | Run on 2026-11-14 |
 
 ## Result
 
-Pending the deployed-preview proof. Two findings changed the plan: the client's remote-URL allowlist (solved by loading the client from the host) and the public CORS proxy's origin allowlist (solved by our own proxy).
+On the deployed preview, all 30 launches (plain, uploaded ZIP and resumed saved site, five each, in Chrome and Firefox) became ready, with no visible errors. A runtime that never connects fails after two minutes with a clear message. Two findings changed the plan: the client's remote-URL allowlist (solved by loading the client from the host) and the public CORS proxy's origin allowlist (solved by our own proxy).
 
 ## Disposition and rationale
 
-Pending the preview proof and the user's go for production.
+Kept: self-hosting removes the dependency on playground.wordpress.net's bot check, and the preview proves the launch paths the user relies on. Production (play.techies.tools with wp.techies.tools) goes live only after the user's go, through `kit pr --release --base main`.
 
 ## Documentation impact
 
@@ -71,4 +74,4 @@ Pending the preview proof and the user's go for production.
 
 - A scheduled workflow that bumps `@wp-playground/blueprints` and the self-hosted build together and joins the security checks (not built here).
 - Firefox asks before granting persistent storage; a launch with browser storage waits for that answer (unchanged behaviour).
-- Five heavy WordPress.org plugins together exhaust PHP's 256 MB in the SQLite layer on one admin request when WordPress comes as the full 7.1.4 download on 127.0.0.1; the bundled 7.1 build and the public site do not. Re-check on the deployed preview; the scheduled bump would show whether the build matters.
+- Five heavy WordPress.org plugins together (WooCommerce, Jetpack, Elementor, Yoast, Query Monitor) log one PHP memory fatal in a background request on our host when WordPress comes as the full 7.1.4 download (on 127.0.0.1 it also failed one admin page); the bundled 7.1 build and playground.wordpress.net log none. The allocation (37,289,984 bytes) is close to the 7.1.4 ZIP's size; the CORS proxy path is the likeliest difference to investigate (for example with `wrangler tail` on the preview host).
