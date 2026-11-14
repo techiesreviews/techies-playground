@@ -26,7 +26,7 @@ The changelog opens as a keyboard-accessible popover/dialog. The list shows vers
 
 The hero eyebrow is **PRIVATE, IN-BROWSER PLAYGROUND**. The heading is **Test premium WordPress tools with ease**. Supporting copy explains that premium packages and licenses remain under the user's control.
 
-The setup form has three numbered sections.
+The setup form has four numbered sections: Environment, Choose a setup, Checks, Name and save.
 
 ### 3.1 Environment
 
@@ -59,13 +59,13 @@ If saved recipes exist, that tab is initially active; otherwise plugins is activ
 
 #### Saved recipes
 
-Each row shows name, plugin/theme count, WordPress/PHP versions, and missing local ZIP count. Selecting loads the recipe. Edit loads it and changes the save action to Update recipe. Updating a renamed record removes the old ID so no stale duplicate remains. Removal deletes only the recipe record, not packages or persisted WordPress data.
+Each row shows name, plugin/theme count, WordPress/PHP versions, missing local ZIP count and, when the recipe has uploaded plugins, **keys ready** or **N keys missing** (uploaded plugins without a saved license). A teal **Start** button at the end of the row loads the recipe and launches it at once with its WordPress/PHP versions and plugins; it is disabled while a launch runs or a local ZIP is missing. Selecting loads the recipe. Edit loads it and changes the save action to Update recipe. Updating a renamed record removes the old ID so no stale duplicate remains. Removal deletes only the recipe record, not packages or persisted WordPress data.
 
 #### Plugins
 
 The user can upload multiple ZIPs. Dragging files over the launcher shows a full-page `upload-box`; dropping anywhere on the launcher accepts mixed plugin/theme ZIP batches with no application file-count cap. WordPress Plugin Name / Theme Name headers identify the destination automatically. Each valid package is saved in its browser-local vault; all imported plugins are selected, and the last successful theme is selected with any directory theme cleared. All other uploaded themes remain available. Batches are queued and processed sequentially; invalid packages report individual errors without stopping later files. A dismissible status shows progress and totals. Existing file pickers and replacement controls remain available. A valid upload must have a `.zip` filename and a ZIP file signature. Version suffixes are removed from the stable vault ID so a newer ZIP can replace an older file without breaking recipes. The stable ID remains an internal recipe/vault reference rather than visible card metadata. The UI shows the label on the first line, then the optional version hint, size, and browser-local note on a second line without a leading dash.
 
-Uploaded plugins can be selected independently, replaced in place, or deleted. Deleting also removes that ID from the current recipe and its recency preference.
+Uploaded plugins can be selected independently, replaced in place, or deleted. Each uploaded plugin card shows **Key saved** when the license vault holds a key for `plugin:<id>`, otherwise an **Add key** button. Add key opens fields inside the card (no nested form; Enter saves): the master password when the vault session is locked (new password and confirmation when no vault exists yet) and the license key, with Save key and Cancel. Saving unlocks or creates the vault for the session and encrypts the key under the plugin's label. Deleting also removes that ID from the current recipe and its recency preference.
 
 The same search field filters uploaded plugins immediately and queries WordPress.org after 350 ms when the trimmed query contains at least two characters. Uploaded results appear first. Directory results show sanitized name, slug, version, author, active installs, tested WordPress version, and official icon when present.
 
@@ -89,7 +89,11 @@ Every successful launch records safe metadata: launch date, normalized recipe, p
 
 History is newest first and capped at 30. Temporary launches may repeat. Only the newest record for the same browser-saved site identity is kept. A row distinguishes resumable saved environments from setup-only history. Selecting restores configuration; deleting removes only history.
 
-### 3.3 Name and save
+### 3.3 Checks
+
+Lists Query Monitor and Code Profiler (`src/lib/checks.js`). A check is in the setup when its plugin is in the recipe: the WordPress.org slug (`query-monitor`, `code-profiler`) or an uploaded ZIP whose ID is `query-monitor`, `code-profiler` or `code-profiler-pro`. In-setup cards use the selected teal surface and a **Runs after start** pill; others show **Not in this setup** and an **Add <check>** button that adds the free WordPress.org plugin. Results are read inside WordPress; there is no results panel of our own.
+
+### 3.4 Name and save
 
 The recipe name is required, trimmed, and capped at 80 characters. Actions:
 
@@ -101,7 +105,7 @@ Import validates JSON, loads it, and saves it to the library. Missing local pack
 
 ## 4. Launch summary
 
-The desktop summary is sticky and shows recipe name, WordPress/PHP, package counts and selected plugin names, storage mode, and networking state. Local plugin names come from the vault; directory names come from session metadata, with IDs or public slugs as fallbacks. Long names wrap within the summary. It repeats the launch action and three product assurances: browser-local execution, secret-free recipes, and the official Playground runtime.
+The desktop summary is sticky and shows recipe name, WordPress/PHP, package counts and selected plugin names, **Licenses** (`N of M keys saved`, only when uploaded plugins are selected), **Checks** (names joined with +, or None), storage mode, and networking state. Local plugin names come from the vault; directory names come from session metadata, with IDs or public slugs as fallbacks. Long names wrap within the summary. It repeats the launch action and three product assurances: browser-local execution, secret-free recipes, and the official Playground runtime.
 
 During launch it shows three ordered stages:
 
@@ -117,15 +121,16 @@ Launch must perform this sequence:
 
 1. Refuse to proceed if a referenced local ZIP is absent.
 2. Validate and normalize the complete recipe.
-3. Show the full-screen Playground shell and start progress reporting.
+3. Show the full-screen Playground shell and start progress reporting. When an uploaded plugin of the recipe has a saved key and the vault session is locked, show **Unlock your license vault** over the frame (master password, **Unlock and start**) and wait; closing the shell abandons the launch.
 4. If WordPress is `latest`, fetch the WordPress.org version list again. Abort if the exact stable version cannot be confirmed.
 5. Resolve the runtime site identity from name, exact WordPress version, and PHP version.
-6. Request persistent browser storage when storage is `browser`; failure to grant persistence is non-fatal.
+6. Request persistent browser storage when storage is `browser` without waiting for the answer (Firefox keeps the request pending until the visitor answers its prompt); failure to grant persistence is non-fatal.
 7. Import the Playground client from `<Playground host>/client/index.js` and start `startPlaygroundWeb` against `<Playground host>/remote.html` with a generated Blueprint. The Playground host is `https://wp.techies.tools` (`src/lib/playground-host.js`; preview builds set `VITE_PLAYGROUND_ORIGIN`). Loading the client, booting and starting WordPress (until `onClientConnected`) must finish within two minutes, otherwise launch fails with a readable timeout; the Blueprint steps that follow have no deadline.
 8. For an existing OPFS site, mount before startup, set `shouldInstallWordPress: false`, and omit one-time setup. For a new saved site, start WordPress, mount OPFS from memory to disk, then remember the site identity.
 9. Wait for readiness, execute PHP to read `$wp_version`, and require a usable version marker. For `latest`, require exact equality with the API result.
 10. A Blueprint step writes the Freemius must-use plugin (`src/lib/freemius-plugin.js`) before any package installs, on every launch. Blueprint steps install and activate WordPress.org packages. Install each local plugin ZIP with overwrite and activation enabled.
 11. Install a selected local theme ZIP with overwrite and activation, then execute PHP and verify `get_option('stylesheet')` equals the local theme ID.
+11a. When checks are in the setup, write the checks must-use plugin. When uploaded plugins have saved keys, decrypt the newest key per plugin and run `LICENSE_FILL_CODE` once with the keys as the POST body, keyed by installed plugin folder; each Freemius-based plugin activates its key through its own SDK (`activate_migrated_license`), an already active licence is left alone, other plugins report that the key must be entered in WordPress. A failed fill never fails the launch.
 12. Navigate to the recipe landing page.
 13. Record the successful spin-up. A `latest` recipe is recorded with the exact launched WordPress version for reproducibility.
 
@@ -135,7 +140,8 @@ Any exception invalidates the active client, blanks the iframe and replaces it w
 
 The runtime occupies the full viewport. Its dark WordPress-like top bar contains the recipe name and:
 
-- Licenses.
+- Licenses, followed after a fill by `· N of M active`.
+- Checks, only when a check is in the launched setup; disabled until setup finishes. It opens a menu (Escape and outside click close it, arrow keys move) with one item per check: Query Monitor reloads the current WordPress page with `techies-check=query-monitor`, where the checks must-use plugin clicks Query Monitor's admin-bar link to open its panel; Code Profiler opens `admin.php?page=code-profiler` (`code-profiler-pro` when only the Pro ZIP is in the setup) with `techies-check=code-profiler`, where the must-use plugin clears Query Monitor's remembered panel so it does not cover the profiler.
 - Export snapshot.
 - Update all.
 - Close.
@@ -162,11 +168,11 @@ States:
 4. Listing unlocked license metadata.
 5. Adding a license for an uploaded plugin or theme.
 
-The derived non-exportable AES key exists only in a React ref. Plaintext appears only in the controlled add field or briefly during an explicit copy. Locking/closing clears the key reference, plaintext state, copy status, and timers. Delete uses inline confirmation. Reset uses a destructive browser confirmation and deletes the complete license database; it has no recovery.
+The derived non-exportable AES key lives in memory in the vault session (`src/lib/vault-session.js`) for the page session, so one unlock serves the manager, Add key and every launch's automatic fill. Plaintext appears only in the controlled add fields, briefly during an explicit copy, and in the PHP request body of an automatic fill. Lock clears the session key; closing the manager clears plaintext state, copy status and timers but keeps the session unlocked; reloading or closing the tab drops it. With a running site, each record shows that launch's fill result (filled in and active, already active, Freemius's refusal message, or not filled in). Delete uses inline confirmation. Reset uses a destructive browser confirmation and deletes the complete license database; it has no recovery.
 
 Lock, close, unmount and reset invalidate the active vault session. Pending clipboard reads/decryption cannot submit a write afterward, and late unlock/create results cannot restore the key or metadata. Already-submitted OS clipboard writes cannot be recalled.
 
-The manager does not inject a license into WordPress. The user copies it and activates the package inside WordPress.
+The manager itself does not inject a license. Launches fill saved keys into Freemius-based plugins (see the launch contract); for other vendors the user copies the key and activates the package inside WordPress.
 
 ## 8. Accessibility and interaction requirements
 
@@ -193,6 +199,7 @@ A rebuild is not equivalent until it passes the automated contracts and manually
 - History retention/deduplication and snapshot export.
 - Temporary close/unload warnings.
 - License vault create, lock, unlock, copy, delete, reset, and incorrect-password handling without secret leakage.
+- One-click Start of a saved recipe, Add key from Choose plugins, one unlock per session, automatic fill into a Freemius plugin, and the Checks menu opening Query Monitor and Code Profiler results.
 - Responsive and keyboard-accessible UI at 320 px, tablet, and desktop widths.
 
 ## Recipe URL security (0.7.1)

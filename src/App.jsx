@@ -127,6 +127,18 @@ const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-stora
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
   {
+    version: '0.10.0',
+    date: 'November 14, 2026',
+    title: 'One-click start, saved keys and Checks',
+    summary: 'Start a saved recipe with one click, let saved license keys go into Freemius plugins by themselves, and add Query Monitor or Code Profiler as Checks.',
+    changes: [
+      'Each saved recipe has a Start button that launches it with its WordPress and PHP versions and its plugins.',
+      'Choose plugins shows Key saved or Add key for every uploaded plugin. Unlock the vault once per session and saved keys go into Freemius-based plugins, such as WP Activity Log, by themselves; the Licenses button shows how many are active.',
+      'A new Checks section adds Query Monitor or Code Profiler to the setup, and a Checks menu in the Playground bar opens their results inside WordPress.',
+      'In Firefox, launching a site saved in the browser no longer stalls on a blank screen before WordPress and your plugins are installed.',
+    ],
+  },
+  {
     version: '0.9.1',
     date: 'November 14, 2026',
     title: 'Freemius licence calls get through',
