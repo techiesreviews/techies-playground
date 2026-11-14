@@ -27,7 +27,10 @@ There is no application server or shared data store.
 | `src/lib/wordpress-org-themes.js` | Search requests and safe theme result normalization. | App. |
 | `src/lib/package-upload.js` | ZIP header detection with zip.js and global file-drag listener lifecycle. | App and regression tests. |
 | `src/lib/vault.js` | IndexedDB plugin/theme ZIP CRUD and ZIP signature check. | App. |
-| `src/lib/license-vault.js` | IndexedDB encrypted license CRUD, PBKDF2 derivation, AES-GCM, clipboard copy. | `LicenseManager` in App. |
+| `src/lib/license-vault.js` | IndexedDB encrypted license CRUD, PBKDF2 derivation, AES-GCM, clipboard copy, decrypting the newest key per package for the automatic fill. | `LicenseManager`, Add key and launch in App. |
+| `src/lib/vault-session.js` | The unlocked vault key for the page session and its listeners. | App, LicenseManager, Add key. |
+| `src/lib/license-fill.js` | The PHP that hands saved keys to Freemius-based plugins (keys only in the request body), its request body, result parsing and labels. | App launch. |
+| `src/lib/checks.js` | Which checks a recipe contains, adding one, where its results open, and the checks must-use plugin. | App. |
 | `src/lib/saved-recipes.js` | Parse, validate, upsert, rename-replace, and serialize saved recipes. | App. |
 | `src/lib/spinup-history.js` | Safe history normalization, cap, and persisted-environment deduplication. | App. |
 | `src/lib/plugin-preferences.js` | Local-package search and recently-selected ordering. | App for plugins and themes. |
@@ -50,8 +53,9 @@ Important refs are intentionally not state:
 - `clientRef`: the ready Playground client.
 - `launchIdRef`: invalidates stale asynchronous work after close/relaunch.
 - `iframeRef`: runtime host and explicit blanking on close/failure. Close and failure also replace the frame element (`playgroundFrameKey`), so a start still running on the old frame cannot attach to the next launch.
-- `license keyRef`: in-memory `CryptoKey`, excluded from rendering and persistence.
-- License session ref: AbortController shared by vault operations; lock starts a fresh session, while close/unmount abort it. Async continuations cannot restore cleared key or UI state.
+- Vault session (`src/lib/vault-session.js`, module state read with `useSyncExternalStore`): the unlocked `CryptoKey` for the page session, excluded from rendering and persistence. Lock clears it; closing the manager does not.
+- License manager session ref: AbortController shared by the manager's vault operations; lock starts a fresh one, while close/unmount abort it. Async continuations cannot restore cleared UI state.
+- `unlockResolveRef`, `launchAbortRef`, `launchedRecipeRef`: the pending launch unlock, cancellation of the automatic key fill on close, and the recipe the running site was launched from (for Checks).
 - File input refs: enable styled buttons to trigger native file selection.
 
 ## Launch data flow
@@ -76,6 +80,10 @@ Directory packages are included as Blueprint resource steps. Local packages cann
 ## Preview tabs
 
 Each launch receives a short random `launcher-<12 hex>` runtime scope (see `createLauncherScope`); the stable OPFS site identity is unchanged and is not part of the scope. Playground places the scope in every WordPress URL, and plugins such as Elementor IDNA-encode whole URLs by splitting on dots, so `net/scope:<scope>/wp-admin/admin` must stay under the 63-character DNS label limit. After readiness, App writes `techies-preview.php` into WordPress's mu-plugins directory on every launch, including resumes. Its admin/frontend script handles Ctrl/Cmd/Shift-click, middle-click, `_blank` links and direct `window.open(scopedUrl)` calls for the current scope. Ordinary navigation, downloads and external links keep their behavior.
+
+### Saved keys filled in at launch
+
+When uploaded plugins of the launched recipe have a saved key, the launch asks for one vault unlock per page session, installs the plugins (recording each installed folder from `installPlugin`'s `assetPath`), decrypts the newest key per plugin and runs `LICENSE_FILL_CODE` once through `client.run` with the keys as the POST body. The PHP loads WordPress as user 1, finds each folder's Freemius instance and calls its public `activate_migrated_license`, which opts the site in with the key or activates it on a registered install; an already active valid licence is left alone, and any message that repeats the key has it replaced with `[key]`. The key leaves the browser only as the SDK's own request to Freemius, through the CORS proxy below when the browser blocks it. Results reach the Licenses button and the manager, never a log or history.
 
 ### Freemius licence calls
 
