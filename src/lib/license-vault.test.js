@@ -180,3 +180,50 @@ test('reads the newest saved key for each requested package only', async () => {
     globalThis.indexedDB = originalIndexedDB
   }
 })
+
+test('a second vault creation never overwrites the first one', async () => {
+  const { createLicenseVault } = await import('./license-vault.js')
+  const originalIndexedDB = globalThis.indexedDB
+  const stored = new Map()
+  const writes = []
+  globalThis.indexedDB = { open() {
+    const request = { result: { close() {}, transaction() {
+      const transaction = { objectStore() { return {
+        get(id) { const read = { result: stored.get(id) }; queueMicrotask(() => { read.onsuccess(); transaction.oncomplete() }); return read },
+        put(record) { writes.push('put'); stored.set(record.id, record); const write = {}; queueMicrotask(() => { write.onsuccess(); transaction.oncomplete() }); return write },
+        add(record) {
+          writes.push('add')
+          const write = {}
+          queueMicrotask(() => {
+            if (stored.has(record.id)) {
+              write.error = Object.assign(new Error('Key already exists'), { name: 'ConstraintError' })
+              write.onerror()
+              transaction.error = write.error
+              transaction.onabort?.()
+              return
+            }
+            stored.set(record.id, record)
+            write.onsuccess()
+            transaction.oncomplete()
+          })
+          return write
+        },
+      } } }
+      return transaction
+    } } }
+    queueMicrotask(() => request.onsuccess())
+    return request
+  } }
+  try {
+    // Both start while no vault exists; only the first one may write its settings.
+    const first = createLicenseVault('first master password')
+    const second = createLicenseVault('second master password')
+    await first
+    const firstMeta = stored.get('vault')
+    await assert.rejects(second, /already exists/)
+    assert.equal(stored.get('vault'), firstMeta)
+    assert.ok(!writes.includes('put'))
+  } finally {
+    globalThis.indexedDB = originalIndexedDB
+  }
+})

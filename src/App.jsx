@@ -896,6 +896,9 @@ function LicenseManager({ packages, anchorRef, fillResults, onRecordsChange, onC
       })
   }, [unlocked])
 
+  // Records arrive newest first; a launch fills only the newest key of each plugin.
+  const usedRecordIds = new Set([...new Map(records.slice().reverse().map((record) => [record.pluginId, record.id])).values()])
+
   async function refreshRecords(signal) {
     const metadata = await listLicenseMetadata()
     onRecordsChange()
@@ -1222,7 +1225,7 @@ function LicenseManager({ packages, anchorRef, fillResults, onRecordsChange, onC
                           <button
                             type="button"
                             aria-label={copiedId === record.id ? `${record.name} license copied` : `Copy ${record.name} license key`}
-                            aria-describedby={fillResults.get(record.pluginId) ? `license-fill-${record.id}` : undefined}
+                            aria-describedby={usedRecordIds.has(record.id) && fillResults.get(record.pluginId) ? `license-fill-${record.id}` : undefined}
                             onClick={() => handleCopyLicense(record.id)}
                             className={`w-full min-w-0 rounded-lg py-2 pr-20 pl-2 text-left text-base/7 font-medium hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 sm:text-sm/6 ${copiedId === record.id ? 'text-teal-700' : 'text-neutral-900'}`}
                           >
@@ -1242,7 +1245,7 @@ function LicenseManager({ packages, anchorRef, fillResults, onRecordsChange, onC
                             <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
                             <TrashIcon className="size-4 shrink-0 fill-current" />
                           </button>
-                          {fillResults.get(record.pluginId) && <LicenseFillLine id={`license-fill-${record.id}`} result={fillResults.get(record.pluginId)} />}
+                          {usedRecordIds.has(record.id) && fillResults.get(record.pluginId) && <LicenseFillLine id={`license-fill-${record.id}`} result={fillResults.get(record.pluginId)} />}
                         </>
                       )}
                       <span className="sr-only" aria-live="polite">{copiedId === record.id ? `${record.name} copied.` : ''}</span>
@@ -1645,7 +1648,7 @@ function FeaturedPluginCard({ plugin, selected, onToggle }) {
   )
 }
 
-function VaultUnlockPrompt({ onUnlocked, onSkip }) {
+function VaultUnlockPrompt({ onUnlocked, onSkip, onCancel }) {
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
@@ -1676,7 +1679,7 @@ function VaultUnlockPrompt({ onUnlocked, onSkip }) {
 
   return (
     <div className="absolute inset-0 z-10 grid place-items-center bg-neutral-950/40 p-4">
-      <form role="dialog" aria-labelledby="vault-unlock-title" onSubmit={handleSubmit} className="grid w-full max-w-md gap-4 rounded-[min(2vw,var(--radius-xl))] bg-white p-5 shadow-2xl ring-1 ring-neutral-950/10">
+      <form role="dialog" aria-labelledby="vault-unlock-title" onSubmit={handleSubmit} onKeyDown={(event) => { if (event.key === 'Escape') onCancel() }} className="grid w-full max-w-md gap-4 rounded-[min(2vw,var(--radius-xl))] bg-white p-5 shadow-2xl ring-1 ring-neutral-950/10">
         <div className="grid gap-1">
           <h2 id="vault-unlock-title" className="text-lg font-semibold text-balance">Unlock your license vault</h2>
           <p className="text-pretty text-base/7 text-neutral-600 sm:text-sm/6">Once per session. Your saved keys then go in by themselves.</p>
@@ -3317,7 +3320,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
           </div>
           <div className="relative min-h-0">
             <iframe key={playgroundFrameKey} ref={iframeRef} title="WordPress Playground" className="size-full bg-white" />
-            {unlockPending && <VaultUnlockPrompt onUnlocked={() => unlockResolveRef.current?.('unlocked')} onSkip={() => unlockResolveRef.current?.('skip')} />}
+            {unlockPending && <VaultUnlockPrompt onUnlocked={() => unlockResolveRef.current?.('unlocked')} onSkip={() => unlockResolveRef.current?.('skip')} onCancel={closePlayground} />}
           </div>
         </div>
       </section>

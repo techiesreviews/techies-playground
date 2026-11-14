@@ -71,6 +71,12 @@ function putRecord(storeName, record) {
   return transact(storeName, 'readwrite', (store) => store.put(record))
 }
 
+// add() fails when the id exists, so two creations that both started before a vault
+// existed cannot overwrite each other's salt and verifier.
+function addRecord(storeName, record) {
+  return transact(storeName, 'readwrite', (store) => store.add(record))
+}
+
 function licenseAdditionalData({ id, name, pluginId }) {
   return encoder.encode(`license-v1\u0000${id}\u0000${pluginId}\u0000${name}`)
 }
@@ -124,12 +130,17 @@ export async function createLicenseVault(password) {
   const salt = crypto.getRandomValues(new Uint8Array(16))
   const key = await deriveLicenseVaultKey(password, salt)
   const verifier = await encryptLicenseSecret(key, VERIFIER_TEXT, encoder.encode(VERIFIER_TEXT))
-  await putRecord(META_STORE, {
-    id: META_ID,
-    salt: bytesToBase64(salt),
-    iterations: DEFAULT_ITERATIONS,
-    verifier,
-  })
+  try {
+    await addRecord(META_STORE, {
+      id: META_ID,
+      salt: bytesToBase64(salt),
+      iterations: DEFAULT_ITERATIONS,
+      verifier,
+    })
+  } catch (caught) {
+    if (caught?.name === 'ConstraintError') throw new Error('The encrypted license vault already exists.')
+    throw caught
+  }
   return key
 }
 
