@@ -1519,7 +1519,7 @@ function ThemeRow({ theme, selected, onSelect, onReplace, onRemove }) {
   )
 }
 
-function LaunchSummary({ recipe, selectedPackageLabel, selectedPluginLabels, keyCounts, checks, status, error, onLaunch }) {
+function LaunchSummary({ recipe, selectedPackageLabel, selectedPluginLabels, keyCounts, checks, status, launchReady, error, onLaunch }) {
   const stages = [
     ['Preparing WordPress', status.step > 0],
     ['Installing selected packages', status.step > 1],
@@ -1566,7 +1566,7 @@ function LaunchSummary({ recipe, selectedPackageLabel, selectedPluginLabels, key
         <div className="mt-6">
           <button
             type="button"
-            disabled={status.running}
+            disabled={status.running || !launchReady}
             onClick={onLaunch}
             className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-teal-700 py-2.5 pr-4 pl-2.5 text-sm/5 font-semibold text-white ring-1 ring-teal-700 hover:bg-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -3217,7 +3217,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                   <button
                     ref={launchButtonRef}
                     type="submit"
-                    disabled={status.running}
+                    disabled={status.running || licenseRecords === null}
                     className="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 py-2.5 pr-4 pl-2.5 text-sm/5 font-medium text-white ring-1 ring-teal-700 hover:bg-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <PlayIcon className="size-4 shrink-0 fill-white" />
@@ -3253,6 +3253,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
             keyCounts={keyCountsFor(recipe)}
             checks={activeChecks}
             status={status}
+            launchReady={licenseRecords !== null}
             error={error}
             onLaunch={() => launch()}
           />
