@@ -34,7 +34,7 @@ Serving Playground's website from our own Cloudflare Worker removes the dependen
 
 | Environment | Procedure/command | Expected | Actual | Evidence |
 | --- | --- | --- | --- | --- |
-| Node 24.22.2 | `npm test` | Pass | 116 tests pass | Local run |
+| Node 24.22.2 | `npm test` | Pass | 117 tests pass | Local run |
 | Node 24.22.2 | `scripts/agents/kit build` | Build succeeds | Build succeeds | Local run |
 | Local, Playground 3.1.64 built from source | `node scripts/prepare-playground-host.mjs …` | Under the limits | 17,795 files; two files split | Local run |
 | Same, at b8a1537 (beta's first-page files kept, `wp-nightly/` dropped) and again after the nightly/trunk archive rule (3.1.64 ships no such archive, so the count is unchanged) | `node scripts/prepare-playground-host.mjs …` | Under the limits | "Prepared 19163 files; WordPress wp-6.3 … wp-7.1, wp-beta; split: /assets/extensions/icu-_xyRJXmL.dat, /wp-7.1/wordpress-static.zip" (beta's static ZIP is under 25 MiB) | Local run |

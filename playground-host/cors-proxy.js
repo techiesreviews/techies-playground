@@ -138,7 +138,7 @@ class ProxyRefusal extends Error {
 // redirect to another origin would hand the credential to that origin. Fetch drops it
 // on a cross-origin redirect; the Worker does the same by following such redirects
 // itself, without Authorization, and checking every hop like any other target.
-async function followWithoutAuthorization(fetchImpl, response, from, headers, requestUrl) {
+async function followWithoutAuthorization(fetchImpl, response, from, headers, requestUrl, method) {
   const plainHeaders = new Headers(headers)
   plainHeaders.delete('Authorization')
   let current = response
@@ -150,7 +150,7 @@ async function followWithoutAuthorization(fetchImpl, response, from, headers, re
     } catch (error) {
       throw new ProxyRefusal(400, `Bad request: ${error.message}`)
     }
-    current = await fetchImpl(url.href, { method: 'GET', headers: plainHeaders, redirect: 'manual' })
+    current = await fetchImpl(url.href, { method, headers: plainHeaders, redirect: 'manual' })
   }
   return current
 }
@@ -187,7 +187,7 @@ export async function handleCorsProxy(request, { fetch: fetchImpl = fetch, limit
     if (outgoing.has('Authorization') && isRedirect(upstream)
       && new URL(upstream.headers.get('Location'), target).origin !== target.origin) {
       if (request.method === 'POST') throw new ProxyRefusal(502, 'Bad gateway: an authorized POST was redirected to another origin.')
-      upstream = await followWithoutAuthorization(fetchImpl, upstream, target, outgoing, requestUrl)
+      upstream = await followWithoutAuthorization(fetchImpl, upstream, target, outgoing, requestUrl, request.method)
     }
   } catch (error) {
     if (error instanceof ProxyRefusal) return answer(error.status, error.message)
