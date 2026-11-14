@@ -2,7 +2,7 @@
 
 - Date: 2026-11-14
 - Owner: fleet-lead build agent (Claude Opus 5.5)
-- Status: complete (investigation); the defect stays open
+- Status: complete
 - Disposition: inconclusive
 - Related version: 0.9.0
 - Related commit/issue: Orbit TOOLS-236; follows [2026-11-14-cors-proxy-identity-ranges.md](2026-11-14-cors-proxy-identity-ranges.md), whose fix does not take effect on Cloudflare
@@ -23,7 +23,13 @@ Through preview-wp.techies.tools at dev d09c853, a range of a file the target co
 
 ## Implementation or prototype
 
-No code change. Headless Chromium (Playwright) opened `https://preview-wp.techies.tools/remote.html`, waited for the service worker, reloaded, and fetched `https://raw.githubusercontent.com/WordPress/wordpress-develop/trunk/README.md` through `/cors-proxy.php?` in full, with HEAD, with `Range: bytes=10-29`, and with `X-Cors-Proxy-Range: bytes=30-49`.
+No code change. Procedure (Playwright's bundled headless Chromium, Linux):
+
+1. Open `https://preview-wp.techies.tools/remote.html`, wait for `navigator.serviceWorker.ready`, reload so the service worker controls the page.
+2. For each target, fetch `/cors-proxy.php?<target>` in full, with `HEAD`, with `Range: bytes=10-29`, and with `X-Cors-Proxy-Range: bytes=30-49`.
+3. Compare each range body with the same bytes of the full body, and read `Content-Range` and the HEAD `Content-Length`.
+
+Targets: `https://raw.githubusercontent.com/WordPress/wordpress-develop/trunk/README.md` (text the server gzips), `https://downloads.wordpress.org/plugin/hello-dolly.zip` and `https://github.com/WordPress/gutenberg/releases/download/v19.0.0/gutenberg.zip` (ZIP archives).
 
 ## Tests and evidence
 
@@ -33,11 +39,13 @@ No code change. Headless Chromium (Playwright) opened `https://preview-wp.techie
 | curl, direct to the target | `Range: bytes=10-29`, `Accept-Encoding: gzip, br` | Compressed slice | `Content-Encoding: gzip`, `Content-Range: bytes 10-29/4363` | Executed |
 | Preview proxy, full GET | `fetch('/cors-proxy.php?<target>')` | 11,134 characters | 11,134 characters | Executed |
 | Preview proxy, direct and tunnelled range | as above | `Content-Range: …/11134`, the file's bytes | `206`, `Content-Range: bytes 10-29/4363` and `bytes 30-49/4363`, no `Content-Encoding`, bytes of the gzip stream | Executed |
-| Preview proxy, HEAD | as above | `Content-Length: 11134` | No `Content-Length` | Executed |
+| Preview proxy, HEAD (README) | as above | `Content-Length: 11134` | No `Content-Length` | Executed; fails |
+| Preview proxy, hello-dolly.zip | full, HEAD, both ranges | Ranges match the full body; HEAD = 1887 | `Content-Range: bytes 10-29/1887` and `bytes 30-49/1887`, both slices equal the full body's bytes; HEAD `Content-Length: 1887` | Executed |
+| Preview proxy, gutenberg.zip (v19.0.0) | full, HEAD, both ranges | Ranges match; HEAD = file size | `Content-Range: …/11313112`, both slices equal; HEAD `Content-Length: 11313112` | Executed |
 
 ## Result
 
-Cloudflare still sends a compressing `Accept-Encoding` upstream for the Worker's ranged requests, and the proxy relays the compressed slice without `Content-Encoding`. Ranges of files the target does not compress (ZIP archives, which servers send as they are) are not affected; normal launches, plugin ZIP uploads and WordPress.org installs passed on the preview the same day.
+For the gzipped text target, the proxy's ranged answers carry offsets and bytes of the gzip stream, without `Content-Encoding`, and its HEAD has no `Content-Length`. The target answers correctly to `Accept-Encoding: identity` (curl rows), so the likely cause, inferred and not confirmed from Cloudflare's side, is that Cloudflare replaces the Worker's `Accept-Encoding` on outgoing requests. The two ZIP targets were answered correctly (ranges and HEAD). Separately, plain launches and a plugin ZIP upload passed on the preview the same day in Chromium and Firefox.
 
 ## Disposition and rationale
 
@@ -45,7 +53,7 @@ Inconclusive: the defect is real for compressed targets; the fix needs a choice 
 
 ## Documentation impact
 
-None besides this record; `docs/architecture.md` still says HEAD and range requests ask for uncompressed bytes, which is what the Worker requests, not what Cloudflare sends.
+`docs/architecture.md` (CORS proxy row) now says the Worker asks for uncompressed bytes and that ranges of compressed text targets are still wrong (this record).
 
 ## Follow-ups and open questions
 
