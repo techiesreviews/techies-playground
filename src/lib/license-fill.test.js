@@ -33,6 +33,7 @@ test('the fill code reads keys from the request body, never from its own text', 
   assert.match(LICENSE_FILL_CODE, /activate_migrated_license/)
   assert.match(LICENSE_FILL_CODE, /has_active_valid_license/)
   assert.match(LICENSE_FILL_CODE, /str_replace\( \$key, '\[key\]'/)
+  assert.match(LICENSE_FILL_CODE, /mb_substr\( \$text, 0, 200 \)/)
   assert.doesNotMatch(LICENSE_FILL_CODE, /sk_/)
 })
 

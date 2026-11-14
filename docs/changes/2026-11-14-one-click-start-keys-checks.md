@@ -48,6 +48,7 @@ Code Profiler profiles by requesting the site from itself. In browser Playground
 | Chromium, 320 px | Add key form, saved recipe row, Checks section | usable, no new overflow | usable; the page-level overflow at 320 px and the Advanced settings label overlap were already present | screenshots |
 | Firefox, preview-play (dev before this change) | Upload ZIP, browser storage on, Launch | WordPress with plugin | frame blank after 5 min | script output |
 | Firefox, local build with the fix | Same, then reload and launch again | plugin installed both times | `menu-image:active` both times (one earlier run timed out on the second launch; the rerun passed) | script output |
+| Firefox, local build | Full flow | as Chromium | everything as in Chromium except the fill: Freemius answered `ApiBlocked` (its SDK got a Freemius web page back). Probe: a proxied POST to `api.freemius.com` echoes `uid` and `license_key` in Chromium but only the query string in Firefox, so Firefox drops the request body when Playground retries through the CORS proxy. This also blocks Freemius activation typed into WordPress in Firefox; it is outside this change. The long refusal is now cut to 200 characters of plain text. | script output |
 | Deployed preview | Proof run after merge | see PR | recorded in the PR and the lead's report | pending at time of writing |
 
 ## Result
@@ -66,4 +67,5 @@ Kept. It is the approved Tuesday slice.
 
 - After Tuesday (not in this change): our own results panel for Checks, an update-waiting status per plugin, automatic keys for other vendors.
 - Code Profiler Pro's admin page slug is unverified.
+- Firefox: Playground drops the POST body when it retries a Freemius API call through the CORS proxy, so Freemius activation (filled in or typed) fails there. Needs its own fix in the Freemius must-use plugin or the Playground build.
 - A real (not fake) Freemius key through Start is Lex's to try; PR #30 already showed a real WP Activity Log key activating.

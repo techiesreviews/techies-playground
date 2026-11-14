@@ -31,6 +31,7 @@ Freemius::$instances = array(
 	new Freemius( 'already/already.php', true, true, array( 'success' => true ) ),
 	new Freemius( 'thrower/thrower.php', false, false, 'throw' ),
 	new Freemius( 'menu-image-extra/menu-image-extra.php', false, false, array( 'success' => true ) ),
+	new Freemius( 'blocked/blocked.php', false, false, array( 'success' => false, 'error' => (object) array( 'type' => 'ApiBlocked', 'message' => 'Your server is blocking <b>Freemius</b>. ' . str_repeat( 'Show error details &lt;html&gt; ', 40 ) ) ) ),
 );
 register_shutdown_function( function () { echo "\\nACTIVATED:" . json_encode( $GLOBALS['activated'] ?? array() ); } );
 `
@@ -55,7 +56,14 @@ test('hands each key to the matching Freemius plugin only and reports the answer
     { folder: 'already', licenseKey: 'sk_fake_three' },
     { folder: 'thrower', licenseKey: 'sk_fake_four' },
     { folder: 'query-monitor', licenseKey: 'sk_fake_five' },
+    { folder: 'blocked', licenseKey: 'sk_fake_six' },
   ])
+  const blocked = results.blocked
+  delete results.blocked
+  assert.equal(blocked.status, 'rejected')
+  assert.match(blocked.message, /^Your server is blocking Freemius\. Show error details/)
+  assert.ok(blocked.message.length <= 200, blocked.message.length)
+  assert.doesNotMatch(blocked.message, /[<>]|&lt;/)
   assert.deepEqual(results, {
     'menu-image': { status: 'rejected', message: 'Invalid license key [key].' },
     'wsal-premium': { status: 'activated', message: '' },
@@ -67,5 +75,6 @@ test('hands each key to the matching Freemius plugin only and reports the answer
     'menu-image/menu-image.php': 'sk_fake_one',
     'wsal-premium/wp-security-audit-log.php': 'sk_fake_two',
     'thrower/thrower.php': 'sk_fake_four',
+    'blocked/blocked.php': 'sk_fake_six',
   })
 })

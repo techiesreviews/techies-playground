@@ -54,6 +54,21 @@ define( 'WP_ADMIN', true );
 require '/wordpress/wp-load.php';
 wp_set_current_user( 1 );
 
+// Plain text for the launcher: the message of an error object, tags and entities removed,
+// the key replaced, at most 200 characters (Freemius can answer with a whole web page).
+function techies_playground_fill_message( $error, $key ) {
+	if ( is_object( $error ) ) {
+		$error = (array) $error;
+	}
+	if ( is_array( $error ) ) {
+		$error = isset( $error['message'] ) && is_string( $error['message'] ) ? $error['message'] : wp_json_encode( $error );
+	}
+	$text = html_entity_decode( wp_strip_all_tags( (string) $error ), ENT_QUOTES );
+	$text = trim( preg_replace( '/\\s+/', ' ', wp_strip_all_tags( $text ) ) );
+	$text = str_replace( $key, '[key]', $text );
+	return function_exists( 'mb_substr' ) ? mb_substr( $text, 0, 200 ) : substr( $text, 0, 200 );
+}
+
 $requested = json_decode( (string) file_get_contents( 'php://input' ), true );
 $results = array();
 $instances = class_exists( 'Freemius' ) ? Freemius::_get_all_instances() : array();
@@ -78,13 +93,12 @@ foreach ( is_array( $requested ) ? $requested : array() as $folder => $key ) {
 	}
 	try {
 		$answer = $fs->activate_migrated_license( $key );
-		$message = isset( $answer['error'] ) ? wp_strip_all_tags( is_string( $answer['error'] ) ? $answer['error'] : wp_json_encode( $answer['error'] ) ) : '';
 		$results[ $folder ] = array(
 			'status' => empty( $answer['success'] ) ? 'rejected' : 'activated',
-			'message' => str_replace( $key, '[key]', $message ),
+			'message' => isset( $answer['error'] ) ? techies_playground_fill_message( $answer['error'], $key ) : '',
 		);
 	} catch ( Throwable $error ) {
-		$results[ $folder ] = array( 'status' => 'failed', 'message' => str_replace( $key, '[key]', $error->getMessage() ) );
+		$results[ $folder ] = array( 'status' => 'failed', 'message' => techies_playground_fill_message( $error->getMessage(), $key ) );
 	}
 }
 
