@@ -32,6 +32,7 @@ export function isKept(relativePath, { phpVersions = PHP_VERSIONS, offlineAssets
   if (DROPPED_DIRECTORIES.has(segments[0]) || DROPPED_FILES.has(relativePath)) return false
   if (segments[0] === BETA_DIRECTORY) return segments.length === 2 ? BETA_TOP_FILES.has(name) : BETA_FIRST_PAGE_FILE.test(name)
   if (name.endsWith('.map') || name.endsWith('.php')) return false
+  // Nightly and trunk download from a remote URL, so bundled archives of them are unused.
   if (/^wp-(nightly|trunk)\.tar-/.test(name)) return false
   if (/-php52-/.test(name)) return false
   const php = name.match(/^php_(\d+)_(\d+)-/)
