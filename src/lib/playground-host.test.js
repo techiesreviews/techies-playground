@@ -18,6 +18,7 @@ test('a build setting can point the launcher at another Playground host', () => 
   assert.equal(playgroundOrigin('https://playground.wordpress.net/'), 'https://playground.wordpress.net')
   assert.equal(playgroundOrigin(''), 'https://wp.techies.tools')
   assert.equal(playgroundOrigin(undefined), 'https://wp.techies.tools')
+  assert.equal(playgroundOrigin('http://127.0.0.1:8787'), 'http://127.0.0.1:8787')
 })
 
 test('rejects Playground hosts that are not plain HTTPS origins', () => {

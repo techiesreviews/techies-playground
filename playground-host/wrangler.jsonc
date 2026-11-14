@@ -1,0 +1,35 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  // Our copy of WordPress Playground. CI builds it from the official repository at the
+  // release that matches @wp-playground/client in package.json and prepares ./dist with
+  // scripts/prepare-playground-host.mjs before deploying.
+  "name": "playground-wp",
+  "main": "worker.js",
+  "compatibility_date": "2026-08-12",
+  "workers_dev": false,
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "none"
+  },
+  "routes": [
+    {
+      "pattern": "wp.techies.tools",
+      "custom_domain": true
+    }
+  ],
+  "observability": {
+    "enabled": true
+  },
+  "env": {
+    "preview": {
+      "name": "playground-wp-preview",
+      "routes": [
+        {
+          "pattern": "preview-wp.techies.tools",
+          "custom_domain": true
+        }
+      ]
+    }
+  }
+}

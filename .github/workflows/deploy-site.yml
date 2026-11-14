@@ -1,0 +1,176 @@
+name: Deploy site
+
+# Shared by deploy.yml (production, from main) and deploy-preview.yml (preview, from dev).
+# Deploys our copy of WordPress Playground first, then the launcher that embeds it.
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: production or preview
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  settings:
+    name: Read deployment settings
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      wrangler_env: ${{ steps.settings.outputs.wrangler_env }}
+      launcher_url: ${{ steps.settings.outputs.launcher_url }}
+      playground_origin: ${{ steps.settings.outputs.playground_origin }}
+      launcher_origins: ${{ steps.settings.outputs.launcher_origins }}
+    steps:
+      - name: Choose hosts for the environment
+        id: settings
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          case "$ENVIRONMENT" in
+            production)
+              {
+                echo "wrangler_env="
+                echo "launcher_url=https://play.techies.tools"
+                echo "playground_origin=https://wp.techies.tools"
+                echo "launcher_origins=--launcher-origin https://play.techies.tools"
+              } >> "$GITHUB_OUTPUT"
+              ;;
+            preview)
+              {
+                echo "wrangler_env=--env preview"
+                echo "launcher_url=https://preview-play.techies.tools"
+                echo "playground_origin=https://preview-wp.techies.tools"
+                echo "launcher_origins=--launcher-origin https://preview-play.techies.tools --launcher-origin http://127.0.0.1:4173 --launcher-origin http://localhost:4173"
+              } >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "Unknown environment: $ENVIRONMENT" >&2
+              exit 1
+              ;;
+          esac
+
+  playground-host:
+    name: Build and deploy Playground host
+    needs: settings
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out the commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Read the pinned Playground release
+        id: release
+        run: |
+          client="$(node -p "require('./package.json').dependencies['@wp-playground/client']")"
+          blueprints="$(node -p "require('./package.json').dependencies['@wp-playground/blueprints']")"
+          if [ "$client" != "$blueprints" ] || ! printf '%s' "$client" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "@wp-playground/client ($client) and @wp-playground/blueprints ($blueprints) must pin the same exact version." >&2
+            exit 1
+          fi
+          echo "version=$client" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the Playground build
+        id: cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .playground-build/wasm-wordpress-net
+          key: playground-website-${{ steps.release.outputs.version }}-v1
+
+      - name: Build Playground ${{ steps.release.outputs.version }} from the official repository
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          PLAYGROUND_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          git clone --branch "v${PLAYGROUND_VERSION}" --single-branch --depth 1 \
+            --recurse-submodules --shallow-submodules \
+            https://github.com/WordPress/wordpress-playground.git "$RUNNER_TEMP/wordpress-playground"
+          cd "$RUNNER_TEMP/wordpress-playground"
+          npm ci --no-audit --no-fund
+          npm run build:website
+          find dist/packages/playground/wasm-wordpress-net -name '*.map' -delete
+          mkdir -p "$GITHUB_WORKSPACE/.playground-build"
+          mv dist/packages/playground/wasm-wordpress-net "$GITHUB_WORKSPACE/.playground-build/"
+          cd "$GITHUB_WORKSPACE"
+          rm -rf "$RUNNER_TEMP/wordpress-playground"
+
+      - name: Prepare the Playground host folder
+        env:
+          LAUNCHER_ORIGINS: ${{ needs.settings.outputs.launcher_origins }}
+        run: |
+          # LAUNCHER_ORIGINS holds several --launcher-origin flags; split them on purpose.
+          # shellcheck disable=SC2086
+          node scripts/prepare-playground-host.mjs .playground-build/wasm-wordpress-net playground-host/dist $LAUNCHER_ORIGINS
+
+      - name: Deploy the Playground host
+        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config playground-host/wrangler.jsonc ${{ needs.settings.outputs.wrangler_env }}
+
+      - name: Check the Playground host answers
+        env:
+          PLAYGROUND_ORIGIN: ${{ needs.settings.outputs.playground_origin }}
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if curl -fsS -o /dev/null "$PLAYGROUND_ORIGIN/remote.html"; then break; fi
+            if [ "$attempt" = 6 ]; then echo "$PLAYGROUND_ORIGIN/remote.html did not answer." >&2; exit 1; fi
+            sleep 20
+          done
+          curl -fsSI "$PLAYGROUND_ORIGIN/remote.html" | grep -i '^content-security-policy: frame-ancestors'
+          curl -fsSI "$PLAYGROUND_ORIGIN/wp-7.1/wordpress-static.zip" | grep -i '^content-type: application/zip'
+
+  launcher:
+    name: Test and deploy launcher
+    needs: [settings, playground-host]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build launcher assets
+        env:
+          VITE_PLAYGROUND_ORIGIN: ${{ needs.settings.outputs.playground_origin }}
+        run: npm run build
+
+      - name: Deploy the launcher
+        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy ${{ needs.settings.outputs.wrangler_env }}
+
+      - name: Publish deployment links
+        env:
+          LAUNCHER_URL: ${{ needs.settings.outputs.launcher_url }}
+          PLAYGROUND_ORIGIN: ${{ needs.settings.outputs.playground_origin }}
+        run: |
+          {
+            echo "### Deployed to [${LAUNCHER_URL#https://}]($LAUNCHER_URL)"
+            echo "Playground host: [${PLAYGROUND_ORIGIN#https://}]($PLAYGROUND_ORIGIN/remote.html)"
+          } >> "$GITHUB_STEP_SUMMARY"

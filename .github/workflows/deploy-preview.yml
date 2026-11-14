@@ -1,0 +1,28 @@
+name: Deploy preview
+
+# Every push to dev deploys preview-play.techies.tools and its Playground host,
+# preview-wp.techies.tools, after the tests pass. Production stays on main.
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: play-techies-tools-preview
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy preview-play.techies.tools and preview-wp.techies.tools
+    if: >-
+      github.repository == 'techiesreviews/techies-playground' &&
+      github.actor == 'techiesreviews' &&
+      vars.CLOUDFLARE_DEPLOY_ENABLED == 'true'
+    uses: ./.github/workflows/deploy-site.yml
+    with:
+      environment: preview
+    secrets: inherit
