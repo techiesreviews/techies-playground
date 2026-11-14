@@ -28,8 +28,8 @@ There is no application server or shared data store.
 | `src/lib/package-upload.js` | ZIP header detection with zip.js and global file-drag listener lifecycle. | App and regression tests. |
 | `src/lib/vault.js` | IndexedDB plugin/theme ZIP CRUD and ZIP signature check. | App. |
 | `src/lib/license-vault.js` | IndexedDB encrypted license CRUD, PBKDF2 derivation, AES-GCM, clipboard copy, decrypting the newest key per package for the automatic fill. | `LicenseManager`, Add key and launch in App. |
-| `src/lib/vault-session.js` | The unlocked vault key for the page session and its listeners. | App, LicenseManager, Add key. |
-| `src/lib/license-fill.js` | The PHP that hands saved keys to Freemius-based plugins (keys only in the request body), its request body, result parsing and labels. | App launch. |
+| `src/lib/vault-session.js` | The unlocked vault key for the page session, its listeners, and a launch's wait for an unlock, skip or close. | App, LicenseManager, Add key. |
+| `src/lib/license-fill.js` | The PHP that hands saved keys to Freemius-based plugins (keys only in the request body), its request body, result parsing and labels, and the fill run (vault key and key reader passed in). | App launch. |
 | `src/lib/checks.js` | Which checks a recipe contains, adding one, where its results open, and the checks must-use plugin. | App. |
 | `src/lib/saved-recipes.js` | Parse, validate, upsert, rename-replace, and serialize saved recipes. | App. |
 | `src/lib/spinup-history.js` | Safe history normalization, cap, and persisted-environment deduplication. | App. |
