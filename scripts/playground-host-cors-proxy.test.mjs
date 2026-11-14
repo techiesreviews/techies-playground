@@ -176,3 +176,53 @@ test('stops a response without a declared size once it passes 100 MB', async () 
   await assert.rejects(response.arrayBuffer(), /too large/)
   assert.ok(sent <= 102, `read ${sent} MB`)
 })
+
+const withAuthorization = { Authorization: 'Bearer secret', 'X-Cors-Proxy-Allowed-Request-Headers': 'authorization' }
+
+test('an authorized request keeps relaying redirects that stay on the same origin', async () => {
+  const upstream = recorder(() => new Response(null, { status: 302, headers: { Location: '/v2/file.zip' } }))
+  const response = await handleCorsProxy(proxied('https://api.example.com/v1/file.zip', { headers: withAuthorization }), { fetch: upstream.fetch })
+  assert.equal(response.status, 302)
+  assert.equal(response.headers.get('Location'), `${HOST}${CORS_PROXY_PATH}?https://api.example.com/v2/file.zip`)
+  assert.equal(upstream.calls.length, 1)
+})
+
+test('an authorized request follows a redirect to another origin itself, without Authorization', async () => {
+  const upstream = recorder((request) => {
+    const url = new URL(request.url)
+    if (url.hostname === 'api.example.com') return new Response(null, { status: 302, headers: { Location: 'https://cdn.example.net/file.zip' } })
+    if (url.pathname === '/file.zip') return new Response(null, { status: 301, headers: { Location: '/final.zip' } })
+    return new Response('file bytes', { headers: { 'Content-Type': 'application/zip' } })
+  })
+  const response = await handleCorsProxy(proxied('https://api.example.com/v1/file.zip', { headers: withAuthorization }), { fetch: upstream.fetch })
+  assert.equal(response.status, 200)
+  assert.equal(await response.text(), 'file bytes')
+  assert.equal(response.headers.get('Location'), null)
+  assert.deepEqual(upstream.calls.map((call) => [call.url, call.headers.get('Authorization')]), [
+    ['https://api.example.com/v1/file.zip', 'Bearer secret'],
+    ['https://cdn.example.net/file.zip', null],
+    ['https://cdn.example.net/final.zip', null],
+  ])
+})
+
+test('an authorized POST redirected to another origin is refused', async () => {
+  const upstream = recorder(() => new Response(null, { status: 307, headers: { Location: 'https://elsewhere.example.net/' } }))
+  const response = await handleCorsProxy(proxied('https://api.example.com/activate', { method: 'POST', body: 'x', headers: withAuthorization }), { fetch: upstream.fetch })
+  assert.equal(response.status, 502)
+  assert.equal(upstream.calls.length, 1)
+})
+
+test('a followed redirect is checked like any other target', async () => {
+  const upstream = recorder(() => new Response(null, { status: 302, headers: { Location: 'http://169.254.169.254/latest/' } }))
+  const response = await handleCorsProxy(proxied('https://api.example.com/', { headers: withAuthorization }), { fetch: upstream.fetch })
+  assert.equal(response.status, 400)
+  assert.equal(upstream.calls.length, 1)
+})
+
+test('a followed redirect chain stops after five hops', async () => {
+  let hop = 0
+  const upstream = recorder(() => new Response(null, { status: 302, headers: { Location: `https://hop${++hop}.example.net/` } }))
+  const response = await handleCorsProxy(proxied('https://api.example.com/', { headers: withAuthorization }), { fetch: upstream.fetch })
+  assert.equal(response.status, 502)
+  assert.equal(upstream.calls.length, 6)
+})

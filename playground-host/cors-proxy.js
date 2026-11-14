@@ -76,6 +76,10 @@ function targetFrom(requestUrl) {
   } catch {
     throw new Error('Invalid URL.')
   }
+  return checkedTarget(target, requestUrl)
+}
+
+function checkedTarget(target, requestUrl) {
   if (target.protocol !== 'https:' && target.protocol !== 'http:') throw new Error('Only HTTP and HTTPS URLs can be proxied.')
   if (target.username || target.password) throw new Error('URLs with credentials cannot be proxied.')
   const host = bareHostname(target)
@@ -120,6 +124,37 @@ function capped(body) {
   }))
 }
 
+const MAX_FOLLOWED_REDIRECTS = 5
+const isRedirect = (response) => response.status >= 300 && response.status < 400 && response.headers.has('Location')
+
+class ProxyRefusal extends Error {
+  constructor(status, message) {
+    super(message)
+    this.status = status
+  }
+}
+
+// The browser re-sends Authorization with every request to this proxy, so relaying a
+// redirect to another origin would hand the credential to that origin. Fetch drops it
+// on a cross-origin redirect; the Worker does the same by following such redirects
+// itself, without Authorization, and checking every hop like any other target.
+async function followWithoutAuthorization(fetchImpl, response, from, headers, requestUrl) {
+  const plainHeaders = new Headers(headers)
+  plainHeaders.delete('Authorization')
+  let current = response
+  let url = from
+  for (let hop = 0; isRedirect(current); hop += 1) {
+    if (hop === MAX_FOLLOWED_REDIRECTS) throw new ProxyRefusal(502, 'Bad gateway: too many redirects.')
+    try {
+      url = checkedTarget(new URL(current.headers.get('Location'), url), requestUrl)
+    } catch (error) {
+      throw new ProxyRefusal(400, `Bad request: ${error.message}`)
+    }
+    current = await fetchImpl(url.href, { method: 'GET', headers: plainHeaders, redirect: 'manual' })
+  }
+  return current
+}
+
 export async function handleCorsProxy(request, { fetch: fetchImpl = fetch, limiter } = {}) {
   const requestUrl = new URL(request.url)
   if (!isSameOriginRequest(request, requestUrl)) return answer(403, 'Forbidden')
@@ -139,16 +174,23 @@ export async function handleCorsProxy(request, { fetch: fetchImpl = fetch, limit
     return answer(400, `Bad request: ${error.message}`)
   }
 
+  const outgoing = forwardedHeaders(request)
   let upstream
   try {
     upstream = await fetchImpl(target.href, {
       method: request.method,
-      headers: forwardedHeaders(request),
+      headers: outgoing,
       body: request.method === 'POST' ? request.body : undefined,
       redirect: 'manual',
       ...(request.method === 'POST' && request.body ? { duplex: 'half' } : {}),
     })
-  } catch {
+    if (outgoing.has('Authorization') && isRedirect(upstream)
+      && new URL(upstream.headers.get('Location'), target).origin !== target.origin) {
+      if (request.method === 'POST') throw new ProxyRefusal(502, 'Bad gateway: an authorized POST was redirected to another origin.')
+      upstream = await followWithoutAuthorization(fetchImpl, upstream, target, outgoing, requestUrl)
+    }
+  } catch (error) {
+    if (error instanceof ProxyRefusal) return answer(error.status, error.message)
     return answer(502, 'Bad gateway: the target could not be reached.')
   }
 
