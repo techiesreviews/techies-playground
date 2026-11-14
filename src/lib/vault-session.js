@@ -51,3 +51,10 @@ export async function unlockVaultSessionIfCurrent(unlock, isCurrent) {
   startVaultSession(key)
   return true
 }
+
+// Runs a save and reports whether the form that asked is still open, so a late success
+// leaves a closed form (and whichever form replaced it) alone.
+export async function saveIfCurrent(save, isCurrent) {
+  await save()
+  return isCurrent()
+}

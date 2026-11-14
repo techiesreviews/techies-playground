@@ -48,3 +48,15 @@ test('the checks must-use plugin opens the Query Monitor panel, or closes it for
   assert.match(CHECKS_PLUGIN, /localStorage\.removeItem\('qm-admin-panel'\)/)
   assert.match(CHECKS_PLUGIN, /add_action\( 'admin_head'/)
 })
+
+test('menu keys move through the checks and wrap', async () => {
+  const { nextMenuIndex } = await import('./checks.js')
+  assert.equal(nextMenuIndex('ArrowDown', 2, 3), 0)
+  assert.equal(nextMenuIndex('ArrowDown', 0, 3), 1)
+  assert.equal(nextMenuIndex('ArrowUp', 0, 3), 2)
+  assert.equal(nextMenuIndex('ArrowUp', -1, 3), 2)
+  assert.equal(nextMenuIndex('Home', 2, 3), 0)
+  assert.equal(nextMenuIndex('End', 0, 3), 2)
+  assert.equal(nextMenuIndex('Enter', 1, 3), null)
+  assert.equal(nextMenuIndex('ArrowDown', 0, 0), null)
+})

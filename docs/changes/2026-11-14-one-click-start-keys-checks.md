@@ -40,7 +40,7 @@ Code Profiler profiles by requesting the site from itself. In browser Playground
 
 | Environment | Procedure/command | Expected | Actual | Evidence |
 | --- | --- | --- | --- | --- |
-| Node 24, worktree | `npm test` (final run before the PR update, five runs in a row) | all pass | 159 tests, 0 failures each time | local run |
+| Node 24, worktree | `npm test` (final run before the PR update, five runs in a row) | all pass | 162 tests, 0 failures each time | local run |
 | New tests before the change | `node --test` on `checks`, `license-fill`, `vault-session`, `license-vault`, `playground-persistence` tests | fail first | failed (module or export missing), then passed | local run |
 | Chromium, local build against preview-wp | Spike: launch Query Monitor + Code Profiler + Menu Image, run Code Profiler | profile result | chart shown | screenshot in PR |
 | Chromium, local build | Fake 32-character key for Menu Image (free, ships the Freemius SDK 2.12.1) run through the fill code | Freemius answers | `Invalid license key.` (a short key gave `License key too short`) | script output |
@@ -55,6 +55,7 @@ Code Profiler profiles by requesting the site from itself. In browser Playground
 | Chromium, `npm run dev` (StrictMode on), after the PR review | Add key with a new vault; reload, launch, unlock from the prompt | key saved; prompt closes and the launch continues | both as expected (before the fix both stayed busy forever in dev builds) | script output |
 | Chromium, local build (after the second GPT look) | Escape on the unlock prompt; choose Query Monitor twice | prompt closes the launch; panel stays open | prompt gone and shell closed; `qm-admin-panel` = `overview` after both opens | script output |
 | Chromium, 320 px (after the third second look) | Bar button sizes; Tab inside the Checks menu | 36 px buttons with 46 px tap areas, Close on screen; Tab closes the menu and moves on | Licenses, Checks, Export snapshot, Update all and Close each 36 px, Close ends at 312 px; after Tab the menu is gone and focus is on Export snapshot | script output |
+| Chromium, 320 px (after the PR review of the prompt) | Open Licenses over the unlock prompt and press Escape; then Escape in the prompt; measure the bar | Escape closes only the manager; Escape in the prompt closes the launch; Close fits the bar | manager closed, prompt still open; prompt Escape closed the shell; bar 32 px, Close 36 x 28 px from 2 to 30 px | script output |
 | Deployed preview | Proof run after merge | see PR | recorded in the PR and the lead's report | pending at time of writing |
 
 ## Result

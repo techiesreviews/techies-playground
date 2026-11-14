@@ -152,3 +152,12 @@ export async function fillSavedLicenseKeys({ client, packages, folders, signal, 
     return failAll(caught instanceof Error ? caught.message.slice(0, 200) : 'The saved keys could not be filled in.')
   }
 }
+
+// The license record that shows a launch's fill result: the record whose key was used, or,
+// when the fill failed before any key was read, the plugin's newest record (records arrive
+// newest first).
+export function fillResultRecordId(result, pluginId, records) {
+  if (!result) return ''
+  if (result.recordId) return result.recordId
+  return records.find((record) => record.pluginId === pluginId)?.id || ''
+}
