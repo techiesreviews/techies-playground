@@ -37,7 +37,7 @@ export function addCheckToSetup(recipe, checkId) {
 export function checkResultsPath(check, recipe, currentPath) {
   if (check.id === 'code-profiler') {
     const proOnly = recipe.plugins.includes('code-profiler-pro') && !recipe.plugins.includes('code-profiler') && !recipe.repositoryPlugins.includes('code-profiler')
-    return `/wp-admin/admin.php?page=${proOnly ? 'code-profiler-pro' : 'code-profiler'}`
+    return `/wp-admin/admin.php?page=${proOnly ? 'code-profiler-pro' : 'code-profiler'}&techies-check=code-profiler`
   }
   const base = 'https://site.invalid'
   let url
@@ -51,15 +51,25 @@ export function checkResultsPath(check, recipe, currentPath) {
   return `${url.pathname}${url.search}`
 }
 
-// Query Monitor opens its panel only from its admin-bar link, so this must-use plugin
-// clicks that link on a page the launcher's Checks menu opened.
+// Query Monitor opens its panel only from its admin-bar link, and it reopens the last
+// panel on every page. This must-use plugin clicks that link on a page the launcher's
+// Checks menu opened for Query Monitor, and starts Query Monitor closed on the Code
+// Profiler page so its panel does not cover the profiler.
 export const CHECKS_PLUGIN_PATH = '/wordpress/wp-content/mu-plugins/techies-checks.php'
 
 export const CHECKS_PLUGIN = `<?php
 /**
  * Plugin Name: Techies Playground: open a check
- * Description: Opens the Query Monitor panel on a page the launcher's Checks menu opened (techies-check=query-monitor).
+ * Description: Opens the Query Monitor panel on a page the launcher's Checks menu opened (techies-check=query-monitor) and keeps it closed on the Code Profiler page (techies-check=code-profiler).
  */
+
+function techies_playground_close_query_monitor() {
+	if ( isset( $_GET['techies-check'] ) && 'code-profiler' === $_GET['techies-check'] ) {
+		echo "<script>try { localStorage.removeItem('qm-admin-panel'); localStorage.removeItem('qm-front-panel'); } catch (error) {}</script>";
+	}
+}
+add_action( 'admin_head', 'techies_playground_close_query_monitor' );
+add_action( 'wp_head', 'techies_playground_close_query_monitor' );
 
 function techies_playground_open_check() {
 	if ( ! isset( $_GET['techies-check'] ) || 'query-monitor' !== $_GET['techies-check'] ) {

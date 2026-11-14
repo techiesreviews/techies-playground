@@ -2401,7 +2401,7 @@ echo 'PLAYGROUND_WORDPRESS_VERSION:' . $wp_version;
       clientRef.current = client
       await client.mkdir('/wordpress/wp-content/mu-plugins')
       await client.writeFile('/wordpress/wp-content/mu-plugins/techies-preview.php', buildPreviewPlugin(window.location.href, scope))
-      if (checksInSetup(launchedRecipe).some((check) => check.id === 'query-monitor')) await client.writeFile(CHECKS_PLUGIN_PATH, CHECKS_PLUGIN)
+      if (checksInSetup(launchedRecipe).length) await client.writeFile(CHECKS_PLUGIN_PATH, CHECKS_PLUGIN)
       if (launchId !== launchIdRef.current) return
       stopPreviewSessionRef.current?.()
       stopPreviewSessionRef.current = hostPreviewSession(scope)
