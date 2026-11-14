@@ -1,4 +1,4 @@
-import { FREEMIUS_DATE_STAMP_PLUGIN, FREEMIUS_DATE_STAMP_PLUGIN_PATH } from './freemius-date-stamp.js'
+import { FREEMIUS_PLUGIN, FREEMIUS_PLUGIN_PATH } from './freemius-plugin.js'
 
 export const DEFAULT_RECIPE = Object.freeze({
   schemaVersion: 1,
@@ -209,7 +209,7 @@ export function buildPlaygroundBlueprint(candidate, { includeOneTimeSetup = true
       },
     },
     // Always on and rewritten on every launch, before any plugin installs or activates.
-    { step: 'writeFile', path: FREEMIUS_DATE_STAMP_PLUGIN_PATH, data: FREEMIUS_DATE_STAMP_PLUGIN },
+    { step: 'writeFile', path: FREEMIUS_PLUGIN_PATH, data: FREEMIUS_PLUGIN },
   ]
 
   if (recipe.language !== 'en_US') steps.push({ step: 'setSiteLanguage', language: recipe.language })
