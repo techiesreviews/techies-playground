@@ -226,3 +226,13 @@ test('a followed redirect chain stops after five hops', async () => {
   assert.equal(response.status, 502)
   assert.equal(upstream.calls.length, 6)
 })
+
+test('a followed redirect keeps HEAD as HEAD', async () => {
+  const upstream = recorder((request) => new URL(request.url).hostname === 'api.example.com'
+    ? new Response(null, { status: 302, headers: { Location: 'https://cdn.example.net/file.zip' } })
+    : new Response(null, { headers: { 'Content-Length': '1234' } }))
+  const response = await handleCorsProxy(proxied('https://api.example.com/file.zip', { method: 'HEAD', headers: withAuthorization }), { fetch: upstream.fetch })
+  assert.equal(response.status, 200)
+  assert.equal(response.body, null)
+  assert.deepEqual(upstream.calls.map((call) => [call.method, call.headers.get('Authorization')]), [['HEAD', 'Bearer secret'], ['HEAD', null]])
+})
