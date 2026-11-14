@@ -120,18 +120,16 @@ function capped(body) {
   }))
 }
 
-export async function handleCorsProxy(request, { fetch: fetchImpl = fetch, limiter, globalLimiter } = {}) {
+export async function handleCorsProxy(request, { fetch: fetchImpl = fetch, limiter } = {}) {
   const requestUrl = new URL(request.url)
   if (!isSameOriginRequest(request, requestUrl)) return answer(403, 'Forbidden')
   if (request.method === 'OPTIONS') return answer(204, null, { Allow: 'GET, HEAD, POST, OPTIONS' })
   if (!ALLOWED_METHODS.has(request.method)) return answer(405, 'Method not allowed', { Allow: 'GET, HEAD, POST, OPTIONS' })
 
   // Sec-Fetch-Site keeps other websites out, but any non-browser client can send it,
-  // so a per-visitor and a shared limit bound what such a client can do.
-  for (const [rateLimiter, key] of [[limiter, request.headers.get('CF-Connecting-IP') || 'unknown'], [globalLimiter, 'all']]) {
-    if (rateLimiter && !(await rateLimiter.limit({ key })).success) {
-      return answer(429, 'Too many requests', { 'Retry-After': '60' })
-    }
+  // so a per-visitor limit bounds what one such client can do.
+  if (limiter && !(await limiter.limit({ key: request.headers.get('CF-Connecting-IP') || 'unknown' })).success) {
+    return answer(429, 'Too many requests', { 'Retry-After': '60' })
   }
 
   let target
