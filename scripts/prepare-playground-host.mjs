@@ -55,6 +55,8 @@ export function buildHeaders({ launcherOrigins, wordpressDirectories }) {
     ]],
     // Every file under /assets/ carries a content hash in its name.
     ['/assets/*', ['Cache-Control: public, max-age=31536000, immutable']],
+    // The launcher imports the Playground client from here as a cross-origin module.
+    ['/client/*', ['Access-Control-Allow-Origin: *']],
     // Matches upstream: WordPress static files change when a build moves to a newer minor release.
     ...wordpressDirectories.map((directory) => [`/${directory}/*`, ['Cache-Control: public, max-age=3600']]),
   ]
