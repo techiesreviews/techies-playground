@@ -113,3 +113,24 @@ test('fills saved keys through one PHP run and reports every package', async () 
   const abortingRead = async (key, ids, abortSignal) => { abortSignal.throwIfAborted(); return new Map() }
   await assert.rejects(fillSavedLicenseKeys({ client, packages, folders, signal: aborted.signal, getVaultKey: () => 'k', readKeys: abortingRead }), { name: 'AbortError' })
 })
+
+test('a vault locked while keys are read sends no key to WordPress', async () => {
+  const { fillSavedLicenseKeys } = await import('./license-fill.js')
+  let vaultKey = 'vault-key'
+  const runs = []
+  const client = { async run(request) { runs.push(request); return { text: 'TECHIES_LICENSE_FILL:{}' } } }
+  const readKeys = async (key, ids) => {
+    vaultKey = null
+    return new Map(ids.map((id) => [id, 'secret']))
+  }
+  const results = await fillSavedLicenseKeys({
+    client,
+    packages: [{ id: 'menu-image', vaultId: 'plugin:menu-image', label: 'Menu Image' }],
+    folders: new Map([['menu-image', 'menu-image']]),
+    signal: new AbortController().signal,
+    getVaultKey: () => vaultKey,
+    readKeys,
+  })
+  assert.equal(runs.length, 0)
+  assert.deepEqual(results.map((result) => [result.status, result.message]), [['failed', 'The license vault was locked.']])
+})

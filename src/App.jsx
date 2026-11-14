@@ -98,6 +98,7 @@ import {
   lockVaultSession,
   startVaultSession,
   subscribeVaultSession,
+  unlockVaultSessionIfCurrent,
   waitForVaultUnlock,
 } from './lib/vault-session'
 import {
@@ -1279,7 +1280,11 @@ function AddKeyForm({ plugin, onSaved, onCancel }) {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const firstFieldRef = useRef(null)
+  const openRef = useRef(true)
   const fieldId = `add-key-${plugin.id}`
+  useEffect(() => () => {
+    openRef.current = false
+  }, [])
 
   useEffect(() => {
     if (vaultState !== 'checking') return undefined
@@ -1320,17 +1325,17 @@ function AddKeyForm({ plugin, onSaved, onCancel }) {
     }
     setBusy(true)
     try {
-      let key = getVaultSessionKey()
-      if (!key) {
-        key = vaultState === 'none' ? await createLicenseVault(password) : await unlockLicenseVault(password)
-        startVaultSession(key)
+      if (!getVaultSessionKey()) {
+        const unlock = () => (vaultState === 'none' ? createLicenseVault(password) : unlockLicenseVault(password))
+        if (!await unlockVaultSessionIfCurrent(unlock, () => openRef.current)) return
       }
-      await addLicense(key, { name: plugin.label, pluginId: `plugin:${plugin.id}`, licenseKey })
+      await addLicense(getVaultSessionKey(), { name: plugin.label, pluginId: `plugin:${plugin.id}`, licenseKey })
       setLicenseKey('')
       setPassword('')
       setConfirmation('')
       onSaved()
     } catch (caught) {
+      if (!openRef.current) return
       setMessage(caught instanceof Error ? caught.message : 'The license could not be saved.')
       setBusy(false)
     }
@@ -1366,7 +1371,7 @@ function AddKeyForm({ plugin, onSaved, onCancel }) {
       </div>
       {message && <p role="alert" className="text-pretty text-base/7 text-red-700 sm:text-sm/6">{message}</p>}
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" disabled={busy} onClick={save} className="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 py-2 pr-3 pl-2 text-sm/5 font-medium text-white ring-1 ring-teal-700 hover:bg-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 disabled:cursor-not-allowed disabled:opacity-50">
+        <button type="button" disabled={busy} onClick={save} className="relative inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-teal-700 py-2 pr-3 pl-2 text-sm/5 font-medium text-white ring-1 ring-teal-700 hover:bg-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 disabled:cursor-not-allowed disabled:opacity-50">
           <LockClosedIcon className="size-4 shrink-0 fill-white" />
           {busy ? 'Saving…' : 'Save key'}
         </button>
@@ -1604,7 +1609,7 @@ function ChecksMenu({ checks, anchorRef, onOpenCheck, onClose }) {
   }, [anchorRef, onClose])
 
   return (
-    <div ref={menuRef} role="menu" aria-label="Checks" className="license-popover-enter absolute top-full right-0 z-60 mt-1.5 grid w-[min(20rem,calc(100vw-1rem))] gap-1 rounded-[min(2vw,var(--radius-xl))] bg-white p-1.5 text-neutral-950 shadow-2xl ring-1 ring-neutral-950/10">
+    <div ref={menuRef} role="menu" aria-label="Checks" className="license-popover-enter absolute top-full right-0 z-60 mt-1.5 grid w-[min(20rem,calc(100vw-1rem))] max-sm:fixed max-sm:top-9.5 max-sm:right-2 max-sm:mt-0 gap-1 rounded-[min(2vw,var(--radius-xl))] bg-white p-1.5 text-neutral-950 shadow-2xl ring-1 ring-neutral-950/10">
       {checks.map((check) => (
         <button
           key={check.id}
@@ -1640,6 +1645,10 @@ function VaultUnlockPrompt({ onUnlocked, onSkip }) {
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
+  const openRef = useRef(true)
+  useEffect(() => () => {
+    openRef.current = false
+  }, [])
 
   async function handleSubmit(event) {
     event.preventDefault()
@@ -1647,10 +1656,11 @@ function VaultUnlockPrompt({ onUnlocked, onSkip }) {
     setBusy(true)
     setMessage('')
     try {
-      startVaultSession(await unlockLicenseVault(password))
+      if (!await unlockVaultSessionIfCurrent(() => unlockLicenseVault(password), () => openRef.current)) return
       setPassword('')
       onUnlocked()
     } catch (caught) {
+      if (!openRef.current) return
       setMessage(caught instanceof Error ? caught.message : 'The encrypted vault could not be unlocked.')
       setBusy(false)
     }
@@ -1669,7 +1679,7 @@ function VaultUnlockPrompt({ onUnlocked, onSkip }) {
         </label>
         {message && <p role="alert" className="text-pretty text-base/7 text-red-700 sm:text-sm/6">{message}</p>}
         <div className="flex flex-wrap items-center gap-2">
-        <button type="submit" disabled={busy} className="inline-flex w-fit items-center gap-1.5 rounded-lg bg-teal-700 py-2.5 pr-4 pl-2.5 text-sm/5 font-medium text-white ring-1 ring-teal-700 hover:bg-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 disabled:cursor-not-allowed disabled:opacity-50">
+        <button type="submit" disabled={busy} className="inline-flex min-h-11 w-fit items-center gap-1.5 rounded-lg bg-teal-700 py-2.5 pr-4 pl-2.5 text-sm/5 font-medium text-white ring-1 ring-teal-700 hover:bg-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 disabled:cursor-not-allowed disabled:opacity-50">
           <LockOpenIcon className="size-4 shrink-0 fill-white" />
           {busy ? 'Unlocking…' : 'Unlock and start'}
         </button>
@@ -2164,6 +2174,7 @@ export default function App() {
 
   async function openCheck(check) {
     setShowChecksMenu(false)
+    checksButtonRef.current?.focus()
     const client = clientRef.current
     if (!client || !launchedRecipeRef.current) return
     let currentPath = ''

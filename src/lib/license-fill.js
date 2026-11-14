@@ -122,6 +122,8 @@ export async function fillSavedLicenseKeys({ client, packages, folders, signal, 
   if (!vaultKey) return failAll('The license vault is locked.')
   try {
     const keys = await readKeys(vaultKey, packages.map((entry) => entry.vaultId), signal)
+    // Lock forgets the key; a lock while the keys were read must stop them here.
+    if (getVaultKey() !== vaultKey) return failAll('The license vault was locked.')
     const entries = packages.flatMap((entry) => (
       folders.get(entry.id) && keys.get(entry.vaultId) ? [{ folder: folders.get(entry.id), licenseKey: keys.get(entry.vaultId) }] : []
     ))

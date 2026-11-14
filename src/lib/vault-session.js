@@ -42,3 +42,12 @@ export function waitForVaultUnlock(register, subscribe = subscribeVaultSession) 
     register(resolve)
   }).finally(() => stop())
 }
+
+// Unlocks (or creates) the vault and starts the session only if the form that asked is still
+// open: a result that arrives after its prompt closed is dropped.
+export async function unlockVaultSessionIfCurrent(unlock, isCurrent) {
+  const key = await unlock()
+  if (!isCurrent()) return false
+  startVaultSession(key)
+  return true
+}
