@@ -62,18 +62,48 @@ test('explains a Playground client that cannot be loaded', async () => {
   )
 })
 
+const loaded = { startPlaygroundWeb: 'client module' }
+const load = async () => loaded
+
 test('the start deadline ends once WordPress is running, so Blueprint installs may take longer', async () => {
-  const client = await startPlaygroundWithin((markRunning) => new Promise((resolve) => {
-    setTimeout(markRunning, 5)
-    setTimeout(() => resolve('client'), 40)
-  }), 20, 'too slow')
+  const client = await startPlaygroundWithin({
+    load,
+    start: (module, markRunning) => new Promise((resolve) => {
+      assert.equal(module, loaded)
+      setTimeout(markRunning, 5)
+      setTimeout(() => resolve('client'), 40)
+    }),
+    milliseconds: 20,
+    message: 'too slow',
+  })
   assert.equal(client, 'client')
 })
 
 test('the start deadline fails a Playground that never starts running', async () => {
-  await assert.rejects(startPlaygroundWithin(() => new Promise(() => {}), 10, 'did not start'), { name: 'TimeoutError', message: 'did not start' })
+  await assert.rejects(startPlaygroundWithin({ load, start: () => new Promise(() => {}), milliseconds: 10, message: 'did not start' }), { name: 'TimeoutError', message: 'did not start' })
+})
+
+test('the start deadline also covers loading the client', async () => {
+  await assert.rejects(startPlaygroundWithin({ load: () => new Promise(() => {}), start: () => 'client', milliseconds: 10, message: 'did not start' }), { name: 'TimeoutError' })
 })
 
 test('a start that fails before the deadline reports its own error', async () => {
-  await assert.rejects(startPlaygroundWithin(() => Promise.reject(new Error('boot failed')), 50, 'did not start'), /boot failed/)
+  await assert.rejects(startPlaygroundWithin({ load, start: () => Promise.reject(new Error('boot failed')), milliseconds: 50, message: 'did not start' }), /boot failed/)
+})
+
+test('a launch closed or replaced while the client loads never starts Playground', async () => {
+  let current = true
+  let started = false
+  let finishLoading
+  const pending = startPlaygroundWithin({
+    load: () => new Promise((resolve) => { finishLoading = () => resolve(loaded) }),
+    start: () => { started = true; return 'client' },
+    isCurrent: () => current,
+    milliseconds: 1000,
+    message: 'did not start',
+  })
+  current = false
+  finishLoading()
+  await assert.rejects(pending, { name: 'AbortError' })
+  assert.equal(started, false)
 })

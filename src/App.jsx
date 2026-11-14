@@ -30,7 +30,7 @@ import {
 import { installPlugin, installTheme, zipWpContent } from '@wp-playground/blueprints'
 import { detectPackageType, registerPackageDrop } from './lib/package-upload'
 import { buildPreviewPlugin, createLauncherScope, hostPreviewSession } from './lib/playground-preview'
-import { PLAYGROUND_ORIGIN, PLAYGROUND_READY_TIMEOUT_MS, PLAYGROUND_REMOTE_URL, loadPlaygroundClient, startPlaygroundWithin } from './lib/playground-host'
+import { PLAYGROUND_ORIGIN, PLAYGROUND_READY_TIMEOUT_MS, PLAYGROUND_REMOTE_URL, startPlaygroundWithin } from './lib/playground-host'
 import {
   DEFAULT_RECIPE,
   buildPlaygroundBlueprint,
@@ -1390,6 +1390,9 @@ export default function App() {
     },
   }), [])
   const iframeRef = useRef(null)
+  // A new frame element per launch: a start still waiting on an old frame (closed, or
+  // past its deadline) can never attach to the next launch's Playground.
+  const [playgroundFrameKey, setPlaygroundFrameKey] = useState(0)
   const launchButtonRef = useRef(null)
   const licenseButtonRef = useRef(null)
   const zipInputRef = useRef(null)
@@ -1900,6 +1903,7 @@ export default function App() {
     setShowPlayground(false)
     clientRef.current = null
     if (iframeRef.current) iframeRef.current.src = 'about:blank'
+    setPlaygroundFrameKey((key) => key + 1)
     setStatus({ running: false, step: 0, message: '' })
     setUpdateCheck({ checking: false, message: '' })
     window.requestAnimationFrame(() => launchButtonRef.current?.focus())
@@ -1975,22 +1979,26 @@ export default function App() {
       if (usesBrowserStorage && navigator.storage?.persist) {
         await navigator.storage.persist().catch(() => false)
       }
-      const client = await startPlaygroundWithin(async (markRunning) => {
-        const { startPlaygroundWeb } = await loadPlaygroundClient()
-        const startedClient = await startPlaygroundWeb({
-          iframe: iframeRef.current,
-          remoteUrl: PLAYGROUND_REMOTE_URL,
-          scope,
-          onClientConnected: markRunning,
-          blueprint: buildPlaygroundBlueprint(runtimeRecipe, { includeOneTimeSetup: !hasPersistedSite }),
-          ...(launchedRecipe.phpExtensionManifestUrl ? {
-            extensions: [{ source: { format: 'manifest', manifestUrl: launchedRecipe.phpExtensionManifestUrl } }],
-          } : {}),
-          ...(hasPersistedSite ? { mounts: [mountDescriptor], shouldInstallWordPress: false } : {}),
-        })
-        await startedClient.isReady()
-        return startedClient
-      }, PLAYGROUND_READY_TIMEOUT_MS, 'WordPress Playground did not start within 2 minutes. Check your connection, then launch again.')
+      const client = await startPlaygroundWithin({
+        isCurrent: () => launchId === launchIdRef.current,
+        milliseconds: PLAYGROUND_READY_TIMEOUT_MS,
+        message: 'WordPress Playground did not start within 2 minutes. Check your connection, then launch again.',
+        start: async ({ startPlaygroundWeb }, markRunning) => {
+          const startedClient = await startPlaygroundWeb({
+            iframe: iframeRef.current,
+            remoteUrl: PLAYGROUND_REMOTE_URL,
+            scope,
+            onClientConnected: markRunning,
+            blueprint: buildPlaygroundBlueprint(runtimeRecipe, { includeOneTimeSetup: !hasPersistedSite }),
+            ...(launchedRecipe.phpExtensionManifestUrl ? {
+              extensions: [{ source: { format: 'manifest', manifestUrl: launchedRecipe.phpExtensionManifestUrl } }],
+            } : {}),
+            ...(hasPersistedSite ? { mounts: [mountDescriptor], shouldInstallWordPress: false } : {}),
+          })
+          await startedClient.isReady()
+          return startedClient
+        },
+      })
       if (launchId !== launchIdRef.current) return
       const wordpressVersionResponse = await client.run({
         code: `<?php
@@ -2087,6 +2095,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
       stopPreviewSessionRef.current = null
       clientRef.current = null
       if (iframeRef.current) iframeRef.current.src = 'about:blank'
+      setPlaygroundFrameKey((key) => key + 1)
       setShowPlayground(false)
       setError(caught instanceof Error ? caught.message : 'Playground failed to start.')
       setStatus((current) => ({ ...current, running: false }))
@@ -2806,7 +2815,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
               </>
             )}
           </div>
-          <iframe ref={iframeRef} title="WordPress Playground" className="size-full bg-white" />
+          <iframe key={playgroundFrameKey} ref={iframeRef} title="WordPress Playground" className="size-full bg-white" />
         </div>
       </section>
       {showLicenseManager && <LicenseManager packages={licensePackages} anchorRef={licenseButtonRef} onClose={() => setShowLicenseManager(false)} />}
