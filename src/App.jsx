@@ -107,6 +107,18 @@ const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-stora
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
   {
+    version: '0.9.0',
+    date: 'November 14, 2026',
+    title: 'Playground runs from our own copy',
+    summary: 'WordPress Playground now loads from wp.techies.tools instead of playground.wordpress.net.',
+    changes: [
+      'Playground starts from our own copy at wp.techies.tools. The public playground.wordpress.net bot check had stopped it for some browsers and networks.',
+      'If Playground does not start within two minutes, the launcher closes it and says so below the Launch button.',
+      'Sites saved in this browser before this update belong to playground.wordpress.net and start fresh here.',
+      'Playground is updated to 3.1.64.',
+    ],
+  },
+  {
     version: '0.8.3',
     date: 'October 17, 2026',
     title: 'Keep selected plugins visible',

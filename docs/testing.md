@@ -26,7 +26,7 @@ For a deployment preparation, also run `npm run deploy:check`. Per the Release s
 
 ## Current automated suite
 
-The suite uses Node's built-in test runner and contains 63 tests in 14 files in the current working tree.
+The suite uses Node's built-in test runner and contains 101 tests in 19 files in the current working tree.
 
 Use the shared [Agent Kit](agents/agent-scripts.md): `scripts/agents/kit doctor`, `scripts/agents/kit unit` (the same files as `npm test`), and `scripts/agents/kit build`. The unit tests are Node tests only; browser specs and `kit shots` are not integrated. Real browser checks below use T3 separately and must not be inferred from the Node results.
 
@@ -46,6 +46,10 @@ Use the shared [Agent Kit](agents/agent-scripts.md): `scripts/agents/kit doctor`
 | `playground-persistence.test.js` | Unload warning, one-time storage-default migration, site identity/persistence labels. |
 | `playground-preview.test.js` | Preview target validation, preserved query/fragment, modified clicks, external/download/ordinary navigation exclusions, direct popup mapping, standalone execution of the generated mu-plugin script. |
 | `sync-wordpress-release.test.mjs` | Stable release selection, branch normalization, minor version bump, no-op and generated release edits. |
+| `playground-host.test.js` | The Playground host setting and its validation, client and remote URLs, loading the client with a readable failure, the two-minute ready timeout. |
+| `prepare-playground-host.test.mjs` | Which Playground build files the host keeps (offered PHP and WordPress builds, offline-cache files) or drops, the `_headers` rules, splitting files above the per-file limit, the file-count limit. |
+| `playground-host-worker.test.mjs` | Joining split files (GET, HEAD, cache headers, missing parts, manifest retry), 404 and 405 answers, routing to the CORS proxy. |
+| `playground-host-cors-proxy.test.mjs` | Same-origin gate, target validation (schemes, credentials, private addresses, the host itself), header rules, POST bodies, redirects through the proxy, size cap, rate limit, unreachable targets. |
 
 The suite does not render React components or start WordPress Playground. It proves pure contracts, not full browser behavior.
 
@@ -76,6 +80,11 @@ Use synthetic ZIPs/test packages and non-production vendor licenses.
 | Update all | Use a package with an available safe test update. | Success/failure summary matches WordPress result and UI returns to Plugins. |
 | License vault | Create, wrong-password unlock, add, lock, unlock, copy, delete, reset. | Ciphertext persists; wrong password fails; plaintext appears only in field/clipboard; reset deletes all entries. |
 | Failure cleanup | Interrupt or fail runtime/package setup. | Iframe blanks, shell closes, client is invalidated, error remains visible in launcher. |
+| Playground never ready | Point a launcher build at a host whose `remote.html` answers 403 (as the upstream bot check did). | After two minutes the shell closes and the launcher shows "WordPress Playground did not start within 2 minutes. Check your connection, then launch again." |
+
+### Self-hosted Playground host
+
+A local run needs the built Playground website (see [the change record](changes/2026-11-14-self-hosted-playground.md)): prepare it with `node scripts/prepare-playground-host.mjs <build> playground-host/dist --launcher-origin http://127.0.0.1:4173`, serve it with `npx wrangler dev --config playground-host/wrangler.jsonc --env preview --port 8787`, then build the launcher with `VITE_PLAYGROUND_ORIGIN=http://127.0.0.1:8787 npx vite build` and serve it with `npx vite preview`. The Vite dev server reloads the page when Playground starts, so use the built launcher for this check. On the deployed preview, launch plain WordPress, a launch with an uploaded plugin ZIP, and a resumed browser-saved site in Chromium and Firefox. Headless Firefox needs its persistent-storage prompt answered (`dom.storageManager.prompt.testing` and `dom.storageManager.prompt.testing.allow`).
 
 ## Deployment verification
 
