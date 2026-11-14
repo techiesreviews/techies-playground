@@ -38,6 +38,14 @@ const DROPPED_RESPONSE_HEADERS = new Set([
   'access-control-allow-headers',
   'access-control-expose-headers',
   'strict-transport-security',
+  // Answers come from the Playground host's own origin, and browsers act on these even on
+  // a fetch() answer: an outside server must not wipe the origin's storage (saved sites),
+  // make the browser report its traffic elsewhere, or set its login status. Headers that
+  // only act on documents (CSP, Link, Refresh) are relayed; WordPress reads some of them.
+  'clear-site-data',
+  'nel',
+  'report-to',
+  'set-login',
 ])
 
 export function isCorsProxyRequest(url) {
@@ -207,6 +215,13 @@ export async function handleCorsProxy(request, { fetch: fetchImpl = fetch, limit
   } catch (error) {
     if (error instanceof ProxyRefusal) return answer(error.status, error.message)
     return answer(502, 'Bad gateway: the target could not be reached.')
+  }
+
+  // A compressed slice cannot be decompressed on its own, and Cloudflare may ask the target
+  // for compression even when the Worker asks for identity: fail clearly, not with wrong bytes.
+  const encoding = (upstream.headers.get('Content-Encoding') || 'identity').trim().toLowerCase()
+  if (upstream.status === 206 && encoding !== 'identity') {
+    return answer(502, 'Bad gateway: the target sent a compressed byte range.')
   }
 
   const length = Number(upstream.headers.get('Content-Length'))
