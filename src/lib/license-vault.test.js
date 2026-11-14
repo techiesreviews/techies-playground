@@ -228,3 +228,33 @@ test('a second vault creation never overwrites the first one', async () => {
     globalThis.indexedDB = originalIndexedDB
   }
 })
+
+test('a key from a vault that was reset and recreated elsewhere cannot save a license', async () => {
+  const { addLicense } = await import('./license-vault.js')
+  const originalIndexedDB = globalThis.indexedDB
+  const verifierText = 'private-playground-license-vault:v1'
+  const currentKey = await deriveLicenseVaultKey('new vault password', new Uint8Array(16), 1000)
+  const staleKey = await deriveLicenseVaultKey('old vault password', new Uint8Array(16), 1000)
+  const verifier = await encryptLicenseSecret(currentKey, verifierText, new TextEncoder().encode(verifierText))
+  const stored = new Map([['vault', { id: 'vault', salt: 'AAAAAAAAAAAAAAAAAAAAAA==', iterations: 1000, verifier }]])
+  const puts = []
+  globalThis.indexedDB = { open() {
+    const request = { result: { close() {}, transaction() {
+      const transaction = { objectStore() { return {
+        get(id) { const read = { result: stored.get(id) }; queueMicrotask(() => { read.onsuccess(); transaction.oncomplete() }); return read },
+        put(record) { puts.push(record); const write = {}; queueMicrotask(() => { write.onsuccess(); transaction.oncomplete() }); return write },
+      } } }
+      return transaction
+    } } }
+    queueMicrotask(() => request.onsuccess())
+    return request
+  } }
+  try {
+    await assert.rejects(addLicense(staleKey, { name: 'Menu Image', pluginId: 'plugin:menu-image', licenseKey: 'sk_x' }), { name: 'VaultChangedError' })
+    assert.equal(puts.length, 0)
+    await addLicense(currentKey, { name: 'Menu Image', pluginId: 'plugin:menu-image', licenseKey: 'sk_x' })
+    assert.equal(puts.length, 1)
+  } finally {
+    globalThis.indexedDB = originalIndexedDB
+  }
+})
