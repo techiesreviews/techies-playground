@@ -35,7 +35,17 @@ test('a launch waits for an unlock from anywhere, a skip or a close, then stops 
   assert.equal(settled, 'pending')
   answer('skip')
   assert.equal(await skipping, 'skip')
+  let stops = 0
+  const counted = (listener) => {
+    const stop = subscribeVaultSession(listener)
+    return () => { stops += 1; stop() }
+  }
+  const skipped = waitForVaultUnlock((resolve) => resolve('skip'), counted)
+  assert.equal(await skipped, 'skip')
+  assert.equal(stops, 1)
+  const unlocked = waitForVaultUnlock(() => {}, counted)
   startVaultSession({ type: 'secret' })
+  assert.equal(await unlocked, 'unlocked')
+  assert.equal(stops, 2)
   lockVaultSession()
-  assert.equal(settled, 'skip')
 })

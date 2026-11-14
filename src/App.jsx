@@ -132,7 +132,7 @@ const CHANGELOG_ENTRIES = [
     summary: 'Start a saved recipe with one click, let saved license keys go into Freemius plugins by themselves, and add Query Monitor or Code Profiler as Checks.',
     changes: [
       'Each saved recipe has a Start button that launches it with its WordPress and PHP versions and its plugins.',
-      'Choose plugins shows Key saved or Add key for every uploaded plugin. Unlock the vault once per session, or start without keys, and saved keys go into Freemius-based plugins, such as WP Activity Log, by themselves; the Licenses button shows how many are active.',
+      'Choose plugins shows Key saved or Add key for every uploaded plugin. Unlock the vault once per session and saved keys go into Freemius-based plugins, such as WP Activity Log, by themselves, or start without keys; the Licenses button shows how many are active.',
       'A new Checks section adds Query Monitor or Code Profiler to the setup, and a Checks menu in the Playground bar opens their results inside WordPress.',
       'In Firefox, launching a site saved in the browser no longer stalls on a blank screen before WordPress and your plugins are installed.',
     ],
@@ -1237,7 +1237,7 @@ function LicenseManager({ packages, anchorRef, fillResults, onRecordsChange, onC
                               </>
                             )}
                           </button>
-                          <button type="button" aria-label={`Delete ${record.name}`} onClick={() => { setConfirmingDeleteId(record.id); setMessage('') }} className="absolute top-3 right-1 rounded-md p-1.5 sm:top-2.5 text-neutral-500 hover:bg-neutral-100 hover:text-red-700 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:opacity-100">
+                          <button type="button" aria-label={`Delete ${record.name}`} onClick={() => { setConfirmingDeleteId(record.id); setMessage('') }} className="absolute top-3 right-1 rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-red-700 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:opacity-100 sm:top-2.5">
                             <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
                             <TrashIcon className="size-4 shrink-0 fill-current" />
                           </button>
@@ -3227,10 +3227,11 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
               type="button"
               aria-haspopup="dialog"
               aria-expanded={showLicenseManager}
+              title="Licenses"
               onClick={() => setShowLicenseManager(true)}
               className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-sm:px-1.5 [anchor-name:--license-trigger]"
             >
-              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
+              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:w-[calc(100%+0.625rem)]" aria-hidden="true" />
               <KeyIcon className="size-4 shrink-0 fill-neutral-300" />
               <span className="max-sm:sr-only">Licenses</span>
               {licenseFill.length > 0 && (
@@ -3252,7 +3253,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                   onClick={() => setShowChecksMenu((open) => !open)}
                   className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-sm:px-1.5 disabled:cursor-not-allowed disabled:opacity-50 aria-expanded:bg-white/15"
                 >
-                  <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
+                  <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:w-[calc(100%+0.625rem)]" aria-hidden="true" />
                   <ChartBarIcon className="size-4 shrink-0 fill-neutral-300" />
                   <span className="max-sm:sr-only">Checks</span>
                 </button>
@@ -3266,7 +3267,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
               onClick={exportSiteSnapshot}
               className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-sm:px-1.5 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
+              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:w-[calc(100%+0.625rem)]" aria-hidden="true" />
               <ArrowDownTrayIcon className="size-4 shrink-0 fill-neutral-300" />
               <span className="max-sm:sr-only">{snapshotExporting ? 'Exporting…' : 'Export snapshot'}</span>
             </button>
@@ -3277,7 +3278,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
               onClick={updateAllPackages}
               className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-sm:px-1.5 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
+              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:w-[calc(100%+0.625rem)]" aria-hidden="true" />
               <ArrowPathIcon className="size-4 shrink-0 fill-neutral-300" />
               <span className="max-sm:sr-only">{updateCheck.checking ? 'Updating…' : 'Update all'}</span>
             </button>
@@ -3289,7 +3290,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
               onClick={requestPlaygroundClose}
               className="relative shrink-0 rounded-md p-1.5 text-neutral-300 hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
             >
-              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
+              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:w-[calc(100%+0.625rem)]" aria-hidden="true" />
               <XMarkIcon className="size-4 shrink-0 fill-current" />
             </button>
               </>
