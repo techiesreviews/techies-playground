@@ -1808,7 +1808,8 @@ export default function App() {
   const [snapshotExporting, setSnapshotExporting] = useState(false)
   const [error, setError] = useState('')
   const [wordpressVersionOptions, setWordPressVersionOptions] = useState(WORDPRESS_VERSION_FALLBACK_OPTIONS)
-  const [licenseRecords, setLicenseRecords] = useState([])
+  // null until the vault's key list has been read, so a launch never misses saved keys.
+  const [licenseRecords, setLicenseRecords] = useState(null)
   const [addingKeyFor, setAddingKeyFor] = useState('')
   const [unlockPending, setUnlockPending] = useState(false)
   const unlockResolveRef = useRef(null)
@@ -1818,7 +1819,7 @@ export default function App() {
   const checksButtonRef = useRef(null)
   const launchedRecipeRef = useRef(null)
   const launchAbortRef = useRef(null)
-  const savedKeyPackages = useMemo(() => packagesWithSavedKeys(licenseRecords), [licenseRecords])
+  const savedKeyPackages = useMemo(() => packagesWithSavedKeys(licenseRecords || []), [licenseRecords])
   const keyCountsFor = (candidate) => ({
     total: candidate.plugins.length,
     saved: candidate.plugins.filter((id) => savedKeyPackages.has(`plugin:${id}`)).length,
@@ -2334,6 +2335,7 @@ export default function App() {
   }
 
   async function launch(candidate = recipe) {
+    if (licenseRecords === null) return
     const missingPlugins = candidate.plugins.filter((id) => !plugins.some((plugin) => plugin.id === id))
     if (missingPlugins.length) {
       setError(`Import the missing ZIP${missingPlugins.length === 1 ? '' : 's'} first: ${missingPlugins.join(', ')}`)
@@ -2860,7 +2862,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                             editing={editingSavedId === record.id}
                             missingCount={record.recipe.plugins.filter((id) => !plugins.some((plugin) => plugin.id === id)).length + (record.recipe.theme && !themes.some((theme) => theme.id === record.recipe.theme) ? 1 : 0)}
                             keyCounts={keyCountsFor(record.recipe)}
-                            starting={status.running}
+                            starting={status.running || licenseRecords === null}
                             onChoose={chooseSavedRecipe}
                             onStart={startSavedRecipe}
                             onEdit={editSavedRecipe}
