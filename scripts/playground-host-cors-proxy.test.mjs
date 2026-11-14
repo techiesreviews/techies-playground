@@ -28,10 +28,20 @@ test('recognizes only the proxy path', () => {
   assert.equal(isCorsProxyRequest(new URL(`${HOST}/cors-proxy/?https://example.com/`)), false)
 })
 
-test('keeps the proxy on a .php path, which Playground\'s service worker never caches', () => {
+test('keeps the proxy on a .php path, which Playground\'s service worker does not cache', () => {
   // The service worker caches other same-origin GETs ignoring the query string, so two
   // proxied URLs on a path without .php would share one cache entry.
   assert.match(CORS_PROXY_PATH, /\.php$/)
+})
+
+test('refuses URLs containing wordpress-static.zip, which the service worker caches on any path', async () => {
+  const upstream = recorder()
+  for (const target of ['https://example.com/wp-7.1/wordpress-static.zip', 'https://example.com/?file=wordpress-static.zip']) {
+    const response = await handleCorsProxy(proxied(target), { fetch: upstream.fetch })
+    assert.equal(response.status, 400, target)
+    assert.equal(response.headers.get('X-Playground-Cors-Proxy'), 'true', target)
+  }
+  assert.equal(upstream.calls.length, 0)
 })
 
 test('relays a same-origin GET and marks the response as proxied', async () => {

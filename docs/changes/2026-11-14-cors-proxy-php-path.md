@@ -13,7 +13,7 @@ Our Playground build used `CORS_PROXY_URL=/cors-proxy/?`, so proxied requests we
 
 ## Hypothesis and success criteria
 
-A proxy path that ends in `.php` is passed straight to the network by the service worker (`dn` returns false for `.php`). Success: on the deployed preview, two different proxied URLs return different bodies and CacheStorage holds no proxy entry.
+A proxy path that ends in `.php` is passed straight to the network by the service worker (`dn` returns false for `.php`), except for a URL containing `wordpress-static.zip`, which `dn` caches on any path; the proxy refuses those (400) so no proxied answer is stored. Playground loads its own `wordpress-static.zip` from the host (`/wp-<version>/wordpress-static.zip`), never through the proxy. Success: on the deployed preview, two different proxied URLs return different bodies and CacheStorage holds no proxy entry.
 
 ## Options considered
 
@@ -23,20 +23,20 @@ A proxy path that ends in `.php` is passed straight to the network by the servic
 
 ## Implementation or prototype
 
-`playground-host/cors-proxy.js`: `CORS_PROXY_PATH` is `/cors-proxy.php` (worker routing and relayed redirects use it). `.github/workflows/deploy-site.yml`: `CORS_PROXY_URL: /cors-proxy.php?`, build cache key `-cors-proxy-v2`, the host job checks the build contains `"/cors-proxy.php?"`. `prepare-playground-host.mjs` already drops `.php` files, so no static file shadows the path. Tests: the old path is no longer the proxy, the path ends in `.php`, and `deploy-workflow.test.mjs` ties the build setting and the host check to `CORS_PROXY_PATH`.
+`playground-host/cors-proxy.js`: `CORS_PROXY_PATH` is `/cors-proxy.php` (worker routing and relayed redirects use it). `.github/workflows/deploy-site.yml`: `CORS_PROXY_URL: /cors-proxy.php?`, build cache key `-cors-proxy-v2`, the host job checks the build contains `"/cors-proxy.php?"`. `prepare-playground-host.mjs` already drops `.php` files, so no static file shadows the path. The proxy answers 400 to any request URL containing `wordpress-static.zip` (second look on this fix). Tests: the old path is no longer the proxy, the path ends in `.php`, `wordpress-static.zip` URLs are refused without an upstream call, and `deploy-workflow.test.mjs` ties the build setting and the host check to `CORS_PROXY_PATH`.
 
 ## Tests and evidence
 
 | Environment | Procedure/command | Expected | Actual | Evidence |
 | --- | --- | --- | --- | --- |
 | Headless Chromium (Playwright), preview-wp.techies.tools at dev 6e3a998 (old path) | Open `/remote.html`, wait for the service worker, reload, fetch `/cors-proxy/?https://api.wordpress.org/core/version-check/1.7/` then `/cors-proxy/?https://api.wordpress.org/plugins/info/1.2/?action=plugin_information&request[slug]=hello-dolly` | Different bodies | Both returned the version-check body; CacheStorage held one `/cors-proxy/?…version-check…` entry | Executed; reproduces the bug |
-| Source inspection, `sw.js` of the 3.1.64 build | Read `dn` and `Qn` | `.php` paths not cached | `dn` returns false when the path ends in `.php` | Inspection |
-| Local, Node 24.22.2 | `scripts/agents/kit unit` | Pass | 121 passed, 0 failed, 20 files | Executed through the kit |
+| Source inspection, `sw.js` and the worker of the 3.1.64 build | Read `dn`, `Qn` and `getWordPressStaticZipUrl` | `.php` paths not cached | `dn` returns false when the path ends in `.php`, unless the URL contains `wordpress-static.zip`; Playground builds that file's URL as a same-origin path | Inspection |
+| Local, Node 24.22.2 | `scripts/agents/kit unit` | Pass | 122 passed, 0 failed, 20 files | Executed through the kit |
 | Deployed preview after landing | Same browser check with `/cors-proxy.php?` | Different bodies, no proxy cache entry | Recorded in the release PR | Pending |
 
 ## Result
 
-Expected from reading `sw.js`: `.php` paths skip the service worker's cache. The executed check on the deployed preview is pending at writing; the release PR records it.
+Expected from reading `sw.js`: `.php` proxy paths skip the service worker's cache, and the one exception is refused by the proxy. The executed check on the deployed preview is pending at writing; the release PR records it.
 
 ## Disposition and rationale
 
