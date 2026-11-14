@@ -1647,7 +1647,7 @@ function ChecksMenu({ checks, anchorRef, onOpenCheck, onClose }) {
   }, [anchorRef, onClose])
 
   return (
-    <div ref={menuRef} role="menu" aria-label="Checks" className="license-popover-enter absolute top-full right-0 z-60 mt-1.5 grid w-[min(20rem,calc(100vw-1rem))] max-sm:fixed max-sm:top-9.5 max-sm:right-2 max-sm:mt-0 gap-1 rounded-[min(2vw,var(--radius-xl))] bg-white p-1.5 text-neutral-950 shadow-2xl ring-1 ring-neutral-950/10">
+    <div ref={menuRef} role="menu" aria-label="Checks" className="license-popover-enter absolute top-full right-0 z-60 mt-1.5 grid w-[min(20rem,calc(100vw-1rem))] max-sm:fixed max-sm:top-9.5 max-sm:right-2 max-sm:mt-0 max-h-[calc(100dvh-3rem)] overflow-y-auto gap-1 rounded-[min(2vw,var(--radius-xl))] bg-white p-1.5 text-neutral-950 shadow-2xl ring-1 ring-neutral-950/10">
       {checks.map((check) => (
         <button
           key={check.id}
