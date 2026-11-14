@@ -33,10 +33,10 @@ export function subscribeVaultSession(listener) {
 
 // Waits during a launch until the vault is unlocked (by the launch prompt or the Licenses
 // manager) or until register's answer function is called with 'skip' or 'closed'.
-export function waitForVaultUnlock(register) {
+export function waitForVaultUnlock(register, subscribe = subscribeVaultSession) {
   let stop = () => {}
   return new Promise((resolve) => {
-    stop = subscribeVaultSession(() => {
+    stop = subscribe(() => {
       if (isVaultSessionUnlocked()) resolve('unlocked')
     })
     register(resolve)
