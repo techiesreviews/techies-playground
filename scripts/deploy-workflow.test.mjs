@@ -47,6 +47,6 @@ test('the test job installs the locked dependencies and runs the tests', async (
 
 test('the Playground build points its CORS proxy at the path the host answers', async () => {
   const jobs = readJobs(await readFile(workflowPath, 'utf8'))
-  assert.match(jobs['playground-build'] ?? '', new RegExp(`CORS_PROXY_URL: ${CORS_PROXY_PATH.replace('.', '\\.')}\\?\n`))
+  assert.ok((jobs['playground-build'] ?? '').includes(`CORS_PROXY_URL: ${CORS_PROXY_PATH}?\n`), 'the build uses the proxy path')
   assert.ok((jobs['playground-host'] ?? '').includes(`'"${CORS_PROXY_PATH}?"'`), 'the host job checks the build uses the proxy path')
 })

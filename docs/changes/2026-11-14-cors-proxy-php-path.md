@@ -2,7 +2,7 @@
 
 - Date: 2026-11-14
 - Owner: fleet-lead build agent (Claude Opus 5.5)
-- Status: complete (the deployed-preview check is recorded in the release PR)
+- Status: complete; deployed-preview check pending at writing (recorded in the release PR)
 - Disposition: kept
 - Related version: 0.9.0 (production never had the bug; no bump)
 - Related commit/issue: Orbit TOOLS-236; release second look SL-1 on PR #24; amends [2026-11-14-self-hosted-playground.md](2026-11-14-self-hosted-playground.md)
@@ -36,7 +36,7 @@ A proxy path that ends in `.php` is passed straight to the network by the servic
 
 ## Result
 
-Proxied requests bypass the service worker's cache.
+Expected from reading `sw.js`: `.php` paths skip the service worker's cache. The executed check on the deployed preview is pending at writing; the release PR records it.
 
 ## Disposition and rationale
 
