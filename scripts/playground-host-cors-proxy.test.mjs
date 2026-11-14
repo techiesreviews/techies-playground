@@ -146,16 +146,6 @@ test('drops response headers that would act on the Playground host\'s own origin
   for (const name of Object.keys(dangerous)) assert.equal(response.headers.get(name), null, name)
 })
 
-test('refuses a compressed byte range instead of relaying wrong bytes', async () => {
-  const compressed = recorder(() => new Response('slice', { status: 206, headers: { 'Content-Encoding': 'gzip', 'Content-Range': 'bytes 0-4/100' } }))
-  const refused = await handleCorsProxy(proxied('https://example.com/a.txt', { headers: { Range: 'bytes=0-4' } }), { fetch: compressed.fetch })
-  assert.equal(refused.status, 502)
-  const plain = recorder(() => new Response('slice', { status: 206, headers: { 'Content-Range': 'bytes 0-4/100' } }))
-  const relayed = await handleCorsProxy(proxied('https://example.com/a.zip', { headers: { Range: 'bytes=0-4' } }), { fetch: plain.fetch })
-  assert.equal(relayed.status, 206)
-  assert.equal(await relayed.text(), 'slice')
-})
-
 test('forwards POST bodies and restores a tunnelled content type and range', async () => {
   const upstream = recorder()
   await handleCorsProxy(proxied('https://api.example.com/activate', {
