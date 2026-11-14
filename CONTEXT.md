@@ -63,7 +63,7 @@ User
             -> WordPress.org Blueprint installs
 
 Change lands on `dev` (`kit pr`, or the WordPress sync PR)
-  -> GitHub Actions: Playground host, then tests, build and launcher
+  -> GitHub Actions: tests (alongside the Playground build), then Playground host, then launcher
   -> `https://preview-wp.techies.tools` and `https://preview-play.techies.tools`
 Release `dev` to `main` (`kit pr --release --base main`)
   -> the same jobs for production
