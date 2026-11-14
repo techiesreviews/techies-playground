@@ -35,3 +35,13 @@ export function persistedSitesKey(playgroundOrigin) {
     ? LEGACY_PERSISTED_SITES_KEY
     : `${LEGACY_PERSISTED_SITES_KEY}@${playgroundOrigin}`
 }
+
+// Asks the browser to keep browser-saved sites. Firefox shows a permission prompt and keeps
+// the promise pending until the visitor answers, so a launch must never wait for it.
+export function requestPersistentStorage(storage) {
+  try {
+    storage?.persist?.()?.catch?.(() => false)
+  } catch {
+    // Persistence is a best-effort request; the site still runs without it.
+  }
+}
