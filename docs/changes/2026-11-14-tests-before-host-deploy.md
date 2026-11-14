@@ -2,7 +2,7 @@
 
 - Date: 2026-11-14
 - Owner: fleet-lead build agent (Claude Opus 5.5)
-- Status: complete
+- Status: complete (the first CI run is recorded in the release PR)
 - Disposition: kept
 - Related version: 0.9.0 (no user-visible change, no bump)
 - Related commit/issue: Orbit TOOLS-236; release review finding R1-1 on PR #22; follows [2026-11-14-self-hosted-playground.md](2026-11-14-self-hosted-playground.md)
@@ -23,17 +23,19 @@ A separate test job that both deploy jobs need restores "no deploy without passi
 
 ## Implementation or prototype
 
-`.github/workflows/deploy-site.yml`: new `test` job (checkout, Node 24, `npm ci`, `npm test`); `playground-host` needs `[settings, test, playground-build]`; `launcher` needs `[settings, test, playground-host]` and no longer runs the tests itself (renamed "Deploy launcher"). The preview workflow uses the same file, so it gets the same order.
+`.github/workflows/deploy-site.yml`: new `test` job (checkout, Node 24, `npm ci`, `npm test`); `playground-host` needs `[settings, test, playground-build]`; `launcher` needs `[settings, test, playground-host]` and no longer runs the tests itself (renamed "Deploy launcher"). The preview workflow uses the same file, so it gets the same order. `scripts/deploy-workflow.test.mjs` guards the order.
 
 ## Tests and evidence
 
 | Environment | Procedure/command | Expected | Actual | Evidence |
 | --- | --- | --- | --- | --- |
 | Local, Python `yaml.safe_load` | Parse `deploy-site.yml` and print each job's `needs` | `test` in both deploy jobs | `playground-host: [settings, test, playground-build]`, `launcher: [settings, test, playground-host]` | Executed |
-| Local, Node 24.22.2 | `scripts/agents/kit unit --affected` | Pass | See the PR's kit log | Executed through the kit |
-| GitHub Actions | First preview run on `dev` after landing | `test` job before both deploy jobs | Checked after landing (see the release PR) | Pending at writing |
+| Local, Node 24.22.2 | `node --test scripts/deploy-workflow.test.mjs` | Pass | 2 passed, 0 failed | Executed |
+| Local, Node 24.22.2 | Same test with `test` removed from `playground-host`'s `needs` (reverted after) | Fail | Failed: "playground-host must list test in needs" | Executed |
+| Local, Node 24.22.2 | `scripts/agents/kit unit` (same files as `npm test`) | Pass | 119 passed, 0 failed, 20 files | Executed through the kit |
+| GitHub Actions | First preview run on `dev` after landing | `test` job before both deploy jobs | Not run at writing; the release PR links the run | Pending |
 
-There is no workflow test suite in this repository; the order is checked by parsing the file, not by an automated test.
+`scripts/deploy-workflow.test.mjs` reads `deploy-site.yml` without a YAML parser: it checks that every job using `cloudflare/wrangler-action` lists `test` in `needs`, and that the `test` job runs `npm ci` and `npm test`.
 
 ## Result
 
@@ -45,7 +47,7 @@ Kept: smallest change that closes R1-1 for production and preview.
 
 ## Documentation impact
 
-`docs/agents/kitchen-extras.md` (After a release) and `docs/architecture.md` (Delivery) describe the new order. Changelog and version unchanged: users see no difference.
+`docs/agents/kitchen-extras.md` (After a release), `docs/architecture.md` (Delivery) and `docs/testing.md` (test count) describe the new order. Changelog and version unchanged: users see no difference.
 
 ## Follow-ups and open questions
 
