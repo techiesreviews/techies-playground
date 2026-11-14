@@ -48,7 +48,7 @@ Important refs are intentionally not state:
 
 - `clientRef`: the ready Playground client.
 - `launchIdRef`: invalidates stale asynchronous work after close/relaunch.
-- `iframeRef`: runtime host and explicit blanking on close/failure.
+- `iframeRef`: runtime host and explicit blanking on close/failure. Close and failure also replace the frame element (`playgroundFrameKey`), so a start still running on the old frame cannot attach to the next launch.
 - `license keyRef`: in-memory `CryptoKey`, excluded from rendering and persistence.
 - License session ref: AbortController shared by vault operations; lock starts a fresh session, while close/unmount abort it. Async continuations cannot restore cleared key or UI state.
 - File input refs: enable styled buttons to trigger native file selection.

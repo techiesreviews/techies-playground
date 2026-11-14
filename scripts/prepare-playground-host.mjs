@@ -32,6 +32,7 @@ export function isKept(relativePath, { phpVersions = PHP_VERSIONS, offlineAssets
   if (DROPPED_DIRECTORIES.has(segments[0]) || DROPPED_FILES.has(relativePath)) return false
   if (segments[0] === BETA_DIRECTORY) return segments.length === 2 ? BETA_TOP_FILES.has(name) : BETA_FIRST_PAGE_FILE.test(name)
   if (name.endsWith('.map') || name.endsWith('.php')) return false
+  if (/^wp-(nightly|trunk)\.tar-/.test(name)) return false
   if (/-php52-/.test(name)) return false
   const php = name.match(/^php_(\d+)_(\d+)-/)
   if (php && !phpVersions.has(`${php[1]}.${php[2]}`)) return false
