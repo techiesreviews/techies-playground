@@ -18,3 +18,24 @@ test('keeps the unlocked key in memory until it is locked, and tells listeners',
   assert.deepEqual(seen, [true, false])
   assert.throws(() => startVaultSession(null), /key/)
 })
+
+test('a launch waits for an unlock from anywhere, a skip or a close, then stops listening', async () => {
+  const { waitForVaultUnlock } = await import('./vault-session.js')
+  let answer
+  const unlocking = waitForVaultUnlock((resolve) => { answer = resolve })
+  lockVaultSession()
+  startVaultSession({ type: 'secret' })
+  assert.equal(await unlocking, 'unlocked')
+  lockVaultSession()
+  let settled = 'pending'
+  const skipping = waitForVaultUnlock((resolve) => { answer = resolve })
+  skipping.then((value) => { settled = value })
+  lockVaultSession()
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(settled, 'pending')
+  answer('skip')
+  assert.equal(await skipping, 'skip')
+  startVaultSession({ type: 'secret' })
+  lockVaultSession()
+  assert.equal(settled, 'skip')
+})

@@ -98,6 +98,7 @@ import {
   lockVaultSession,
   startVaultSession,
   subscribeVaultSession,
+  waitForVaultUnlock,
 } from './lib/vault-session'
 import {
   fillSavedLicenseKeys,
@@ -131,7 +132,7 @@ const CHANGELOG_ENTRIES = [
     summary: 'Start a saved recipe with one click, let saved license keys go into Freemius plugins by themselves, and add Query Monitor or Code Profiler as Checks.',
     changes: [
       'Each saved recipe has a Start button that launches it with its WordPress and PHP versions and its plugins.',
-      'Choose plugins shows Key saved or Add key for every uploaded plugin. Unlock the vault once per session and saved keys go into Freemius-based plugins, such as WP Activity Log, by themselves; the Licenses button shows how many are active.',
+      'Choose plugins shows Key saved or Add key for every uploaded plugin. Unlock the vault once per session, or start without keys, and saved keys go into Freemius-based plugins, such as WP Activity Log, by themselves; the Licenses button shows how many are active.',
       'A new Checks section adds Query Monitor or Code Profiler to the setup, and a Checks menu in the Playground bar opens their results inside WordPress.',
       'In Firefox, launching a site saved in the browser no longer stalls on a blank screen before WordPress and your plugins are installed.',
     ],
@@ -1232,11 +1233,11 @@ function LicenseManager({ packages, anchorRef, fillResults, onRecordsChange, onC
                             ) : (
                               <>
                                 <span className="block truncate">{record.name}</span>
-                                <ClipboardDocumentIcon className="pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100 pointer-fine:opacity-0 absolute top-4.5 right-9 size-4 shrink-0 fill-neutral-500" />
+                                <ClipboardDocumentIcon className="pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100 pointer-fine:opacity-0 absolute top-4.5 right-9 size-4 shrink-0 fill-neutral-500 sm:top-4" />
                               </>
                             )}
                           </button>
-                          <button type="button" aria-label={`Delete ${record.name}`} onClick={() => { setConfirmingDeleteId(record.id); setMessage('') }} className="absolute top-2.5 right-1 rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-red-700 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:opacity-100">
+                          <button type="button" aria-label={`Delete ${record.name}`} onClick={() => { setConfirmingDeleteId(record.id); setMessage('') }} className="absolute top-3 right-1 rounded-md p-1.5 sm:top-2.5 text-neutral-500 hover:bg-neutral-100 hover:text-red-700 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:opacity-100">
                             <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
                             <TrashIcon className="size-4 shrink-0 fill-current" />
                           </button>
@@ -1304,6 +1305,7 @@ function AddKeyForm({ plugin, onSaved, onCancel }) {
   async function save() {
     if (busy || vaultState === 'checking') return
     if (vaultState === 'unlocked' && !isVaultSessionUnlocked()) {
+      setMessage('The vault was locked. Enter your master password to save the key.')
       setVaultState('checking')
       return
     }
@@ -2308,17 +2310,12 @@ export default function App() {
     let keyPackageIds = launchedRecipe.plugins.filter((id) => savedKeyPackages.has(`plugin:${id}`))
     if (keyPackageIds.length && !isVaultSessionUnlocked()) {
       setStatus({ running: true, step: 0, message: 'Unlock the license vault to fill in saved keys.' })
-      let stopWatching = () => {}
       // 'unlocked' from the prompt or an unlock in the Licenses manager, 'skip' to start
       // without keys, 'closed' when the Playground closes.
-      const answer = await new Promise((resolve) => {
+      const answer = await waitForVaultUnlock((resolve) => {
         unlockResolveRef.current = resolve
-        stopWatching = subscribeVaultSession(() => {
-          if (isVaultSessionUnlocked()) resolve('unlocked')
-        })
         setUnlockPending(true)
       })
-      stopWatching()
       unlockResolveRef.current = null
       setUnlockPending(false)
       if (answer === 'closed' || launchId !== launchIdRef.current) return
@@ -3203,7 +3200,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
 
       <section className={showPlayground ? 'fixed inset-0 z-50 grid bg-white' : 'hidden'} aria-label="WordPress Playground">
         <div className="grid min-h-0 grid-rows-[2rem_1fr] overflow-hidden bg-white">
-          <div className="flex min-w-0 items-center gap-1.5 bg-[#1d2327] px-2 text-white">
+          <div className="flex min-w-0 items-center gap-1.5 bg-[#1d2327] px-2 text-white max-sm:gap-2.5">
             {confirmingPlaygroundClose ? (
               <>
                 <p className="min-w-0 flex-1 truncate text-sm/5 font-medium">Discard this temporary site?</p>
@@ -3238,7 +3235,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
               <span className="max-sm:sr-only">Licenses</span>
               {licenseFill.length > 0 && (
                 <span className="font-normal text-neutral-300">
-                  <span className="max-sm:hidden">· {licenseFillSummary(licenseFill)}</span>
+                  <span className="max-sm:sr-only">· {licenseFillSummary(licenseFill)}</span>
                   <span className="sm:hidden" aria-hidden="true">{licenseFillSummary(licenseFill).replace(/ of (\d+) active$/, '/$1')}</span>
                 </span>
               )}
@@ -3251,7 +3248,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                   aria-haspopup="menu"
                   aria-expanded={showChecksMenu}
                   disabled={status.step <= 2}
-                  title={status.step <= 2 ? 'Available when setup finishes' : undefined}
+                  title={status.step <= 2 ? 'Available when setup finishes' : 'Checks'}
                   onClick={() => setShowChecksMenu((open) => !open)}
                   className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-sm:px-1.5 disabled:cursor-not-allowed disabled:opacity-50 aria-expanded:bg-white/15"
                 >
@@ -3265,7 +3262,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
             <button
               type="button"
               disabled={status.step <= 2 || snapshotExporting}
-              title={status.step <= 2 ? 'Available when setup finishes' : undefined}
+              title={status.step <= 2 ? 'Available when setup finishes' : 'Export snapshot'}
               onClick={exportSiteSnapshot}
               className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-sm:px-1.5 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -3276,7 +3273,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
             <button
               type="button"
               disabled={status.step <= 2 || updateCheck.checking}
-              title={status.step <= 2 ? 'Available when setup finishes' : undefined}
+              title={status.step <= 2 ? 'Available when setup finishes' : 'Update all'}
               onClick={updateAllPackages}
               className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-sm:px-1.5 disabled:cursor-not-allowed disabled:opacity-50"
             >

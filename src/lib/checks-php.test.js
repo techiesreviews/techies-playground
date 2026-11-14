@@ -12,7 +12,7 @@ function add_action( $hook, $callback ) { $GLOBALS['actions'][ $hook ][] = $call
 $check = getenv( 'CHECK' );
 if ( '' !== $check ) { $_GET['techies-check'] = $check; }
 require '/plugin.php';
-foreach ( array( 'admin_head', 'admin_print_footer_scripts' ) as $hook ) {
+foreach ( array( 'admin_head', 'admin_print_footer_scripts', 'wp_head', 'wp_print_footer_scripts' ) as $hook ) {
 	echo "[$hook]";
 	foreach ( $GLOBALS['actions'][ $hook ] ?? array() as $callback ) { $callback(); }
 }
@@ -24,7 +24,9 @@ async function render(check) {
   php.writeFile('/harness.php', HARNESS)
   const response = await php.run({ scriptPath: '/harness.php', env: { CHECK: check } })
   assert.equal(response.errors, '', response.errors)
-  const [, head, footer] = response.text.split(/\[admin_head\]|\[admin_print_footer_scripts\]/)
+  const [, head, footer, frontHead, frontFooter] = response.text.split(/\[(?:admin_head|admin_print_footer_scripts|wp_head|wp_print_footer_scripts)\]/)
+  assert.equal(frontHead, head)
+  assert.equal(frontFooter, footer)
   return { head, footer }
 }
 
