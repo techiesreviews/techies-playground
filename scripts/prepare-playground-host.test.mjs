@@ -49,6 +49,7 @@ test('drops source maps, unoffered PHP and WordPress builds, demos, test fixture
     'wp-beta/wp-includes/images/w-logo-blue.png',
     // Nightly comes as a full download, and Playground looks for /wp-trunk/, not here.
     'assets/wp-nightly.tar-AbCd1234.zst',
+    'assets/wp-trunk.tar-AbCd1234.zst',
     'wp-nightly/wordpress-static.zip',
     'wp-nightly/wp-includes/version.php',
     'test-fixtures/plugin.zip',
@@ -64,8 +65,9 @@ test('drops source maps, unoffered PHP and WordPress builds, demos, test fixture
 })
 
 test('never drops a file the Playground service worker caches for offline use', () => {
-  const offlineAssets = new Set(['/demos/index.html'])
+  const offlineAssets = new Set(['/demos/index.html', '/assets/wp-trunk.tar-AbCd1234.zst'])
   assert.equal(isKept('demos/index.html', { phpVersions: offered, offlineAssets }), true)
+  assert.equal(isKept('assets/wp-trunk.tar-AbCd1234.zst', { phpVersions: offered, offlineAssets }), true)
 })
 
 test('headers allow framing only by the launcher and cache hashed assets for a year', () => {
