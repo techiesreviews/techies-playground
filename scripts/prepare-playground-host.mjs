@@ -14,7 +14,15 @@ export const FILE_LIMIT = 20_000
 export const PART_SIZE = 20 * 1024 * 1024
 export const SPLIT_MANIFEST = 'split-files.json'
 
-const DROPPED_DIRECTORIES = new Set(['wp-beta', 'wp-nightly', 'test-fixtures', 'demos', 'php-next'])
+const DROPPED_DIRECTORIES = new Set(['test-fixtures', 'demos', 'php-next', 'wp-nightly'])
+// The launcher offers beta, but its whole unpacked tree (about 3,900 files) would pass
+// the file limit. Its archive, static ZIP and asset list stay, with the minified CSS,
+// JavaScript and fonts the first page loads; Playground backfills the rest from
+// wordpress-static.zip after that page. Nightly is a full download from GitHub and
+// Playground looks for /wp-trunk/, so wp-nightly is never used.
+const BETA_DIRECTORY = 'wp-beta'
+const BETA_TOP_FILES = new Set(['wordpress-static.zip', 'wordpress-remote-asset-paths'])
+const BETA_FIRST_PAGE_FILE = /\.(min\.css|min\.js|woff2?|ttf|eot)$/
 const DROPPED_FILES = new Set(['.htaccess', 'php-8-6.html'])
 
 export function isKept(relativePath, { phpVersions = PHP_VERSIONS, offlineAssets = new Set() } = {}) {
@@ -22,8 +30,8 @@ export function isKept(relativePath, { phpVersions = PHP_VERSIONS, offlineAssets
   const segments = relativePath.split('/')
   const name = segments.at(-1)
   if (DROPPED_DIRECTORIES.has(segments[0]) || DROPPED_FILES.has(relativePath)) return false
+  if (segments[0] === BETA_DIRECTORY) return segments.length === 2 ? BETA_TOP_FILES.has(name) : BETA_FIRST_PAGE_FILE.test(name)
   if (name.endsWith('.map') || name.endsWith('.php')) return false
-  if (/^wp-(beta|nightly|trunk)\.tar-/.test(name)) return false
   if (/-php52-/.test(name)) return false
   const php = name.match(/^php_(\d+)_(\d+)-/)
   if (php && !phpVersions.has(`${php[1]}.${php[2]}`)) return false
@@ -142,7 +150,7 @@ export async function preparePlaygroundHost({
     const to = path.join(out, file)
     await mkdir(path.dirname(to), { recursive: true })
     const top = file.split('/')[0]
-    if (file.includes('/') && /^wp-\d+\.\d+$/.test(top)) wordpressDirectories.add(top)
+    if (file.includes('/') && /^wp-(\d+\.\d+|beta)$/.test(top)) wordpressDirectories.add(top)
     const { size } = await stat(from)
     if (size > fileSizeLimit) {
       const parts = await splitFile(from, to, size, partSize)

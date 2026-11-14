@@ -23,6 +23,14 @@ test('keeps the runtime, offered PHP builds and offered WordPress builds', () =>
     'wp-6.3/wp-includes/css/dashicons.min.css',
     'wp-7.1/wordpress-static.zip',
     'wp-cli.phar',
+    // Beta stays selectable: its archive, static ZIP, asset list, and the minified
+    // CSS, JavaScript and fonts its first page needs.
+    'assets/wp-beta.tar-CqF4p5bg.zst',
+    'wp-beta/wordpress-static.zip',
+    'wp-beta/wordpress-remote-asset-paths',
+    'wp-beta/wp-includes/css/dashicons.min.css',
+    'wp-beta/wp-includes/js/jquery/jquery.min.js',
+    'wp-beta/wp-includes/fonts/dashicons.woff2',
   ]) {
     assert.equal(isKept(file, { phpVersions: offered, offlineAssets: new Set() }), true, file)
   }
@@ -34,9 +42,13 @@ test('drops source maps, unoffered PHP and WordPress builds, demos, test fixture
     'assets/index-B1tm9G29.js.map',
     'assets/php_5_2-Xy12Zz34.wasm',
     'assets/php_5_2-Xy12Zz34.js',
-    'assets/wp-beta.tar-CqF4p5bg.zst',
     'assets/sqlite-database-integration-v3.0.0-rc.3-php52-gDghoRWW.zip',
-    'wp-beta/wordpress-static.zip',
+    // The rest of beta's unpacked tree would pass the 20,000-file limit; Playground
+    // backfills it from wordpress-static.zip after the first page.
+    'wp-beta/wp-includes/css/buttons.css',
+    'wp-beta/wp-includes/images/w-logo-blue.png',
+    // Nightly comes as a full download, and Playground looks for /wp-trunk/, not here.
+    'wp-nightly/wordpress-static.zip',
     'wp-nightly/wp-includes/version.php',
     'test-fixtures/plugin.zip',
     'demos/index.html',
@@ -96,6 +108,8 @@ async function fixture() {
     'wp-7.1/wordpress-static.zip': 'x'.repeat(25),
     'wp-7.1/wp-includes/a.css': 'a',
     'wp-beta/wordpress-static.zip': 'beta',
+    'wp-beta/wp-includes/b.css': 'b',
+    'wp-beta/wp-includes/b.min.css': 'b',
     'assets-required-for-offline-mode.json': JSON.stringify(['/remote.html']),
   }
   for (const [name, content] of Object.entries(files)) {
@@ -138,6 +152,8 @@ test('prepares a trimmed host folder and splits files above the per-file limit',
     'wp-7.1/wordpress-static.zip.part1',
     'wp-7.1/wordpress-static.zip.part2',
     'wp-7.1/wp-includes/a.css',
+    'wp-beta/wordpress-static.zip',
+    'wp-beta/wp-includes/b.min.css',
   ])
   assert.deepEqual(JSON.parse(await readFile(path.join(out, 'split-files.json'), 'utf8')), {
     '/wp-7.1/wordpress-static.zip': {
@@ -147,8 +163,10 @@ test('prepares a trimmed host folder and splits files above the per-file limit',
   })
   const joined = await Promise.all([0, 1, 2].map((index) => readFile(path.join(out, `wp-7.1/wordpress-static.zip.part${index}`), 'utf8')))
   assert.equal(joined.join(''), 'x'.repeat(25))
-  assert.match(await readFile(path.join(out, '_headers'), 'utf8'), /\n\/wp-7\.1\/\*\n/)
-  assert.equal(result.fileCount, 9)
+  const headers = await readFile(path.join(out, '_headers'), 'utf8')
+  assert.match(headers, /\n\/wp-7\.1\/\*\n/)
+  assert.match(headers, /\n\/wp-beta\/\*\n/)
+  assert.equal(result.fileCount, 11)
   assert.deepEqual(result.split, ['/wp-7.1/wordpress-static.zip'])
 })
 
