@@ -38,6 +38,14 @@ const DROPPED_RESPONSE_HEADERS = new Set([
   'access-control-allow-headers',
   'access-control-expose-headers',
   'strict-transport-security',
+  // Answers come from the Playground host's own origin, and browsers act on these even on
+  // a fetch() answer: an outside server must not wipe the origin's storage (saved sites),
+  // make the browser report its traffic elsewhere, or set its login status. Headers that
+  // only act on documents (CSP, Link, Refresh) are relayed; WordPress reads some of them.
+  'clear-site-data',
+  'nel',
+  'report-to',
+  'set-login',
 ])
 
 export function isCorsProxyRequest(url) {

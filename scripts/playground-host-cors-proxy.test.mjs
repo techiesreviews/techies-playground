@@ -130,6 +130,22 @@ test('asks for uncompressed bytes on HEAD and range requests only', async () => 
   assert.deepEqual(upstream.calls.map((call) => call.headers.get('Accept-Encoding')), cases.map(([, expected]) => expected))
 })
 
+test('drops response headers that would act on the Playground host\'s own origin', async () => {
+  const dangerous = {
+    'Clear-Site-Data': '"storage"',
+    NEL: '{"report_to":"a","max_age":86400}',
+    'Report-To': '{"group":"a","max_age":86400,"endpoints":[{"url":"https://example.com/r"}]}',
+    'Set-Login': 'logged-in',
+  }
+  const link = '<https://api.github.com/x?page=2>; rel="next"'
+  const upstream = recorder(() => new Response('body', { headers: { 'Content-Type': 'text/plain', Link: link, ...dangerous } }))
+  const response = await handleCorsProxy(proxied('https://example.com/'), { fetch: upstream.fetch })
+  assert.equal(response.status, 200)
+  assert.equal(response.headers.get('Content-Type'), 'text/plain')
+  assert.equal(response.headers.get('Link'), link)
+  for (const name of Object.keys(dangerous)) assert.equal(response.headers.get(name), null, name)
+})
+
 test('forwards POST bodies and restores a tunnelled content type and range', async () => {
   const upstream = recorder()
   await handleCorsProxy(proxied('https://api.example.com/activate', {
