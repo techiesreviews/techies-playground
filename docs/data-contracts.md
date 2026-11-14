@@ -46,7 +46,7 @@ A validated recipe produces:
 - `preferredVersions.php` and `.wp`.
 - `features.networking` and `.intl`.
 - Optional `extraLibraries: ['wp-cli']`.
-- Steps in order: WP config constants, site options, optional language, optional one-time Multisite, optional one-time WXR import, directory plugin installs, optional directory theme install, login.
+- Steps in order: WP config constants, site options, a `writeFile` of the Freemius must-use plugin (`/wordpress/wp-content/mu-plugins/techies-freemius.php`, every launch), optional language, optional one-time Multisite, optional one-time WXR import, directory plugin installs, optional directory theme install, login.
 
 Local ZIPs and the PHP extension manifest are not serialized into these steps. The manifest is passed as a Playground startup extension, and local ZIPs are installed through the ready client.
 

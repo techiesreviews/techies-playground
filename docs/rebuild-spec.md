@@ -124,7 +124,7 @@ Launch must perform this sequence:
 7. Import the Playground client from `<Playground host>/client/index.js` and start `startPlaygroundWeb` against `<Playground host>/remote.html` with a generated Blueprint. The Playground host is `https://wp.techies.tools` (`src/lib/playground-host.js`; preview builds set `VITE_PLAYGROUND_ORIGIN`). Loading the client, booting and starting WordPress (until `onClientConnected`) must finish within two minutes, otherwise launch fails with a readable timeout; the Blueprint steps that follow have no deadline.
 8. For an existing OPFS site, mount before startup, set `shouldInstallWordPress: false`, and omit one-time setup. For a new saved site, start WordPress, mount OPFS from memory to disk, then remember the site identity.
 9. Wait for readiness, execute PHP to read `$wp_version`, and require a usable version marker. For `latest`, require exact equality with the API result.
-10. Blueprint steps install and activate WordPress.org packages. Install each local plugin ZIP with overwrite and activation enabled.
+10. A Blueprint step writes the Freemius must-use plugin (`src/lib/freemius-plugin.js`) before any package installs, on every launch. Blueprint steps install and activate WordPress.org packages. Install each local plugin ZIP with overwrite and activation enabled.
 11. Install a selected local theme ZIP with overwrite and activation, then execute PHP and verify `get_option('stylesheet')` equals the local theme ID.
 12. Navigate to the recipe landing page.
 13. Record the successful spin-up. A `latest` recipe is recorded with the exact launched WordPress version for reproducibility.

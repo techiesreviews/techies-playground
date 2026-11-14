@@ -179,11 +179,77 @@ test('refuses responses of 100 MB or more', async () => {
   assert.equal(response.status, 413)
 })
 
-test('allows only GET, HEAD, POST and OPTIONS', async () => {
+test('allows only GET, HEAD, POST and OPTIONS for targets outside the licence API list', async () => {
   const upstream = recorder()
-  assert.equal((await handleCorsProxy(proxied('https://example.com/', { method: 'PUT', body: 'x' }), { fetch: upstream.fetch })).status, 405)
+  for (const [method, target] of [
+    ['PUT', 'https://example.com/'],
+    ['PATCH', 'https://example.com/'],
+    ['DELETE', 'https://example.com/'],
+    ['PUT', 'https://freemius.com/'],
+    ['PUT', 'https://api.freemius.com.evil.test/v1/installs.json'],
+    ['PUT', 'https://evil-api.freemius.com/v1/installs.json'],
+    ['PUT', 'https://evil.test/api.freemius.com'],
+    ['PUT', 'https://evil.test/?https://api.freemius.com/'],
+    ['PROPFIND', 'https://api.freemius.com/'],
+  ]) {
+    const response = await handleCorsProxy(proxied(target, { method, ...(method === 'PROPFIND' ? {} : { body: 'x' }) }), { fetch: upstream.fetch })
+    assert.equal(response.status, 405, `${method} ${target}`)
+    assert.equal(response.headers.get('Allow'), 'GET, HEAD, POST, OPTIONS', `${method} ${target}`)
+    assert.equal(response.headers.get('X-Playground-Cors-Proxy'), 'true', `${method} ${target}`)
+  }
   assert.equal((await handleCorsProxy(proxied('https://example.com/', { method: 'OPTIONS' }), { fetch: upstream.fetch })).status, 204)
   assert.equal(upstream.calls.length, 0)
+})
+
+test('relays PUT, PATCH and DELETE with their bodies to the Freemius licence API hosts only', async () => {
+  // Freemius-based plugins (WP Activity Log and others) activate and sync licences with
+  // PUT and DELETE on these hosts; every other host keeps the GET, HEAD and POST limit.
+  const upstream = recorder()
+  const cases = [
+    ['PUT', 'https://api.freemius.com/v1/plugins/1/installs/2.json?auth_date=x', '{"license_key":"fake"}'],
+    ['PATCH', 'https://sandbox-api.freemius.com/v1/plugins/1/installs/2.json', '{"is_active":true}'],
+    ['DELETE', 'https://API.Freemius.com./v1/plugins/1/installs/2/licenses/3.json', null],
+  ]
+  for (const [method, target, body] of cases) {
+    const response = await handleCorsProxy(proxied(target, { method, body, headers: { 'X-Cors-Proxy-Content-Type': 'application/json' } }), { fetch: upstream.fetch })
+    assert.equal(response.status, 200, `${method} ${target}`)
+  }
+  assert.deepEqual(upstream.calls.map((call) => [call.method, new URL(call.url).hostname, call.body || null]), [
+    ['PUT', 'api.freemius.com', '{"license_key":"fake"}'],
+    ['PATCH', 'sandbox-api.freemius.com', '{"is_active":true}'],
+    ['DELETE', 'api.freemius.com.', null],
+  ])
+  assert.equal(upstream.calls[0].url, 'https://api.freemius.com/v1/plugins/1/installs/2.json?auth_date=x')
+  assert.equal(upstream.calls[0].headers.get('Content-Type'), 'application/json')
+})
+
+test('a licence API PUT redirected to another host is relayed, and following it with PUT is refused', async () => {
+  const upstream = recorder(() => new Response(null, { status: 307, headers: { Location: 'https://elsewhere.example.net/' } }))
+  const response = await handleCorsProxy(proxied('https://api.freemius.com/v1/installs.json', { method: 'PUT', body: 'x' }), { fetch: upstream.fetch })
+  assert.equal(response.status, 307)
+  const location = response.headers.get('Location')
+  assert.equal(location, `${HOST}${CORS_PROXY_PATH}?https://elsewhere.example.net/`)
+  const followed = await handleCorsProxy(proxied(location.slice(`${HOST}${CORS_PROXY_PATH}?`.length), { method: 'PUT', body: 'x' }), { fetch: upstream.fetch })
+  assert.equal(followed.status, 405)
+  assert.equal(upstream.calls.length, 1)
+})
+
+test('a licence API PUT keeps every other protection', async () => {
+  const upstream = recorder()
+  const put = (target, init = {}) => proxied(target, { method: 'PUT', body: 'x', ...init })
+  const crossSite = await handleCorsProxy(put('https://api.freemius.com/', { headers: { 'Sec-Fetch-Site': 'cross-site' } }), { fetch: upstream.fetch })
+  assert.equal(crossSite.status, 403)
+  const limited = await handleCorsProxy(put('https://api.freemius.com/'), { fetch: upstream.fetch, limiter: { limit: async () => ({ success: false }) } })
+  assert.equal(limited.status, 429)
+  const credentials = await handleCorsProxy(put('https://user:pass@api.freemius.com/'), { fetch: upstream.fetch })
+  assert.equal(credentials.status, 400)
+  assert.equal(upstream.calls.length, 0)
+
+  await handleCorsProxy(put('https://api.freemius.com/', { headers: { Authorization: 'FS 1:2:sig', Cookie: 'a=b' } }), { fetch: upstream.fetch })
+  assert.equal(upstream.calls[0].headers.get('Authorization'), null)
+  assert.equal(upstream.calls[0].headers.get('Cookie'), null)
+  await handleCorsProxy(put('https://api.freemius.com/', { headers: { Authorization: 'FS 1:2:sig', 'X-Cors-Proxy-Allowed-Request-Headers': 'authorization' } }), { fetch: upstream.fetch })
+  assert.equal(upstream.calls[1].headers.get('Authorization'), 'FS 1:2:sig')
 })
 
 test('reports an unreachable target as a bad gateway', async () => {
@@ -250,11 +316,18 @@ test('an authorized request follows a redirect to another origin itself, without
   ])
 })
 
-test('an authorized POST redirected to another origin is refused', async () => {
-  const upstream = recorder(() => new Response(null, { status: 307, headers: { Location: 'https://elsewhere.example.net/' } }))
-  const response = await handleCorsProxy(proxied('https://api.example.com/activate', { method: 'POST', body: 'x', headers: withAuthorization }), { fetch: upstream.fetch })
-  assert.equal(response.status, 502)
-  assert.equal(upstream.calls.length, 1)
+test('an authorized POST, PUT, PATCH or DELETE redirected to another origin is refused', async () => {
+  for (const [method, target] of [
+    ['POST', 'https://api.example.com/activate'],
+    ['PUT', 'https://api.freemius.com/v1/installs.json'],
+    ['PATCH', 'https://api.freemius.com/v1/installs.json'],
+    ['DELETE', 'https://api.freemius.com/v1/installs.json'],
+  ]) {
+    const upstream = recorder(() => new Response(null, { status: 307, headers: { Location: 'https://elsewhere.example.net/' } }))
+    const response = await handleCorsProxy(proxied(target, { method, body: 'x', headers: withAuthorization }), { fetch: upstream.fetch })
+    assert.equal(response.status, 502, method)
+    assert.equal(upstream.calls.length, 1, method)
+  }
 })
 
 test('a followed redirect is checked like any other target', async () => {
