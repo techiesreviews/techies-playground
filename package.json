@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test": "node --test",
+    "test": "node --test \"src/**/*.test.js\" \"scripts/*.test.mjs\"",
     "sync:wordpress": "node scripts/sync-wordpress-release.mjs",
     "deploy:check": "npm run build && wrangler deploy --dry-run",
     "deploy": "npm run build && wrangler deploy"

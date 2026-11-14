@@ -7,6 +7,7 @@ import {
   PLAYGROUND_REMOTE_URL,
   loadPlaygroundClient,
   playgroundOrigin,
+  startPlaygroundWithin,
   withTimeout,
 } from './playground-host.js'
 
@@ -59,4 +60,20 @@ test('explains a Playground client that cannot be loaded', async () => {
     loadPlaygroundClient(async () => { throw new TypeError('Failed to fetch dynamically imported module') }),
     { message: 'WordPress Playground could not be loaded from wp.techies.tools. Check your connection, then launch again.' },
   )
+})
+
+test('the start deadline ends once WordPress is running, so Blueprint installs may take longer', async () => {
+  const client = await startPlaygroundWithin((markRunning) => new Promise((resolve) => {
+    setTimeout(markRunning, 5)
+    setTimeout(() => resolve('client'), 40)
+  }), 20, 'too slow')
+  assert.equal(client, 'client')
+})
+
+test('the start deadline fails a Playground that never starts running', async () => {
+  await assert.rejects(startPlaygroundWithin(() => new Promise(() => {}), 10, 'did not start'), { name: 'TimeoutError', message: 'did not start' })
+})
+
+test('a start that fails before the deadline reports its own error', async () => {
+  await assert.rejects(startPlaygroundWithin(() => Promise.reject(new Error('boot failed')), 50, 'did not start'), /boot failed/)
 })

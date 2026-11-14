@@ -30,7 +30,7 @@ import {
 import { installPlugin, installTheme, zipWpContent } from '@wp-playground/blueprints'
 import { detectPackageType, registerPackageDrop } from './lib/package-upload'
 import { buildPreviewPlugin, createLauncherScope, hostPreviewSession } from './lib/playground-preview'
-import { PLAYGROUND_ORIGIN, PLAYGROUND_READY_TIMEOUT_MS, PLAYGROUND_REMOTE_URL, loadPlaygroundClient, withTimeout } from './lib/playground-host'
+import { PLAYGROUND_ORIGIN, PLAYGROUND_READY_TIMEOUT_MS, PLAYGROUND_REMOTE_URL, loadPlaygroundClient, startPlaygroundWithin } from './lib/playground-host'
 import {
   DEFAULT_RECIPE,
   buildPlaygroundBlueprint,
@@ -1975,12 +1975,13 @@ export default function App() {
       if (usesBrowserStorage && navigator.storage?.persist) {
         await navigator.storage.persist().catch(() => false)
       }
-      const client = await withTimeout((async () => {
+      const client = await startPlaygroundWithin(async (markRunning) => {
         const { startPlaygroundWeb } = await loadPlaygroundClient()
         const startedClient = await startPlaygroundWeb({
           iframe: iframeRef.current,
           remoteUrl: PLAYGROUND_REMOTE_URL,
           scope,
+          onClientConnected: markRunning,
           blueprint: buildPlaygroundBlueprint(runtimeRecipe, { includeOneTimeSetup: !hasPersistedSite }),
           ...(launchedRecipe.phpExtensionManifestUrl ? {
             extensions: [{ source: { format: 'manifest', manifestUrl: launchedRecipe.phpExtensionManifestUrl } }],
@@ -1989,7 +1990,7 @@ export default function App() {
         })
         await startedClient.isReady()
         return startedClient
-      })(), PLAYGROUND_READY_TIMEOUT_MS, 'WordPress Playground did not start within 2 minutes. Check your connection, then launch again.')
+      }, PLAYGROUND_READY_TIMEOUT_MS, 'WordPress Playground did not start within 2 minutes. Check your connection, then launch again.')
       if (launchId !== launchIdRef.current) return
       const wordpressVersionResponse = await client.run({
         code: `<?php

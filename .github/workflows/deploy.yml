@@ -23,4 +23,5 @@ jobs:
     uses: ./.github/workflows/deploy-site.yml
     with:
       environment: production
-    secrets: inherit
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
