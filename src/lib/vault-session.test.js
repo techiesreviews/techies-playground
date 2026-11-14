@@ -75,3 +75,14 @@ test('a key save that finishes after its form closed does not touch that form', 
   assert.equal(await pending, false)
   assert.equal(await saveIfCurrent(async () => {}, () => true), true)
 })
+
+test('a Lock or Reset while an unlock runs keeps the session locked', async () => {
+  const { unlockVaultSessionIfCurrent } = await import('./vault-session.js')
+  lockVaultSession()
+  let finish
+  const pending = unlockVaultSessionIfCurrent(() => new Promise((resolve) => { finish = resolve }), () => true)
+  lockVaultSession()
+  finish({ type: 'secret' })
+  assert.equal(await pending, false)
+  assert.equal(isVaultSessionUnlocked(), false)
+})

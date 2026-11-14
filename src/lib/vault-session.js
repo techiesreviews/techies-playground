@@ -1,6 +1,9 @@
 // The unlocked licence vault key for this page session. It lives in memory only, so one
 // unlock lets every launch fill in saved keys; Lock, closing the tab or reloading drops it.
 let sessionKey = null
+// Changes on every Lock (Reset locks first), so an unlock that was already running when the
+// vault was locked or reset cannot bring its key back.
+let lockCount = 0
 const listeners = new Set()
 
 function notify() {
@@ -22,6 +25,7 @@ export function startVaultSession(key) {
 }
 
 export function lockVaultSession() {
+  lockCount += 1
   sessionKey = null
   notify()
 }
@@ -46,8 +50,9 @@ export function waitForVaultUnlock(register, subscribe = subscribeVaultSession) 
 // Unlocks (or creates) the vault and starts the session only if the form that asked is still
 // open: a result that arrives after its prompt closed is dropped.
 export async function unlockVaultSessionIfCurrent(unlock, isCurrent) {
+  const locksBefore = lockCount
   const key = await unlock()
-  if (!isCurrent()) return false
+  if (!isCurrent() || lockCount !== locksBefore) return false
   startVaultSession(key)
   return true
 }
