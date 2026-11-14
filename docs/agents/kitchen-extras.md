@@ -33,13 +33,17 @@ file wins.
 
 ## After a release
 
-- GitHub Actions (`.github/workflows/deploy.yml`) runs `npm ci`, `npm test` and `npm run build` on
-  a push to `main` (or a manual run), then deploys to <https://play.techies.tools>, but only in
-  `techiesreviews/techies-playground`, when the push comes from the `techiesreviews` account and the
-  repository variable `CLOUDFLARE_DEPLOY_ENABLED` is `true`; otherwise the job is skipped, and a
-  skipped run is not a green one. No workflow is triggered by pull requests or by pushes to `dev`,
-  so `kit pr` has no checks to wait for: a change's CI result is the deploy run on `main` after its
-  release. The lead checks that run and, for a visible change, the live site.
+- GitHub Actions (`.github/workflows/deploy.yml`) runs on a push to `main` (or a manual run): it
+  runs `npm ci` and `npm test` while it builds our copy of WordPress Playground; only when the
+  tests pass does it deploy that copy to <https://wp.techies.tools>, then run `npm run build` and
+  deploy the launcher to <https://play.techies.tools> (all through `deploy-site.yml`), but only in `techiesreviews/techies-playground`, when the push
+  comes from the `techiesreviews` account and the repository variable `CLOUDFLARE_DEPLOY_ENABLED` is
+  `true`; otherwise the job is skipped, and a skipped run is not a green one.
+- `.github/workflows/deploy-preview.yml` does the same for every push to `dev`:
+  <https://preview-wp.techies.tools> and <https://preview-play.techies.tools>. No workflow is
+  triggered by pull requests, so `kit pr` has no checks to wait for: a change's first CI result is
+  the preview run after it lands on `dev`. The lead checks that run and, for a visible change, the
+  preview; the live site after the release.
 
 ## Release
 

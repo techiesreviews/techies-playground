@@ -121,7 +121,7 @@ Launch must perform this sequence:
 4. If WordPress is `latest`, fetch the WordPress.org version list again. Abort if the exact stable version cannot be confirmed.
 5. Resolve the runtime site identity from name, exact WordPress version, and PHP version.
 6. Request persistent browser storage when storage is `browser`; failure to grant persistence is non-fatal.
-7. Start `startPlaygroundWeb` against `https://playground.wordpress.net/remote.html` with a generated Blueprint.
+7. Import the Playground client from `<Playground host>/client/index.js` and start `startPlaygroundWeb` against `<Playground host>/remote.html` with a generated Blueprint. The Playground host is `https://wp.techies.tools` (`src/lib/playground-host.js`; preview builds set `VITE_PLAYGROUND_ORIGIN`). Loading the client, booting and starting WordPress (until `onClientConnected`) must finish within two minutes, otherwise launch fails with a readable timeout; the Blueprint steps that follow have no deadline.
 8. For an existing OPFS site, mount before startup, set `shouldInstallWordPress: false`, and omit one-time setup. For a new saved site, start WordPress, mount OPFS from memory to disk, then remember the site identity.
 9. Wait for readiness, execute PHP to read `$wp_version`, and require a usable version marker. For `latest`, require exact equality with the API result.
 10. Blueprint steps install and activate WordPress.org packages. Install each local plugin ZIP with overwrite and activation enabled.
@@ -129,7 +129,7 @@ Launch must perform this sequence:
 12. Navigate to the recipe landing page.
 13. Record the successful spin-up. A `latest` recipe is recorded with the exact launched WordPress version for reproducibility.
 
-Any exception invalidates the active client, blanks the iframe, closes the full-screen shell, and surfaces a readable error.
+Any exception invalidates the active client, blanks the iframe and replaces it with a new element, closes the full-screen shell, and surfaces a readable error. A launch closed or replaced while the Playground client loads never starts Playground.
 
 ## 6. Playground shell
 
