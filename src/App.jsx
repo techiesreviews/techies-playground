@@ -1282,8 +1282,12 @@ function AddKeyForm({ plugin, onSaved, onCancel }) {
   const firstFieldRef = useRef(null)
   const openRef = useRef(true)
   const fieldId = `add-key-${plugin.id}`
-  useEffect(() => () => {
-    openRef.current = false
+  useEffect(() => {
+    // Set again on every mount: React's StrictMode runs this cleanup once before the real mount.
+    openRef.current = true
+    return () => {
+      openRef.current = false
+    }
   }, [])
 
   useEffect(() => {
@@ -1646,8 +1650,12 @@ function VaultUnlockPrompt({ onUnlocked, onSkip }) {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const openRef = useRef(true)
-  useEffect(() => () => {
-    openRef.current = false
+  useEffect(() => {
+    // Set again on every mount: React's StrictMode runs this cleanup once before the real mount.
+    openRef.current = true
+    return () => {
+      openRef.current = false
+    }
   }, [])
 
   async function handleSubmit(event) {
