@@ -77,6 +77,7 @@ import {
   migrateStorageDefault,
   persistedSiteId,
   persistedSitesKey,
+  requestPersistentStorage,
   shouldWarnBeforeUnload,
   spinupPersistenceLabel,
 } from './lib/playground-persistence'
@@ -2352,9 +2353,7 @@ export default function App() {
     setStatus({ running: true, step: 0, message: 'Starting the local WordPress runtime…' })
 
     try {
-      if (usesBrowserStorage && navigator.storage?.persist) {
-        await navigator.storage.persist().catch(() => false)
-      }
+      if (usesBrowserStorage) requestPersistentStorage(navigator.storage)
       const client = await startPlaygroundWithin({
         isCurrent: () => launchId === launchIdRef.current,
         milliseconds: PLAYGROUND_READY_TIMEOUT_MS,
