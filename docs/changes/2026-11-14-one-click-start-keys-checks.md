@@ -53,6 +53,7 @@ Code Profiler profiles by requesting the site from itself. In browser Playground
 | Firefox, local build | Full flow | as Chromium | everything as in Chromium except the fill: Freemius answered `ApiBlocked` (its SDK got a Freemius web page back). Probe: a proxied POST to `api.freemius.com` echoes `uid` and `license_key` in Chromium but only the query string in Firefox, so Firefox drops the request body when Playground retries through the CORS proxy. This also blocks Freemius activation typed into WordPress in Firefox; it is outside this change. The long refusal is now cut to 200 characters of plain text. | script output |
 | Chromium, 320 px (after the GPT second look) | Open Checks with Query Monitor and Code Profiler in the setup, choose Query Monitor | menu inside the screen, focus back on Checks | menu at x 8, width 304; focus on Checks | screenshot |
 | Chromium, `npm run dev` (StrictMode on), after the PR review | Add key with a new vault; reload, launch, unlock from the prompt | key saved; prompt closes and the launch continues | both as expected (before the fix both stayed busy forever in dev builds) | script output |
+| Chromium, local build (after the second GPT look) | Escape on the unlock prompt; choose Query Monitor twice | prompt closes the launch; panel stays open | prompt gone and shell closed; `qm-admin-panel` = `overview` after both opens | script output |
 | Deployed preview | Proof run after merge | see PR | recorded in the PR and the lead's report | pending at time of writing |
 
 ## Result

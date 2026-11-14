@@ -34,6 +34,8 @@ test('prints only the script its check asks for', async () => {
   const queryMonitor = await render('query-monitor')
   assert.equal(queryMonitor.head, '')
   assert.match(queryMonitor.footer, /#wp-admin-bar-query-monitor > a/)
+  // Query Monitor reopens its last panel itself; clicking its toggle then would close it.
+  assert.match(queryMonitor.footer, /localStorage\.getItem\(panelKey\)/)
   const codeProfiler = await render('code-profiler')
   assert.match(codeProfiler.head, /localStorage\.removeItem\('qm-admin-panel'\)/)
   assert.equal(codeProfiler.footer, '')

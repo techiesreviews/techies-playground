@@ -52,7 +52,8 @@ export function checkResultsPath(check, recipe, currentPath) {
 }
 
 // Query Monitor opens its panel only from its admin-bar link, and it reopens the last
-// panel on every page. This must-use plugin clicks that link on a page the launcher's
+// panel on every page (so the link is clicked only when no panel is remembered; clicking
+// would close it). This must-use plugin clicks that link on a page the launcher's
 // Checks menu opened for Query Monitor, and starts Query Monitor closed on the Code
 // Profiler page so its panel does not cover the profiler.
 export const CHECKS_PLUGIN_PATH = '/wordpress/wp-content/mu-plugins/techies-checks.php'
@@ -75,7 +76,7 @@ function techies_playground_open_check() {
 	if ( ! isset( $_GET['techies-check'] ) || 'query-monitor' !== $_GET['techies-check'] ) {
 		return;
 	}
-	echo "<script>(function () { var tries = 0; function open() { var link = document.querySelector('#wp-admin-bar-query-monitor > a'); if (link) { link.click(); } else if (tries++ < 20) { setTimeout(open, 250); } } if (document.readyState === 'complete') { open(); } else { window.addEventListener('load', open); } }());</script>";
+	echo "<script>(function () { var tries = 0; var panelKey = document.body.classList.contains('wp-admin') ? 'qm-admin-panel' : 'qm-front-panel'; function open() { var stored = ''; try { stored = localStorage.getItem(panelKey) || ''; } catch (error) {} if (stored) { return; } var link = document.querySelector('#wp-admin-bar-query-monitor > a'); if (link) { link.click(); } else if (tries++ < 20) { setTimeout(open, 250); } } if (document.readyState === 'complete') { open(); } else { window.addEventListener('load', open); } }());</script>";
 }
 add_action( 'admin_print_footer_scripts', 'techies_playground_open_check' );
 add_action( 'wp_print_footer_scripts', 'techies_playground_open_check' );
