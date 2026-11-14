@@ -9,11 +9,16 @@
 // no proxied answer is ever stored.
 // The rules follow upstream's packages/playground/php-cors-proxy: no cookies,
 // Authorization only on opt-in, redirects relayed through the proxy,
-// X-Playground-Cors-Proxy on every answer.
+// X-Playground-Cors-Proxy on every answer. Unlike upstream, PUT, PATCH and DELETE pass
+// for the licence API hosts below: Freemius-based plugins activate and sync licences
+// with them.
 export const CORS_PROXY_PATH = '/cors-proxy.php'
 const SERVICE_WORKER_CACHED_NAME = 'wordpress-static.zip'
 
 const ALLOWED_METHODS = new Set(['GET', 'HEAD', 'POST'])
+const ALLOWED_METHODS_HEADER = 'GET, HEAD, POST, OPTIONS'
+const LICENCE_API_METHODS = new Set(['PUT', 'PATCH', 'DELETE'])
+const LICENCE_API_HOSTS = new Set(['api.freemius.com', 'sandbox-api.freemius.com'])
 const MAX_RESPONSE_SIZE = 100 * 1024 * 1024
 const OWN_HOSTS = new Set(['wp.techies.tools', 'preview-wp.techies.tools'])
 
@@ -175,8 +180,9 @@ async function followWithoutAuthorization(fetchImpl, response, from, headers, re
 export async function handleCorsProxy(request, { fetch: fetchImpl = fetch, limiter } = {}) {
   const requestUrl = new URL(request.url)
   if (!isSameOriginRequest(request, requestUrl)) return answer(403, 'Forbidden')
-  if (request.method === 'OPTIONS') return answer(204, null, { Allow: 'GET, HEAD, POST, OPTIONS' })
-  if (!ALLOWED_METHODS.has(request.method)) return answer(405, 'Method not allowed', { Allow: 'GET, HEAD, POST, OPTIONS' })
+  if (request.method === 'OPTIONS') return answer(204, null, { Allow: ALLOWED_METHODS_HEADER })
+  const isLicenceApiMethod = LICENCE_API_METHODS.has(request.method)
+  if (!ALLOWED_METHODS.has(request.method) && !isLicenceApiMethod) return answer(405, 'Method not allowed', { Allow: ALLOWED_METHODS_HEADER })
   // Playground's service worker caches any URL containing this name, ignoring the query
   // string, so a successful answer would be served for every later such proxy request.
   // Playground loads its own wordpress-static.zip from the host, never through the proxy.
@@ -196,20 +202,24 @@ export async function handleCorsProxy(request, { fetch: fetchImpl = fetch, limit
   } catch (error) {
     return answer(400, `Bad request: ${error.message}`)
   }
+  if (isLicenceApiMethod && !LICENCE_API_HOSTS.has(bareHostname(target))) {
+    return answer(405, 'Method not allowed', { Allow: ALLOWED_METHODS_HEADER })
+  }
 
+  const hasBody = request.method !== 'GET' && request.method !== 'HEAD'
   const outgoing = forwardedHeaders(request)
   let upstream
   try {
     upstream = await fetchImpl(target.href, {
       method: request.method,
       headers: outgoing,
-      body: request.method === 'POST' ? request.body : undefined,
+      body: hasBody ? request.body : undefined,
       redirect: 'manual',
-      ...(request.method === 'POST' && request.body ? { duplex: 'half' } : {}),
+      ...(hasBody && request.body ? { duplex: 'half' } : {}),
     })
     if (outgoing.has('Authorization') && isRedirect(upstream)
       && new URL(upstream.headers.get('Location'), target).origin !== target.origin) {
-      if (request.method === 'POST') throw new ProxyRefusal(502, 'Bad gateway: an authorized POST was redirected to another origin.')
+      if (hasBody) throw new ProxyRefusal(502, `Bad gateway: an authorized ${request.method} was redirected to another origin.`)
       upstream = await followWithoutAuthorization(fetchImpl, upstream, target, outgoing, requestUrl, request.method)
     }
   } catch (error) {
