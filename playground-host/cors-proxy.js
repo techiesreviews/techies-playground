@@ -4,11 +4,14 @@
 // them. The public proxy only answers playground.wordpress.net, so our build sets
 // CORS_PROXY_URL=/cors-proxy.php? and this Worker answers it. The path must end in .php:
 // Playground's service worker caches same-origin GETs while ignoring the query string, so
-// every /cors-proxy/?<url> would share one cache entry; it never caches a .php path.
+// every /cors-proxy/?<url> would share one cache entry. It skips a .php path, except
+// when the URL contains "wordpress-static.zip"; such requests are refused below, so
+// no proxied answer is ever stored.
 // The rules follow upstream's packages/playground/php-cors-proxy: no cookies,
 // Authorization only on opt-in, redirects relayed through the proxy,
 // X-Playground-Cors-Proxy on every answer.
 export const CORS_PROXY_PATH = '/cors-proxy.php'
+const SERVICE_WORKER_CACHED_NAME = 'wordpress-static.zip'
 
 const ALLOWED_METHODS = new Set(['GET', 'HEAD', 'POST'])
 const MAX_RESPONSE_SIZE = 100 * 1024 * 1024
@@ -163,6 +166,12 @@ export async function handleCorsProxy(request, { fetch: fetchImpl = fetch, limit
   if (!isSameOriginRequest(request, requestUrl)) return answer(403, 'Forbidden')
   if (request.method === 'OPTIONS') return answer(204, null, { Allow: 'GET, HEAD, POST, OPTIONS' })
   if (!ALLOWED_METHODS.has(request.method)) return answer(405, 'Method not allowed', { Allow: 'GET, HEAD, POST, OPTIONS' })
+  // Playground's service worker caches any URL containing this name, ignoring the query
+  // string, so a successful answer would be served for every later such proxy request.
+  // Playground loads its own wordpress-static.zip from the host, never through the proxy.
+  if (requestUrl.href.includes(SERVICE_WORKER_CACHED_NAME)) {
+    return answer(400, `Bad request: URLs containing ${SERVICE_WORKER_CACHED_NAME} are not proxied.`)
+  }
 
   // Sec-Fetch-Site keeps other websites out, but any non-browser client can send it,
   // so a per-visitor limit bounds what one such client can do.
