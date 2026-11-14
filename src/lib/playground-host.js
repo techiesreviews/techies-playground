@@ -38,6 +38,18 @@ export async function loadPlaygroundClient(importer = (url) => import(/* @vite-i
 // A first boot downloads about 40 MB (PHP and WordPress); two minutes covers slow links.
 export const PLAYGROUND_READY_TIMEOUT_MS = 120_000
 
+// `start(markRunning)` starts Playground and calls markRunning once WordPress runs
+// (startPlaygroundWeb's onClientConnected). Only that part has a deadline: Blueprint
+// steps that follow, such as WordPress.org plugin installs, may take longer.
+export async function startPlaygroundWithin(start, milliseconds, message) {
+  let markRunning
+  const running = new Promise((resolve) => { markRunning = resolve })
+  const started = start(() => markRunning())
+  started.catch(() => {})
+  await withTimeout(Promise.race([running, started]), milliseconds, message)
+  return started
+}
+
 export function withTimeout(promise, milliseconds, message) {
   let timer
   const timeout = new Promise((_, reject) => {

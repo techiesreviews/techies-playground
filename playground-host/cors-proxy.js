@@ -50,8 +50,7 @@ function answer(status, message, extra = {}) {
   })
 }
 
-function isPrivateHost(hostname) {
-  const host = hostname.replace(/^\[|\]$/g, '').toLowerCase()
+function isPrivateHost(host) {
   if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal')) return true
   if (host.includes(':')) {
     // IPv6 literal: loopback, unspecified, unique local, link local, IPv4-mapped.
@@ -62,6 +61,10 @@ function isPrivateHost(hostname) {
   const [a, b] = octets.map(Number)
   return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127)
     || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || a >= 224
+}
+
+function bareHostname(url) {
+  return url.hostname.replace(/^\[|\]$/g, '').replace(/\.$/, '').toLowerCase()
 }
 
 function targetFrom(requestUrl) {
@@ -75,8 +78,9 @@ function targetFrom(requestUrl) {
   }
   if (target.protocol !== 'https:' && target.protocol !== 'http:') throw new Error('Only HTTP and HTTPS URLs can be proxied.')
   if (target.username || target.password) throw new Error('URLs with credentials cannot be proxied.')
-  if (isPrivateHost(target.hostname)) throw new Error('Private addresses cannot be proxied.')
-  if (OWN_HOSTS.has(target.hostname) || target.hostname === requestUrl.hostname) throw new Error('The Playground host cannot proxy itself.')
+  const host = bareHostname(target)
+  if (isPrivateHost(host)) throw new Error('Private addresses cannot be proxied.')
+  if (OWN_HOSTS.has(host) || host === bareHostname(requestUrl)) throw new Error('The Playground host cannot proxy itself.')
   return target
 }
 
@@ -104,15 +108,30 @@ function forwardedHeaders(request) {
   return headers
 }
 
-export async function handleCorsProxy(request, { fetch: fetchImpl = fetch, limiter } = {}) {
+// Counts the bytes of a body without a declared size and fails it past the cap.
+function capped(body) {
+  let total = 0
+  return body.pipeThrough(new TransformStream({
+    transform(chunk, controller) {
+      total += chunk.byteLength
+      if (total > MAX_RESPONSE_SIZE) controller.error(new Error('Response too large'))
+      else controller.enqueue(chunk)
+    },
+  }))
+}
+
+export async function handleCorsProxy(request, { fetch: fetchImpl = fetch, limiter, globalLimiter } = {}) {
   const requestUrl = new URL(request.url)
   if (!isSameOriginRequest(request, requestUrl)) return answer(403, 'Forbidden')
   if (request.method === 'OPTIONS') return answer(204, null, { Allow: 'GET, HEAD, POST, OPTIONS' })
   if (!ALLOWED_METHODS.has(request.method)) return answer(405, 'Method not allowed', { Allow: 'GET, HEAD, POST, OPTIONS' })
 
-  if (limiter) {
-    const { success } = await limiter.limit({ key: request.headers.get('CF-Connecting-IP') || 'unknown' })
-    if (!success) return answer(429, 'Too many requests', { 'Retry-After': '60' })
+  // Sec-Fetch-Site keeps other websites out, but any non-browser client can send it,
+  // so a per-visitor and a shared limit bound what such a client can do.
+  for (const [rateLimiter, key] of [[limiter, request.headers.get('CF-Connecting-IP') || 'unknown'], [globalLimiter, 'all']]) {
+    if (rateLimiter && !(await rateLimiter.limit({ key })).success) {
+      return answer(429, 'Too many requests', { 'Retry-After': '60' })
+    }
   }
 
   let target
@@ -148,7 +167,9 @@ export async function handleCorsProxy(request, { fetch: fetchImpl = fetch, limit
   }
   headers.set('X-Playground-Cors-Proxy', 'true')
   headers.set('Cache-Control', 'no-store')
-  return new Response(request.method === 'HEAD' ? null : upstream.body, {
+  const declaredSize = upstream.headers.has('Content-Length')
+  const body = request.method === 'HEAD' || !upstream.body ? null : declaredSize ? upstream.body : capped(upstream.body)
+  return new Response(body, {
     status: upstream.status,
     statusText: upstream.statusText,
     headers,

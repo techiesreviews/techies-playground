@@ -26,7 +26,7 @@ For a deployment preparation, also run `npm run deploy:check`. Per the Release s
 
 ## Current automated suite
 
-The suite uses Node's built-in test runner and contains 101 tests in 19 files in the current working tree.
+The suite uses Node's built-in test runner and contains 109 tests in 19 files in the current working tree. `npm test` names its files (`src/**/*.test.js`, `scripts/*.test.mjs`), so a locally prepared `playground-host/dist` adds none.
 
 Use the shared [Agent Kit](agents/agent-scripts.md): `scripts/agents/kit doctor`, `scripts/agents/kit unit` (the same files as `npm test`), and `scripts/agents/kit build`. The unit tests are Node tests only; browser specs and `kit shots` are not integrated. Real browser checks below use T3 separately and must not be inferred from the Node results.
 
@@ -46,10 +46,11 @@ Use the shared [Agent Kit](agents/agent-scripts.md): `scripts/agents/kit doctor`
 | `playground-persistence.test.js` | Unload warning, one-time storage-default migration, site identity/persistence labels. |
 | `playground-preview.test.js` | Preview target validation, preserved query/fragment, modified clicks, external/download/ordinary navigation exclusions, direct popup mapping, standalone execution of the generated mu-plugin script. |
 | `sync-wordpress-release.test.mjs` | Stable release selection, branch normalization, minor version bump, no-op and generated release edits. |
-| `playground-host.test.js` | The Playground host setting and its validation, client and remote URLs, loading the client with a readable failure, the two-minute ready timeout. |
+| `playground-host.test.js` | The Playground host setting and its validation, client and remote URLs, loading the client with a readable failure, the two-minute start deadline that ends once WordPress runs. |
+| `launcher-worker.test.mjs` | The launcher CSP allows scripts and frames from its own environment's Playground host and the public one, not the other environment's. |
 | `prepare-playground-host.test.mjs` | Which Playground build files the host keeps (offered PHP and WordPress builds, offline-cache files) or drops, the `_headers` rules, splitting files above the per-file limit, the file-count limit. |
 | `playground-host-worker.test.mjs` | Joining split files (GET, HEAD, cache headers, missing parts, manifest retry), 404 and 405 answers, routing to the CORS proxy. |
-| `playground-host-cors-proxy.test.mjs` | Same-origin gate, target validation (schemes, credentials, private addresses, the host itself), header rules, POST bodies, redirects through the proxy, size cap, rate limit, unreachable targets. |
+| `playground-host-cors-proxy.test.mjs` | Same-origin gate, target validation (schemes, credentials, private and reserved addresses, the host itself with or without a trailing dot), header rules, POST bodies, redirects through the proxy, size cap for declared and streamed sizes, per-visitor and shared rate limits, unreachable targets. |
 
 The suite does not render React components or start WordPress Playground. It proves pure contracts, not full browser behavior.
 

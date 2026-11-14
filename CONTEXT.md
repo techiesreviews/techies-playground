@@ -72,7 +72,7 @@ Release `dev` to `main` (`kit pr --release --base main`)
 
 ## Invariants that must survive a rebuild
 
-1. There is no app-owned upload or search proxy. ZIPs, decrypted licenses, and WordPress data never pass through a Techies server. The one exception is Playground's own CORS proxy on the Playground host: when WordPress makes an outgoing request the browser blocks (for example a licence activation), Playground retries it through `/cors-proxy/` on `wp.techies.tools`, as it did through `wordpress-playground-cors-proxy.net` before self-hosting. That Worker stores nothing and has request logging off.
+1. There is no app-owned upload or search proxy. ZIPs, decrypted licenses, and WordPress data never pass through a Techies server. The one exception is Playground's own CORS proxy on the Playground host: when WordPress makes an outgoing request the browser blocks (for example a licence activation), Playground retries it through `/cors-proxy/` on `wp.techies.tools`, as it did through `wordpress-playground-cors-proxy.net` before self-hosting. That Worker refuses browsers on other sites, rate-limits every caller, stores nothing and has request logging off.
 2. Every recipe is normalized through `validateRecipe` before it is saved, exported, imported, launched, or added to history.
 3. Recipes and history never include ZIP contents or license keys.
 4. Local plugin/theme IDs remain separate from WordPress.org slugs.

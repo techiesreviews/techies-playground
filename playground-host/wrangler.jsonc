@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/wrangler/config-schema.json",
   // Our copy of WordPress Playground. CI builds it from the official repository at the
-  // release that matches @wp-playground/client in package.json and prepares ./dist with
+  // release that matches @wp-playground/blueprints in package.json and prepares ./dist with
   // scripts/prepare-playground-host.mjs before deploying.
   "name": "playground-wp",
   "main": "worker.js",
@@ -25,13 +25,19 @@
   "observability": {
     "enabled": false
   },
-  // Per-visitor limit for the CORS proxy (cors-proxy.js). A launch with plugins makes a
-  // few dozen proxied requests; WordPress admin pages add a few per page.
+  // Limits for the CORS proxy (cors-proxy.js): per visitor, and shared by all visitors.
+  // A launch with plugins makes a few dozen proxied requests; WordPress admin pages add a
+  // few per page.
   "ratelimits": [
     {
       "name": "CORS_PROXY_LIMIT",
       "namespace_id": "2361",
       "simple": { "limit": 300, "period": 60 }
+    },
+    {
+      "name": "CORS_PROXY_GLOBAL_LIMIT",
+      "namespace_id": "2363",
+      "simple": { "limit": 1000, "period": 60 }
     }
   ],
   "env": {
@@ -42,6 +48,11 @@
           "name": "CORS_PROXY_LIMIT",
           "namespace_id": "2362",
           "simple": { "limit": 300, "period": 60 }
+        },
+        {
+          "name": "CORS_PROXY_GLOBAL_LIMIT",
+          "namespace_id": "2364",
+          "simple": { "limit": 1000, "period": 60 }
         }
       ],
       "routes": [

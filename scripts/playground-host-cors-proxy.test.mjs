@@ -71,6 +71,13 @@ test('rejects missing, non-web, credentialed, private and looping targets', asyn
     'http://192.168.1.1/',
     'http://169.254.169.254/latest/meta-data/',
     'http://[::1]/',
+    'http://100.64.0.1/',
+    'http://[fd00::1]/',
+    'http://[fe80::1]/',
+    'http://[::ffff:127.0.0.1]/',
+    'http://224.0.0.1/',
+    'http://metadata.internal/',
+    'https://wp.techies.tools./remote.html',
     'https://wp.techies.tools/cors-proxy/?https://example.com/',
     'https://preview-wp.techies.tools/remote.html',
   ]) {
@@ -151,4 +158,33 @@ test('applies the per-visitor rate limit before contacting the target', async ()
   assert.equal(upstream.calls.length, 0)
   const allowed = { limit: async () => ({ success: true }) }
   assert.equal((await handleCorsProxy(proxied('https://example.com/'), { fetch: upstream.fetch, limiter: allowed })).status, 200)
+})
+
+test('stops a response without a declared size once it passes 100 MB', async () => {
+  const chunk = new Uint8Array(1024 * 1024)
+  let sent = 0
+  const endless = new ReadableStream({
+    pull(controller) {
+      sent += 1
+      if (sent > 120) controller.close()
+      else controller.enqueue(chunk)
+    },
+  })
+  const upstream = recorder(() => new Response(endless))
+  const response = await handleCorsProxy(proxied('https://example.com/stream'), { fetch: upstream.fetch })
+  assert.equal(response.status, 200)
+  await assert.rejects(response.arrayBuffer(), /too large/)
+  assert.ok(sent <= 102, `read ${sent} MB`)
+})
+
+test('applies the shared limit for all visitors as well', async () => {
+  const upstream = recorder()
+  const visitorKeys = []
+  const sharedKeys = []
+  const limiter = { limit: async ({ key }) => { visitorKeys.push(key); return { success: true } } }
+  const globalLimiter = { limit: async ({ key }) => { sharedKeys.push(key); return { success: false } } }
+  const response = await handleCorsProxy(proxied('https://example.com/'), { fetch: upstream.fetch, limiter, globalLimiter })
+  assert.equal(response.status, 429)
+  assert.deepEqual(sharedKeys, ['all'])
+  assert.equal(upstream.calls.length, 0)
 })

@@ -47,7 +47,9 @@ async function pumpParts(env, url, parts, writable) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url)
-    if (isCorsProxyRequest(url)) return handleCorsProxy(request, { limiter: env.CORS_PROXY_LIMIT })
+    if (isCorsProxyRequest(url)) {
+      return handleCorsProxy(request, { limiter: env.CORS_PROXY_LIMIT, globalLimiter: env.CORS_PROXY_GLOBAL_LIMIT })
+    }
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       return plain(405, 'Method not allowed', { Allow: 'GET, HEAD' })
     }
