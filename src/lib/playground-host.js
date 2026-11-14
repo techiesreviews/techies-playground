@@ -42,13 +42,14 @@ export const PLAYGROUND_READY_TIMEOUT_MS = 120_000
 // markRunning once WordPress runs (startPlaygroundWeb's onClientConnected). Only that
 // part has a deadline: Blueprint steps that follow, such as WordPress.org plugin
 // installs, may take longer. A launch that is no longer current once the client has
-// loaded (closed or replaced) never starts Playground.
+// loaded (closed, replaced or past its deadline) never starts Playground.
 export async function startPlaygroundWithin({ load = loadPlaygroundClient, start, isCurrent = () => true, milliseconds, message }) {
   let markRunning
+  let expired = false
   const running = new Promise((resolve) => { markRunning = resolve })
   const started = (async () => {
     const module = await load()
-    if (!isCurrent()) {
+    if (expired || !isCurrent()) {
       const error = new Error('This launch was closed or replaced.')
       error.name = 'AbortError'
       throw error
@@ -56,7 +57,12 @@ export async function startPlaygroundWithin({ load = loadPlaygroundClient, start
     return start(module, () => markRunning())
   })()
   started.catch(() => {})
-  await withTimeout(Promise.race([running, started]), milliseconds, message)
+  try {
+    await withTimeout(Promise.race([running, started]), milliseconds, message)
+  } catch (error) {
+    expired = true
+    throw error
+  }
   return started
 }
 
