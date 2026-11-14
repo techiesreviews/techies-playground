@@ -42,6 +42,11 @@ Serving Playground's website from our own Cloudflare Worker removes the dependen
 | Same, Chromium | Browser-saved site: change Reading → posts per page, close, reload, relaunch | Setting kept | Second launch ready in 4.3 s; setting kept | Local run |
 | Same, Playwright Firefox | Plain, ZIP and resume as above | Same results | All three pass (resume needs the persistent-storage prompt answered) | Local run |
 | Local host whose `remote.html` answers 403 | Launch | Timeout message | After 120.5 s: "WordPress Playground did not start within 2 minutes. Check your connection, then launch again." | Local run |
+| Same local setup at f7012d5, Chromium | Plain launch; uploaded ZIP launch | Ready | Plain ready in 11.6 s (admin bar present); ZIP ready in 11.5 s (plugin active) | Local run |
+| Same at f7012d5, Chromium | WordPress.org plugins in the Blueprint: query-monitor + wordpress-seo; woocommerce | Installed and active | Ready in 16.7 s and 28 s; all listed plugins active (direct downloads, no proxy needed) | Local run |
+| Same at f7012d5, launcher built with the deadline lowered to 15 s (not committed) | woocommerce + query-monitor + wordpress-seo | The deadline stops before Blueprint installs | Ready in 27.3 s, past the 15 s deadline; all three active | Local run |
+| Host whose `remote.html` answers 403, at f7012d5 | Launch | Timeout message | After 120.3 s: the two-minute message | Local run |
+| Same at f7012d5, Chromium | woocommerce + jetpack + elementor + wordpress-seo + query-monitor together | Installed | Ready in 39.4 s, but `wp-admin/plugins.php` answers HTTP 500 (PHP exit 255) with all five; each smaller set above works. Not investigated further; not caused by hosting | Local run |
 | Deployed preview | Five launches per scenario in Chromium and Firefox | All succeed | Pending until the preview deploys from `dev` | — |
 
 ## Result
