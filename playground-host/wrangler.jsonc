@@ -20,8 +20,10 @@
       "custom_domain": true
     }
   ],
+  // Off: proxied URLs can carry licence keys (activation requests from WordPress), and
+  // invocation logs would store them.
   "observability": {
-    "enabled": true
+    "enabled": false
   },
   // Per-visitor limit for the CORS proxy (cors-proxy.js). A launch with plugins makes a
   // few dozen proxied requests; WordPress admin pages add a few per page.

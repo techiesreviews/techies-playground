@@ -28,7 +28,8 @@ Techies Playground is a browser-local control panel that assembles and launches 
 | Term | Meaning in this repository |
 | --- | --- |
 | Launcher | The React application rendered by `src/App.jsx`. |
-| Playground | The WordPress runtime embedded from `playground.wordpress.net/remote.html`. It runs WordPress in WebAssembly with SQLite. |
+| Playground | The WordPress runtime embedded from our own copy, `wp.techies.tools/remote.html` (`playground-host/`). It runs WordPress in WebAssembly with SQLite. |
+| Playground host | The second Cloudflare Worker that serves our build of Playground's website and its CORS proxy. `src/lib/playground-host.js` holds the one setting that picks it. |
 | Recipe | Validated, secret-free JSON describing an environment and package references. |
 | Blueprint | The runtime instructions derived from a recipe for WordPress Playground. A recipe is the app's durable contract; a Blueprint is generated execution input. |
 | Package vault | IndexedDB database containing uploaded plugin and theme ZIP `File` objects and safe metadata. |
@@ -54,22 +55,24 @@ User
        -> IndexedDB encrypted license vault
        -> WordPress.org public APIs: versions, plugins, themes
        -> GitHub public API: repository star count
-       -> embedded WordPress Playground client
+       -> embedded WordPress Playground client, loaded from the Playground host
+            (`wp.techies.tools`: client script, remote.html, PHP and WordPress builds, CORS proxy)
             -> in-memory WordPress + SQLite
             -> optional OPFS `/wordpress` persistence
             -> local ZIP install/activation
             -> WordPress.org Blueprint installs
 
 Change lands on `dev` (`kit pr`, or the WordPress sync PR)
-  -> release `dev` to `main` (`kit pr --release --base main`)
-  -> GitHub Actions tests and build
-  -> Cloudflare Worker and static assets
-  -> `https://play.techies.tools`
+  -> GitHub Actions: Playground host, then tests, build and launcher
+  -> `https://preview-wp.techies.tools` and `https://preview-play.techies.tools`
+Release `dev` to `main` (`kit pr --release --base main`)
+  -> the same jobs for production
+  -> `https://wp.techies.tools` and `https://play.techies.tools`
 ```
 
 ## Invariants that must survive a rebuild
 
-1. There is no app-owned upload or search proxy. ZIPs, decrypted licenses, and WordPress data never pass through a Techies server.
+1. There is no app-owned upload or search proxy. ZIPs, decrypted licenses, and WordPress data never pass through a Techies server. The one exception is Playground's own CORS proxy on the Playground host: when WordPress makes an outgoing request the browser blocks (for example a licence activation), Playground retries it through `/cors-proxy/` on `wp.techies.tools`, as it did through `wordpress-playground-cors-proxy.net` before self-hosting. That Worker stores nothing and has request logging off.
 2. Every recipe is normalized through `validateRecipe` before it is saved, exported, imported, launched, or added to history.
 3. Recipes and history never include ZIP contents or license keys.
 4. Local plugin/theme IDs remain separate from WordPress.org slugs.
