@@ -115,6 +115,9 @@ function forwardedHeaders(request) {
   if (contentType && !/[\r\n]/.test(contentType)) headers.set('Content-Type', contentType)
   const range = request.headers.get('X-Cors-Proxy-Range')?.trim()
   if (range && !/[\r\n]/.test(range)) headers.set('Range', range)
+  // Byte ranges and sizes must describe the file itself: a compressed slice cannot be
+  // decompressed on its own, and a compressed HEAD reports the compressed size.
+  if (request.method === 'HEAD' || headers.has('Range')) headers.set('Accept-Encoding', 'identity')
   return headers
 }
 

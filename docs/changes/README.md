@@ -41,6 +41,7 @@ Prefer, in order:
 - [2026-11-14-self-hosted-playground.md](2026-11-14-self-hosted-playground.md) — our own copy of WordPress Playground on wp.techies.tools (preview on preview-wp.techies.tools) with a same-origin CORS proxy, instead of playground.wordpress.net.
 - [2026-11-14-tests-before-host-deploy.md](2026-11-14-tests-before-host-deploy.md) — a `test` job that the Playground host and launcher deploy jobs both need, so failing tests deploy nothing.
 - [2026-11-14-cors-proxy-php-path.md](2026-11-14-cors-proxy-php-path.md) — the CORS proxy moves to `/cors-proxy.php`, a path Playground's service worker does not cache (it had served one proxied answer for every URL); URLs containing `wordpress-static.zip` are refused.
+- [2026-11-14-cors-proxy-identity-ranges.md](2026-11-14-cors-proxy-identity-ranges.md) — the CORS proxy asks for uncompressed bytes on HEAD and range requests, so sizes and byte offsets describe the file.
 
 - [2026-10-30-shared-agent-kit.md](2026-10-30-shared-agent-kit.md) — the project-local kit copy replaced by the shared Agent Kit; `npm test` no longer runs kit tests; the built site is expected unchanged (post-merge check pending).
 

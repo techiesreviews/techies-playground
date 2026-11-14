@@ -118,6 +118,18 @@ test('never forwards cookies, and forwards Authorization only when the request o
   assert.equal(upstream.calls[1].headers.get('X-Cors-Proxy-Allowed-Request-Headers'), null)
 })
 
+test('asks for uncompressed bytes on HEAD and range requests only', async () => {
+  const upstream = recorder()
+  const cases = [
+    [{ method: 'HEAD', headers: { 'Accept-Encoding': 'br, gzip' } }, 'identity'],
+    [{ headers: { 'Accept-Encoding': 'br, gzip', Range: 'bytes=0-9' } }, 'identity'],
+    [{ headers: { 'Accept-Encoding': 'br, gzip', 'X-Cors-Proxy-Range': 'bytes=10-19' } }, 'identity'],
+    [{ headers: { 'Accept-Encoding': 'br, gzip' } }, 'br, gzip'],
+  ]
+  for (const [init] of cases) await handleCorsProxy(proxied('https://example.com/file.zip', init), { fetch: upstream.fetch })
+  assert.deepEqual(upstream.calls.map((call) => call.headers.get('Accept-Encoding')), cases.map(([, expected]) => expected))
+})
+
 test('forwards POST bodies and restores a tunnelled content type and range', async () => {
   const upstream = recorder()
   await handleCorsProxy(proxied('https://api.example.com/activate', {
