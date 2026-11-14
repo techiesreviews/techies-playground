@@ -1280,7 +1280,9 @@ function LicenseFillLine({ id, result }) {
 const inputClassName = 'w-full rounded-lg bg-white px-3 py-2.5 text-base/7 font-normal text-neutral-900 ring-1 ring-neutral-950/10 outline-none focus-visible:outline-2 -outline-offset-1 focus-visible:outline-teal-600 sm:py-2 sm:text-sm/6'
 
 // Lives inside the launch form, so it is a group of fields with its own Save button
-// instead of a nested <form>; Enter in a field saves instead of launching.
+// instead of a nested <form>; Enter in a field saves instead of launching. No HTML
+// validation attributes either: they would block the launch form (createLicenseVault
+// checks the 12-character minimum on Save).
 function AddKeyForm({ plugin, onSaved, onSavedElsewhere, onCancel }) {
   const [vaultState, setVaultState] = useState(() => (isVaultSessionUnlocked() ? 'unlocked' : 'checking'))
   const [password, setPassword] = useState('')
@@ -1381,13 +1383,13 @@ function AddKeyForm({ plugin, onSaved, onSavedElsewhere, onCancel }) {
         {locked && (
           <label htmlFor={`${fieldId}-password`} className="grid gap-1.5 text-base/7 font-medium text-neutral-900 sm:text-sm/6">
             {vaultState === 'none' ? 'New master password' : 'Master password'}
-            <input ref={firstFieldRef} id={`${fieldId}-password`} type="password" autoComplete={vaultState === 'none' ? 'new-password' : 'current-password'} minLength={vaultState === 'none' ? 12 : undefined} value={password} onChange={(event) => setPassword(event.target.value)} onKeyDown={saveOnEnter} className={inputClassName} />
+            <input ref={firstFieldRef} id={`${fieldId}-password`} type="password" autoComplete={vaultState === 'none' ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} onKeyDown={saveOnEnter} className={inputClassName} />
           </label>
         )}
         {vaultState === 'none' && (
           <label htmlFor={`${fieldId}-confirm`} className="grid gap-1.5 text-base/7 font-medium text-neutral-900 sm:text-sm/6">
             Confirm master password
-            <input id={`${fieldId}-confirm`} type="password" autoComplete="new-password" minLength={12} value={confirmation} onChange={(event) => setConfirmation(event.target.value)} onKeyDown={saveOnEnter} className={inputClassName} />
+            <input id={`${fieldId}-confirm`} type="password" autoComplete="new-password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} onKeyDown={saveOnEnter} className={inputClassName} />
           </label>
         )}
         <label htmlFor={`${fieldId}-key`} className="grid gap-1.5 text-base/7 font-medium text-neutral-900 sm:text-sm/6">
