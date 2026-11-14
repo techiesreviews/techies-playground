@@ -107,3 +107,18 @@ test('a launch closed or replaced while the client loads never starts Playground
   await assert.rejects(pending, { name: 'AbortError' })
   assert.equal(started, false)
 })
+
+test('a launch whose client loads only after the deadline never starts Playground', async () => {
+  let started = false
+  let finishLoading
+  const pending = startPlaygroundWithin({
+    load: () => new Promise((resolve) => { finishLoading = () => resolve(loaded) }),
+    start: () => { started = true; return 'client' },
+    milliseconds: 10,
+    message: 'did not start',
+  })
+  await assert.rejects(pending, { name: 'TimeoutError' })
+  finishLoading()
+  await new Promise((resolve) => setTimeout(resolve, 10))
+  assert.equal(started, false)
+})
