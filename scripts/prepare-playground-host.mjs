@@ -174,8 +174,9 @@ export async function preparePlaygroundHost({
   return { fileCount, split: Object.keys(manifest), wordpressDirectories: sortedDirectories }
 }
 
-const runAsScript = Boolean(process.argv[1]) && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
-if (runAsScript) {
+// The same entry check as scripts/sync-wordpress-release.mjs.
+const invokedFilename = process.argv[1] ? path.resolve(process.argv[1]) : ''
+if (invokedFilename === fileURLToPath(import.meta.url)) {
   try {
     const result = await preparePlaygroundHost(parseArguments(process.argv.slice(2)))
     console.log(`Prepared ${result.fileCount} files; WordPress ${result.wordpressDirectories.join(', ')}; split: ${result.split.join(', ') || 'none'}`)
