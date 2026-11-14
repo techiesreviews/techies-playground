@@ -34,9 +34,9 @@ file wins.
 ## After a release
 
 - GitHub Actions (`.github/workflows/deploy.yml`) runs on a push to `main` (or a manual run): it
-  runs `npm ci` and `npm test`, and only when the tests pass builds and deploys our copy of WordPress
-  Playground to <https://wp.techies.tools>, then runs `npm run build` and deploys the launcher to
-  <https://play.techies.tools> (all through `deploy-site.yml`), but only in `techiesreviews/techies-playground`, when the push
+  runs `npm ci` and `npm test` while it builds our copy of WordPress Playground; only when the
+  tests pass does it deploy that copy to <https://wp.techies.tools>, then run `npm run build` and
+  deploy the launcher to <https://play.techies.tools> (all through `deploy-site.yml`), but only in `techiesreviews/techies-playground`, when the push
   comes from the `techiesreviews` account and the repository variable `CLOUDFLARE_DEPLOY_ENABLED` is
   `true`; otherwise the job is skipped, and a skipped run is not a green one.
 - `.github/workflows/deploy-preview.yml` does the same for every push to `dev`:

@@ -38,7 +38,6 @@ Prefer, in order:
 - [2026-10-31-factory-hooks.md](2026-10-31-factory-hooks.md) — the brief-guard and stop-guard hook entries from the shared Agent Kit: a child's brief comes from `kit brief`, and a turn waits for its own `kit go` job.
 - [2026-10-31-line-endings.md](2026-10-31-line-endings.md) — `.gitattributes` `* text=auto eol=lf` from the shared Agent Kit; a `core.autocrlf=true` checkout keeps LF (112 CRLF files before, none after).
 - [2026-11-05-messages-to-lex.md](2026-11-05-messages-to-lex.md) — the kit's "Messages to Lex" rule added to `AGENTS.md` by `kit init`; application unchanged.
-- [2026-11-07-ci-node-24.md](2026-11-07-ci-node-24.md) — CI and the docs move from Node 22 to Node 24.
 - [2026-11-14-self-hosted-playground.md](2026-11-14-self-hosted-playground.md) — our own copy of WordPress Playground on wp.techies.tools (preview on preview-wp.techies.tools) with a same-origin CORS proxy, instead of playground.wordpress.net.
 - [2026-11-14-tests-before-host-deploy.md](2026-11-14-tests-before-host-deploy.md) — a `test` job that the Playground host and launcher deploy jobs both need, so failing tests deploy nothing.
 
