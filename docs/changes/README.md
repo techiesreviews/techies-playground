@@ -40,6 +40,7 @@ Prefer, in order:
 - [2026-11-05-messages-to-lex.md](2026-11-05-messages-to-lex.md) — the kit's "Messages to Lex" rule added to `AGENTS.md` by `kit init`; application unchanged.
 - [2026-11-14-self-hosted-playground.md](2026-11-14-self-hosted-playground.md) — our own copy of WordPress Playground on wp.techies.tools (preview on preview-wp.techies.tools) with a same-origin CORS proxy, instead of playground.wordpress.net.
 - [2026-11-14-tests-before-host-deploy.md](2026-11-14-tests-before-host-deploy.md) — a `test` job that the Playground host and launcher deploy jobs both need, so failing tests deploy nothing.
+- [2026-11-14-cors-proxy-php-path.md](2026-11-14-cors-proxy-php-path.md) — the CORS proxy moves to `/cors-proxy.php`, a path Playground's service worker never caches (it had served one proxied answer for every URL).
 
 - [2026-10-30-shared-agent-kit.md](2026-10-30-shared-agent-kit.md) — the project-local kit copy replaced by the shared Agent Kit; `npm test` no longer runs kit tests; the built site is expected unchanged (post-merge check pending).
 

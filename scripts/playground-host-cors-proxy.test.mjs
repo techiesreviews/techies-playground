@@ -23,8 +23,15 @@ function recorder(response = () => new Response('upstream body', { headers: { 'C
 }
 
 test('recognizes only the proxy path', () => {
-  assert.equal(isCorsProxyRequest(new URL(`${HOST}/cors-proxy/?https://example.com/`)), true)
+  assert.equal(isCorsProxyRequest(new URL(`${HOST}/cors-proxy.php?https://example.com/`)), true)
   assert.equal(isCorsProxyRequest(new URL(`${HOST}/remote.html`)), false)
+  assert.equal(isCorsProxyRequest(new URL(`${HOST}/cors-proxy/?https://example.com/`)), false)
+})
+
+test('keeps the proxy on a .php path, which Playground\'s service worker never caches', () => {
+  // The service worker caches other same-origin GETs ignoring the query string, so two
+  // proxied URLs on a path without .php would share one cache entry.
+  assert.match(CORS_PROXY_PATH, /\.php$/)
 })
 
 test('relays a same-origin GET and marks the response as proxied', async () => {
@@ -78,7 +85,7 @@ test('rejects missing, non-web, credentialed, private and looping targets', asyn
     'http://224.0.0.1/',
     'http://metadata.internal/',
     'https://wp.techies.tools./remote.html',
-    'https://wp.techies.tools/cors-proxy/?https://example.com/',
+    'https://wp.techies.tools/cors-proxy.php?https://example.com/',
     'https://preview-wp.techies.tools/remote.html',
   ]) {
     const response = await handleCorsProxy(proxied(target), { fetch: upstream.fetch })

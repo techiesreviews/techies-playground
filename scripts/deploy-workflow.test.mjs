@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
+import { CORS_PROXY_PATH } from '../playground-host/cors-proxy.js'
 
 const workflowPath = new URL('../.github/workflows/deploy-site.yml', import.meta.url)
 
@@ -42,4 +43,10 @@ test('the test job installs the locked dependencies and runs the tests', async (
   assert.match(jobs.test ?? '', /run: npm ci\n/)
   assert.match(jobs.test ?? '', /run: npm test\n/)
   assert.doesNotMatch(jobs.test ?? '', /wrangler-action|secrets\./)
+})
+
+test('the Playground build points its CORS proxy at the path the host answers', async () => {
+  const jobs = readJobs(await readFile(workflowPath, 'utf8'))
+  assert.match(jobs['playground-build'] ?? '', new RegExp(`CORS_PROXY_URL: ${CORS_PROXY_PATH.replace('.', '\\.')}\\?\n`))
+  assert.ok((jobs['playground-host'] ?? '').includes(`'"${CORS_PROXY_PATH}?"'`), 'the host job checks the build uses the proxy path')
 })

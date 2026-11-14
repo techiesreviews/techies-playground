@@ -2,10 +2,12 @@
 // (WordPress release ZIPs, outgoing WordPress HTTP requests such as licence activation)
 // directly first and retries through `${CORS_PROXY_URL}${url}` when the browser blocks
 // them. The public proxy only answers playground.wordpress.net, so our build sets
-// CORS_PROXY_URL=/cors-proxy/? and this Worker answers it. The rules follow upstream's
+// CORS_PROXY_URL=/cors-proxy.php? and this Worker answers it. The path must end in .php:
+// Playground's service worker caches same-origin GETs while ignoring the query string, so
+// every /cors-proxy/?<url> would share one cache entry; it never caches a .php path. The rules follow upstream's
 // packages/playground/php-cors-proxy: no cookies, Authorization only on opt-in,
 // redirects relayed through the proxy, X-Playground-Cors-Proxy on every answer.
-export const CORS_PROXY_PATH = '/cors-proxy/'
+export const CORS_PROXY_PATH = '/cors-proxy.php'
 
 const ALLOWED_METHODS = new Set(['GET', 'HEAD', 'POST'])
 const MAX_RESPONSE_SIZE = 100 * 1024 * 1024
