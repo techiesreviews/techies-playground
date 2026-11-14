@@ -1021,6 +1021,11 @@ function LicenseManager({ packages, anchorRef, fillResults, onRecordsChange, onC
       setMessage('License encrypted and saved locally.')
     } catch (caught) {
       if (signal.aborted) return
+      if (caught?.name === 'VaultChangedError') {
+        lockVault()
+        setMessage(caught.message)
+        return
+      }
       setMessage(caught instanceof Error ? caught.message : 'The license could not be saved.')
     } finally {
       if (!signal.aborted) setBusy(false)
@@ -1366,6 +1371,10 @@ function AddKeyForm({ plugin, onSaved, onSavedElsewhere, onCancel }) {
     } catch (caught) {
       if (!openRef.current) return
       setMessage(caught instanceof Error ? caught.message : 'The license could not be saved.')
+      if (caught?.name === 'VaultChangedError') {
+        lockVaultSession()
+        setVaultState('checking')
+      }
       setBusy(false)
     }
   }
@@ -1376,10 +1385,16 @@ function AddKeyForm({ plugin, onSaved, onSavedElsewhere, onCancel }) {
     save()
   }
 
+  function cancelOnEscape(event) {
+    if (event.key !== 'Escape' || busy) return
+    event.preventDefault()
+    onCancel()
+  }
+
   if (vaultState === 'checking') return <p className="text-base/7 text-neutral-600 sm:text-sm/6">Opening the encrypted vault.</p>
   const locked = vaultState !== 'unlocked'
   return (
-    <div role="group" aria-label={`Add a license key for ${plugin.label}`} className="grid gap-3 rounded-lg bg-white p-3 ring-1 ring-neutral-950/10">
+    <div role="group" aria-label={`Add a license key for ${plugin.label}`} onKeyDown={cancelOnEscape} className="grid gap-3 rounded-lg bg-white p-3 ring-1 ring-neutral-950/10">
       <div className="grid gap-3 sm:grid-cols-2">
         {locked && (
           <label htmlFor={`${fieldId}-password`} className="grid gap-1.5 text-base/7 font-medium text-neutral-900 sm:text-sm/6">

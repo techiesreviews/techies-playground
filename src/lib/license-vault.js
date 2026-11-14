@@ -171,6 +171,19 @@ export async function addLicense(key, { name, pluginId, licenseKey }) {
   if (!normalizedPluginId) throw new Error('Choose the plugin this license belongs to.')
   if (typeof licenseKey !== 'string' || !licenseKey.trim()) throw new Error('Enter a license key.')
 
+  // The key may come from a session that outlived the vault (reset and recreated in another
+  // tab); a license encrypted with it could never be read, so it must open the current vault.
+  const meta = await getRecord(META_STORE, META_ID)
+  let opensVault = false
+  try {
+    opensVault = Boolean(meta) && await decryptLicenseSecret(key, meta.verifier, encoder.encode(VERIFIER_TEXT)) === VERIFIER_TEXT
+  } catch {
+    opensVault = false
+  }
+  if (!opensVault) {
+    throw Object.assign(new Error('The vault changed in another tab. Unlock it again to save this key.'), { name: 'VaultChangedError' })
+  }
+
   const id = crypto.randomUUID()
   const metadata = { id, name: normalizedName, pluginId: normalizedPluginId }
   const encrypted = await encryptLicenseSecret(key, licenseKey.trim(), licenseAdditionalData(metadata))
