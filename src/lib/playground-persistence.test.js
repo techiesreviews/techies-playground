@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { migrateStorageDefault, persistedSiteId, shouldWarnBeforeUnload, spinupPersistenceLabel } from './playground-persistence.js'
+import { migrateStorageDefault, persistedSiteId, persistedSitesKey, shouldWarnBeforeUnload, spinupPersistenceLabel } from './playground-persistence.js'
 
 test('warns before unloading only an active temporary Playground', () => {
   assert.equal(shouldWarnBeforeUnload({ playgroundOpen: true, running: true, storage: 'temporary' }), true)
@@ -23,4 +23,11 @@ test('uses the recipe identity to distinguish resumable history', () => {
   assert.match(spinupPersistenceLabel({ recipe }, new Set([siteId])), /^Saved environment/)
   assert.match(spinupPersistenceLabel({ recipe }, new Set()), /^Setup only/)
   assert.match(spinupPersistenceLabel({ recipe: { ...recipe, storage: 'temporary' } }, new Set([siteId])), /temporary$/)
+})
+
+test('keeps the saved-site list per Playground host, because each host has its own browser storage', () => {
+  const legacy = 'private-playground-launcher:persisted-sites'
+  assert.equal(persistedSitesKey('https://playground.wordpress.net'), legacy)
+  assert.equal(persistedSitesKey('https://wp.techies.tools'), `${legacy}@https://wp.techies.tools`)
+  assert.equal(persistedSitesKey('https://preview-wp.techies.tools'), `${legacy}@https://preview-wp.techies.tools`)
 })

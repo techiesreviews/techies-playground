@@ -25,3 +25,13 @@ export function spinupPersistenceLabel(record, persistedSiteIds) {
     ? 'Saved environment — launch to resume in this browser'
     : 'Setup only — saved site is unavailable in this browser'
 }
+
+const LEGACY_PERSISTED_SITES_KEY = 'private-playground-launcher:persisted-sites'
+
+// Saved sites live in the Playground host's own browser storage (OPFS), so a site saved
+// on one host cannot resume on another. The public host keeps the original key.
+export function persistedSitesKey(playgroundOrigin) {
+  return playgroundOrigin === 'https://playground.wordpress.net'
+    ? LEGACY_PERSISTED_SITES_KEY
+    : `${LEGACY_PERSISTED_SITES_KEY}@${playgroundOrigin}`
+}

@@ -34,13 +34,12 @@ Never store a license in plaintext `localStorage`, a recipe, URL, command-line a
 
 ## Run locally
 
-```powershell
-cd playground-launcher
-npm install
-npm run dev
+```bash
+npm ci
+VITE_PLAYGROUND_ORIGIN=https://preview-wp.techies.tools npm run dev
 ```
 
-Open the local URL printed by Vite, add your plugin ZIPs, choose a setup, and launch WordPress.
+Open <http://127.0.0.1:4173>, add your plugin ZIPs, choose a setup, and launch WordPress. Without `VITE_PLAYGROUND_ORIGIN` the launcher loads Playground from the live host, wp.techies.tools, which lets only play.techies.tools embed it; the preview host, preview-wp.techies.tools, also allows `http://127.0.0.1:4173` and `http://localhost:4173`. If the dev server reloads the page while Playground starts, build and serve the launcher instead: `VITE_PLAYGROUND_ORIGIN=https://preview-wp.techies.tools npx vite build`, then `npx vite preview`. To run your own Playground host locally, see [docs/testing.md](docs/testing.md).
 
 ## Deploy to Cloudflare Workers
 

@@ -2,7 +2,7 @@
 
 ## Deployments
 
-- Changes land on `dev`; `main` only takes `dev` (`scripts/agents/kit pr --release --base main`). Every push to `main` deploys the site through GitHub Actions (the extras' After a release section says when the job is skipped). What "deploy", "redeploy", "publish" and "release" mean here, and the changelog and version rule, are in the Release section of [docs/agents/kitchen-extras.md](docs/agents/kitchen-extras.md#release) (also printed by `scripts/agents/kit rulebook`).
+- Changes land on `dev`; `main` only takes `dev` (`scripts/agents/kit pr --release --base main`). Every push to `dev` deploys the preview (preview-play.techies.tools with its Playground host preview-wp.techies.tools) and every push to `main` deploys the site (play.techies.tools with wp.techies.tools) through GitHub Actions (the extras' After a release section says when the job is skipped). What "deploy", "redeploy", "publish" and "release" mean here, and the changelog and version rule, are in the Release section of [docs/agents/kitchen-extras.md](docs/agents/kitchen-extras.md#release) (also printed by `scripts/agents/kit rulebook`).
 
 ## Documentation and experiment history
 

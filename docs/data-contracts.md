@@ -52,7 +52,7 @@ Local ZIPs and the PHP extension manifest are not serialized into these steps. T
 
 ## Preview tabs
 
-Preview navigation is an ephemeral UI contract, separate from recipes: `#preview=<encodeURIComponent(https://playground.wordpress.net/scope:launcher-<12 hex>/<path>?<query>#<fragment>)>`. The target must use the exact HTTPS Playground origin, contain no URL credentials, and have a launcher scope. The fragment is not sent to the launcher hosting server. WordPress preview nonces, if present in the original link, remain in this browser URL; it is not a public sharing link.
+Preview navigation is an ephemeral UI contract, separate from recipes: `#preview=<encodeURIComponent(https://wp.techies.tools/scope:launcher-<12 hex>/<path>?<query>#<fragment>)>`. The target must use the exact HTTPS Playground host origin from `src/lib/playground-host.js` (`https://preview-wp.techies.tools` on the preview), contain no URL credentials, and have a launcher scope. The fragment is not sent to the launcher hosting server. WordPress preview nonces, if present in the original link, remain in this browser URL; it is not a public sharing link.
 
 `BroadcastChannel('techies-preview:<scope>')` carries only `{ type: 'ping' }`, `{ type: 'alive' }`, and `{ type: 'closed' }`. It transports no WordPress data or vault contents. The scope is unique per launch and is not a replacement for WordPress authorization. The preview shares the active site's WordPress permissions and can navigate within it; it is not a read-only sandbox. The generated mu-plugin lives in the site filesystem and is refreshed on launch, so snapshots can include it. No recipe or persisted-site index schema changes.
 
@@ -71,7 +71,8 @@ Example: `Acme-Pro_v2.4.0-beta.7.zip` becomes `acme-pro`. This is why Replace ZI
 | `private-playground-launcher:spinup-history` | At most 30 safe spin-up records. |
 | `private-playground-launcher:plugin-recency` | Map of local plugin ID to numeric timestamp. |
 | `private-playground-launcher:theme-recency` | Map of local theme ID to numeric timestamp. |
-| `private-playground-launcher:persisted-sites` | Array of remembered OPFS site IDs. |
+| `private-playground-launcher:persisted-sites@<Playground host origin>` | Array of remembered OPFS site IDs for that Playground host (`persistedSitesKey`). OPFS belongs to the host's origin, so a site saved on one host cannot resume on another. |
+| `private-playground-launcher:persisted-sites` | The same list for `https://playground.wordpress.net`, the host before self-hosting; used again only if the launcher is switched back. |
 | `private-playground-launcher:browser-storage-default-v1` | One-time migration marker `1`. |
 | `private-playground-launcher:changelog-seen-version` | Newest version the user opened. |
 

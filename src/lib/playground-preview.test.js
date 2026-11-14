@@ -2,9 +2,10 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import vm from 'node:vm'
 import { buildPreviewPlugin, createLauncherScope, installPreviewLinks, parsePreviewUrl } from './playground-preview.js'
+import { PLAYGROUND_ORIGIN } from './playground-host.js'
 
 const scope = 'launcher-test-123'
-const site = `https://playground.wordpress.net/scope:${scope}/`
+const site = `${PLAYGROUND_ORIGIN}/scope:${scope}/`
 const base = 'https://play.techies.tools/#preview='
 
 function browser() {
@@ -30,7 +31,8 @@ function click(listeners, { href = site + 'sample-page/?preview=true#content', t
 test('preview URL preserves path, query and fragment, and rejects other origins/scopes', () => {
   const url = site + 'sample-page/?preview=true&preview_nonce=abc#content'
   assert.deepEqual(parsePreviewUrl('#preview=' + encodeURIComponent(url)), { url, scope })
-  for (const value of ['https://evil.test/' , 'https://playground.wordpress.net.evil.test/scope:launcher-test/', 'https://user@playground.wordpress.net/scope:launcher-test/', 'https://playground.wordpress.net/remote.html', 'javascript:alert(1)']) {
+  const host = new URL(PLAYGROUND_ORIGIN).host
+  for (const value of ['https://evil.test/', `https://${host}.evil.test/scope:launcher-test/`, `https://user@${host}/scope:launcher-test/`, `${PLAYGROUND_ORIGIN}/remote.html`, 'https://playground.wordpress.net/scope:launcher-test/', 'javascript:alert(1)']) {
     assert.equal(parsePreviewUrl('#preview=' + encodeURIComponent(value)), null)
   }
   assert.equal(parsePreviewUrl('#preview=%'), null)
@@ -48,7 +50,7 @@ test('Ctrl/Cmd-click, middle-click and target blank open the scoped page in the 
 })
 
 test('ordinary navigation, downloads, external links, other sites and handled clicks are preserved', () => {
-  for (const options of [{}, { ctrlKey: true, download: true }, { ctrlKey: true, href: 'https://wordpress.org/' }, { ctrlKey: true, href: 'https://playground.wordpress.net/scope:launcher-another/' }, { ctrlKey: true, defaultPrevented: true }]) {
+  for (const options of [{}, { ctrlKey: true, download: true }, { ctrlKey: true, href: 'https://wordpress.org/' }, { ctrlKey: true, href: `${PLAYGROUND_ORIGIN}/scope:launcher-another/` }, { ctrlKey: true, defaultPrevented: true }]) {
     const { win, listeners, opened } = browser()
     installPreviewLinks(base, scope, win)
     click(listeners, options)
@@ -83,9 +85,9 @@ test('launcher scopes keep Playground URLs within the IDNA label limit', () => {
   assert.equal(scopes.size, 50)
   for (const value of scopes) {
     assert.match(value, /^launcher-[a-f0-9]{12}$/)
-    const url = `https://playground.wordpress.net/scope:${value}/wp-admin/admin.php?page=elementor-connect&app=library&action=authorize`
+    const url = `${PLAYGROUND_ORIGIN}/scope:${value}/wp-admin/admin.php?page=elementor-connect&app=library&action=authorize`
     // Mirrors Elementor's Str::encode_idn_url → WpOrg\Requests\IdnaEncoder::encode.
     for (const label of url.replace(/^https?:\/\//, '').split('.')) assert.ok(label.length < 64, label)
-    assert.deepEqual(parsePreviewUrl(`#preview=${encodeURIComponent(`https://playground.wordpress.net/scope:${value}/`)}`)?.scope, value)
+    assert.deepEqual(parsePreviewUrl(`#preview=${encodeURIComponent(`${PLAYGROUND_ORIGIN}/scope:${value}/`)}`)?.scope, value)
   }
 })

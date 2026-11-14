@@ -1,13 +1,13 @@
 {
   "name": "techies-playground",
   "private": true,
-  "version": "0.8.3",
+  "version": "0.9.0",
   "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test": "node --test",
+    "test": "node --test \"src/**/*.test.js\" \"scripts/*.test.mjs\"",
     "sync:wordpress": "node scripts/sync-wordpress-release.mjs",
     "deploy:check": "npm run build && wrangler deploy --dry-run",
     "deploy": "npm run build && wrangler deploy"
@@ -15,8 +15,7 @@
   "dependencies": {
     "@heroicons/react": "^2.2.0",
     "@tailwindcss/vite": "^4.1.16",
-    "@wp-playground/blueprints": "3.1.47",
-    "@wp-playground/client": "3.1.47",
+    "@wp-playground/blueprints": "3.1.64",
     "@zip.js/zip.js": "2.7.57",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
