@@ -113,6 +113,16 @@ export function licenseFillLabel({ status, message }) {
   return { tone: 'warn', text: `Not filled in: ${message || 'WordPress did not answer.'}` }
 }
 
+// A PHP run that never answers must not keep a closed launch waiting.
+function untilAborted(promise, signal) {
+  return new Promise((resolve, reject) => {
+    const abort = () => reject(signal.reason ?? new DOMException('The launch was closed.', 'AbortError'))
+    if (signal.aborted) return abort()
+    signal.addEventListener('abort', abort, { once: true })
+    promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort))
+  })
+}
+
 // Decrypts the saved keys of the launched plugins and lets each plugin's own Freemius SDK
 // activate its key inside the running site. Keys travel only in the PHP request body. A
 // failure is reported per package and never fails the launch; closing it aborts.
@@ -125,14 +135,15 @@ export async function fillSavedLicenseKeys({ client, packages, folders, signal, 
     // Lock forgets the key; a lock while the keys were read must stop them here.
     if (getVaultKey() !== vaultKey) return failAll('The license vault was locked.')
     const entries = packages.flatMap((entry) => (
-      folders.get(entry.id) && keys.get(entry.vaultId) ? [{ folder: folders.get(entry.id), licenseKey: keys.get(entry.vaultId) }] : []
+      folders.get(entry.id) && keys.get(entry.vaultId) ? [{ folder: folders.get(entry.id), licenseKey: keys.get(entry.vaultId).licenseKey }] : []
     ))
     if (!entries.length) return failAll('The plugin folder could not be found.')
-    const response = await client.run({ code: LICENSE_FILL_CODE, method: 'POST', body: licenseFillBody(entries) })
+    const response = await untilAborted(client.run({ code: LICENSE_FILL_CODE, method: 'POST', body: licenseFillBody(entries) }), signal)
     signal.throwIfAborted()
     const results = parseLicenseFillResult(response.text)
     return packages.map((entry) => ({
       ...entry,
+      recordId: keys.get(entry.vaultId)?.recordId || '',
       ...(results[folders.get(entry.id)] || { status: 'failed', message: 'WordPress did not report this plugin.' }),
     }))
   } catch (caught) {

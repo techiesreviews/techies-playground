@@ -83,16 +83,16 @@ test('fills saved keys through one PHP run and reports every package', async () 
     runs.push(request)
     return { text: 'TECHIES_LICENSE_FILL:{"menu-image":{"status":"rejected","message":"Invalid license key."}}' }
   } }
-  const readKeys = async (key, ids) => new Map(ids.map((id) => [id, `key-for-${id}`]))
+  const readKeys = async (key, ids) => new Map(ids.map((id) => [id, { recordId: `record-${id}`, licenseKey: `key-for-${id}` }]))
   const signal = new AbortController().signal
 
   const results = await fillSavedLicenseKeys({ client, packages, folders, signal, getVaultKey: () => 'vault-key', readKeys })
   assert.equal(runs.length, 1)
   assert.equal(runs[0].method, 'POST')
   assert.deepEqual(JSON.parse(runs[0].body), { 'menu-image': 'key-for-plugin:menu-image', 'wsal-premium': 'key-for-plugin:wsal' })
-  assert.deepEqual(results.map((result) => [result.id, result.status, result.message]), [
-    ['menu-image', 'rejected', 'Invalid license key.'],
-    ['wsal', 'failed', 'WordPress did not report this plugin.'],
+  assert.deepEqual(results.map((result) => [result.id, result.recordId, result.status, result.message]), [
+    ['menu-image', 'record-plugin:menu-image', 'rejected', 'Invalid license key.'],
+    ['wsal', 'record-plugin:wsal', 'failed', 'WordPress did not report this plugin.'],
   ])
 
   const locked = await fillSavedLicenseKeys({ client, packages, folders, signal, getVaultKey: () => null, readKeys })
@@ -121,7 +121,7 @@ test('a vault locked while keys are read sends no key to WordPress', async () =>
   const client = { async run(request) { runs.push(request); return { text: 'TECHIES_LICENSE_FILL:{}' } } }
   const readKeys = async (key, ids) => {
     vaultKey = null
-    return new Map(ids.map((id) => [id, 'secret']))
+    return new Map(ids.map((id) => [id, { recordId: 'r', licenseKey: 'secret' }]))
   }
   const results = await fillSavedLicenseKeys({
     client,
@@ -133,4 +133,19 @@ test('a vault locked while keys are read sends no key to WordPress', async () =>
   })
   assert.equal(runs.length, 0)
   assert.deepEqual(results.map((result) => [result.status, result.message]), [['failed', 'The license vault was locked.']])
+})
+
+test('closing the Playground ends a fill whose PHP run never answers', async () => {
+  const { fillSavedLicenseKeys } = await import('./license-fill.js')
+  const controller = new AbortController()
+  const pending = fillSavedLicenseKeys({
+    client: { run: () => new Promise(() => {}) },
+    packages: [{ id: 'menu-image', vaultId: 'plugin:menu-image', label: 'Menu Image' }],
+    folders: new Map([['menu-image', 'menu-image']]),
+    signal: controller.signal,
+    getVaultKey: () => 'k',
+    readKeys: async (key, ids) => new Map(ids.map((id) => [id, { recordId: 'r', licenseKey: 'secret' }])),
+  })
+  setImmediate(() => controller.abort())
+  await assert.rejects(pending, { name: 'AbortError' })
 })

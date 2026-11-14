@@ -896,9 +896,6 @@ function LicenseManager({ packages, anchorRef, fillResults, onRecordsChange, onC
       })
   }, [unlocked])
 
-  // Records arrive newest first; a launch fills only the newest key of each plugin.
-  const usedRecordIds = new Set([...new Map(records.slice().reverse().map((record) => [record.pluginId, record.id])).values()])
-
   async function refreshRecords(signal) {
     const metadata = await listLicenseMetadata()
     onRecordsChange()
@@ -1225,7 +1222,7 @@ function LicenseManager({ packages, anchorRef, fillResults, onRecordsChange, onC
                           <button
                             type="button"
                             aria-label={copiedId === record.id ? `${record.name} license copied` : `Copy ${record.name} license key`}
-                            aria-describedby={usedRecordIds.has(record.id) && fillResults.get(record.pluginId) ? `license-fill-${record.id}` : undefined}
+                            aria-describedby={fillResults.get(record.pluginId)?.recordId === record.id ? `license-fill-${record.id}` : undefined}
                             onClick={() => handleCopyLicense(record.id)}
                             className={`w-full min-w-0 rounded-lg py-2 pr-20 pl-2 text-left text-base/7 font-medium hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 sm:text-sm/6 ${copiedId === record.id ? 'text-teal-700' : 'text-neutral-900'}`}
                           >
@@ -1245,7 +1242,7 @@ function LicenseManager({ packages, anchorRef, fillResults, onRecordsChange, onC
                             <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
                             <TrashIcon className="size-4 shrink-0 fill-current" />
                           </button>
-                          {usedRecordIds.has(record.id) && fillResults.get(record.pluginId) && <LicenseFillLine id={`license-fill-${record.id}`} result={fillResults.get(record.pluginId)} />}
+                          {fillResults.get(record.pluginId)?.recordId === record.id && <LicenseFillLine id={`license-fill-${record.id}`} result={fillResults.get(record.pluginId)} />}
                         </>
                       )}
                       <span className="sr-only" aria-live="polite">{copiedId === record.id ? `${record.name} copied.` : ''}</span>
@@ -1275,7 +1272,7 @@ const inputClassName = 'w-full rounded-lg bg-white px-3 py-2.5 text-base/7 font-
 
 // Lives inside the launch form, so it is a group of fields with its own Save button
 // instead of a nested <form>; Enter in a field saves instead of launching.
-function AddKeyForm({ plugin, onSaved, onCancel }) {
+function AddKeyForm({ plugin, onSaved, onSavedElsewhere, onCancel }) {
   const [vaultState, setVaultState] = useState(() => (isVaultSessionUnlocked() ? 'unlocked' : 'checking'))
   const [password, setPassword] = useState('')
   const [confirmation, setConfirmation] = useState('')
@@ -1337,6 +1334,10 @@ function AddKeyForm({ plugin, onSaved, onCancel }) {
         if (!await unlockVaultSessionIfCurrent(unlock, () => openRef.current)) return
       }
       await addLicense(getVaultSessionKey(), { name: plugin.label, pluginId: `plugin:${plugin.id}`, licenseKey })
+      if (!openRef.current) {
+        onSavedElsewhere()
+        return
+      }
       setLicenseKey('')
       setPassword('')
       setConfirmation('')
@@ -1391,7 +1392,7 @@ function AddKeyForm({ plugin, onSaved, onCancel }) {
   )
 }
 
-function PluginRow({ plugin, selected, keySaved, addingKey, onToggle, onReplace, onRemove, onAddKey, onCancelKey, onKeySaved }) {
+function PluginRow({ plugin, selected, keySaved, addingKey, onToggle, onReplace, onRemove, onAddKey, onCancelKey, onKeySaved, onKeysChanged }) {
   const size = `${(plugin.size / 1024 / 1024).toFixed(1)} MB`
   const versionHint = plugin.versionHint || extractVersionHint(plugin.filename)
   const packageDetails = [versionHint && `version ${versionHint}`, size, 'stored only in this browser'].filter(Boolean).join(', ')
@@ -1448,7 +1449,7 @@ function PluginRow({ plugin, selected, keySaved, addingKey, onToggle, onReplace,
       </div>
       {addingKey && (
         <div className="basis-full">
-          <AddKeyForm plugin={plugin} onSaved={onKeySaved} onCancel={onCancelKey} />
+          <AddKeyForm plugin={plugin} onSaved={onKeySaved} onSavedElsewhere={onKeysChanged} onCancel={onCancelKey} />
         </div>
       )}
     </div>
@@ -1597,11 +1598,16 @@ function ChecksMenu({ checks, anchorRef, onOpenCheck, onClose }) {
         anchorRef.current?.focus()
         return
       }
-      if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+      if (event.key === 'Tab') {
+        onClose()
+        return
+      }
       const items = [...(menuRef.current?.querySelectorAll('[role="menuitem"]') || [])]
       const index = items.indexOf(document.activeElement)
+      const next = { ArrowDown: index + 1, ArrowUp: index - 1, Home: 0, End: items.length - 1 }[event.key]
+      if (next === undefined) return
       event.preventDefault()
-      items[(index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus()
+      items[(next + items.length) % items.length]?.focus()
     }
     function handleOutsidePointer(event) {
       if (menuRef.current?.contains(event.target) || anchorRef.current?.contains(event.target)) return
@@ -1679,10 +1685,10 @@ function VaultUnlockPrompt({ onUnlocked, onSkip, onCancel }) {
 
   return (
     <div className="absolute inset-0 z-10 grid place-items-center bg-neutral-950/40 p-4">
-      <form role="dialog" aria-labelledby="vault-unlock-title" onSubmit={handleSubmit} onKeyDown={(event) => { if (event.key === 'Escape') onCancel() }} className="grid w-full max-w-md gap-4 rounded-[min(2vw,var(--radius-xl))] bg-white p-5 shadow-2xl ring-1 ring-neutral-950/10">
+      <form role="dialog" aria-modal="true" aria-labelledby="vault-unlock-title" aria-describedby="vault-unlock-description" onSubmit={handleSubmit} onKeyDown={(event) => { if (event.key === 'Escape') onCancel() }} className="grid w-full max-w-md gap-4 rounded-[min(2vw,var(--radius-xl))] bg-white p-5 shadow-2xl ring-1 ring-neutral-950/10">
         <div className="grid gap-1">
           <h2 id="vault-unlock-title" className="text-lg font-semibold text-balance">Unlock your license vault</h2>
-          <p className="text-pretty text-base/7 text-neutral-600 sm:text-sm/6">Once per session. Your saved keys then go in by themselves.</p>
+          <p id="vault-unlock-description" className="text-pretty text-base/7 text-neutral-600 sm:text-sm/6">Once per session. Your saved keys then go in by themselves.</p>
         </div>
         <label htmlFor="launch-vault-password" className="grid gap-2 text-base/7 font-medium text-neutral-900 sm:text-sm/6">
           Master password
@@ -2341,6 +2347,7 @@ export default function App() {
       unlockResolveRef.current = null
       setUnlockPending(false)
       if (answer === 'closed' || launchId !== launchIdRef.current) return
+      window.requestAnimationFrame(() => licenseButtonRef.current?.focus())
       if (answer === 'skip') keyPackageIds = []
     }
     setStatus({ running: true, step: 0, message: launchedRecipe.wordpress === 'latest' ? 'Confirming the latest stable WordPress release…' : 'Starting the local WordPress runtime…' })
@@ -3041,6 +3048,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                                 onReplace={replacePluginZip}
                                 onRemove={handleRemovePlugin}
                                 onAddKey={setAddingKeyFor}
+                                onKeysChanged={refreshLicenseRecords}
                                 onCancelKey={() => {
                                   setAddingKeyFor('')
                                   window.requestAnimationFrame(() => document.getElementById(`add-key-button-${plugin.id}`)?.focus())
