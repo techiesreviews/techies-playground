@@ -79,12 +79,15 @@ test('copies the Date header into auth_date and opts Authorization into the prox
   assert.deepEqual(sent, [{ url: `https://api.freemius.com/v1/plugins/123/installs/456.json?fields=id,is_active&${STAMP}`, args: optedIn(args) }])
 })
 
-test('stamps sandbox-api.freemius.com, the http fallback, any letter case and a lowercase header name', async () => {
+test('stamps sandbox-api.freemius.com, the http fallback, any letter case, a trailing dot, existing queries and a lowercase header name', async () => {
   for (const [url, expected] of [
     ['https://sandbox-api.freemius.com/v1/ping.json', `https://sandbox-api.freemius.com/v1/ping.json?${STAMP}`],
     ['http://api.freemius.com/v1/ping.json', `http://api.freemius.com/v1/ping.json?${STAMP}`],
     ['https://API.Freemius.com/v1/ping.json?', `https://API.Freemius.com/v1/ping.json?${STAMP}`],
     ['https://api.freemius.com/v1/ping.json#top', `https://api.freemius.com/v1/ping.json?${STAMP}#top`],
+    ['https://api.freemius.com/v1/ping.json?a=1&', `https://api.freemius.com/v1/ping.json?a=1&${STAMP}`],
+    ['https://api.freemius.com/v1/ping.json?a=1#top', `https://api.freemius.com/v1/ping.json?a=1&${STAMP}#top`],
+    ['https://api.freemius.com./v1/ping.json', `https://api.freemius.com./v1/ping.json?${STAMP}`],
   ]) {
     const { sent } = await send(url, signed({ method: 'GET', body: null }))
     assert.equal(sent.length, 1, url)

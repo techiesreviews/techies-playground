@@ -180,6 +180,7 @@ async function followWithoutAuthorization(fetchImpl, response, from, headers, re
 export async function handleCorsProxy(request, { fetch: fetchImpl = fetch, limiter } = {}) {
   const requestUrl = new URL(request.url)
   if (!isSameOriginRequest(request, requestUrl)) return answer(403, 'Forbidden')
+  // OPTIONS does not depend on the target, so it names only the methods every target takes.
   if (request.method === 'OPTIONS') return answer(204, null, { Allow: ALLOWED_METHODS_HEADER })
   const isLicenceApiMethod = LICENCE_API_METHODS.has(request.method)
   if (!ALLOWED_METHODS.has(request.method) && !isLicenceApiMethod) return answer(405, 'Method not allowed', { Allow: ALLOWED_METHODS_HEADER })

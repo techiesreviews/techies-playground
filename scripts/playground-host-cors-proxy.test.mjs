@@ -223,6 +223,17 @@ test('relays PUT, PATCH and DELETE with their bodies to the Freemius licence API
   assert.equal(upstream.calls[0].headers.get('Content-Type'), 'application/json')
 })
 
+test('a licence API PUT redirected to another host is relayed, and following it with PUT is refused', async () => {
+  const upstream = recorder(() => new Response(null, { status: 307, headers: { Location: 'https://elsewhere.example.net/' } }))
+  const response = await handleCorsProxy(proxied('https://api.freemius.com/v1/installs.json', { method: 'PUT', body: 'x' }), { fetch: upstream.fetch })
+  assert.equal(response.status, 307)
+  const location = response.headers.get('Location')
+  assert.equal(location, `${HOST}${CORS_PROXY_PATH}?https://elsewhere.example.net/`)
+  const followed = await handleCorsProxy(proxied(location.slice(`${HOST}${CORS_PROXY_PATH}?`.length), { method: 'PUT', body: 'x' }), { fetch: upstream.fetch })
+  assert.equal(followed.status, 405)
+  assert.equal(upstream.calls.length, 1)
+})
+
 test('a licence API PUT keeps every other protection', async () => {
   const upstream = recorder()
   const put = (target, init = {}) => proxied(target, { method: 'PUT', body: 'x', ...init })
