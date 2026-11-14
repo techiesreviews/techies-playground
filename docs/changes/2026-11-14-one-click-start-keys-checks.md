@@ -72,3 +72,15 @@ Kept. It is the approved Tuesday slice.
 - Code Profiler Pro's admin page slug is unverified.
 - Firefox: Playground drops the POST body when it retries a Freemius API call through the CORS proxy, so Freemius activation (filled in or typed) fails there. Needs its own fix in the Freemius must-use plugin or the Playground build.
 - A real (not fake) Freemius key through Start is Lex's to try; PR #30 already showed a real WP Activity Log key activating.
+
+## Screenshots
+
+Approved prototype next to the built launcher (local build against preview-wp, fake data and a fake key):
+
+![Start on a saved recipe and the Checks section](assets/2026-11-14-one-click-start/1-start-and-checks.jpg)
+![Key saved in Choose plugins](assets/2026-11-14-one-click-start/2-key-saved.jpg)
+![One unlock per session](assets/2026-11-14-one-click-start/3-unlock-once.jpg)
+![Started site with the fill result](assets/2026-11-14-one-click-start/4-started-fill-result.jpg)
+![Checks menu](assets/2026-11-14-one-click-start/5-checks-menu.jpg)
+![Query Monitor opened by the Checks menu](assets/2026-11-14-one-click-start/6-query-monitor.jpg)
+![Code Profiler result](assets/2026-11-14-one-click-start/7-code-profiler.jpg)
