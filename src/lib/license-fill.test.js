@@ -162,3 +162,16 @@ test('a failure after the keys were read still names the record of each key', as
   })
   assert.deepEqual(results.map((result) => [result.recordId, result.status, result.message]), [['record-1', 'failed', 'boom']])
 })
+
+test('the fill result shows on the record whose key was used, else on the newest record', async () => {
+  const { fillResultRecordId } = await import('./license-fill.js')
+  const records = [
+    { id: 'new', pluginId: 'plugin:menu-image' },
+    { id: 'old', pluginId: 'plugin:menu-image' },
+    { id: 'other', pluginId: 'plugin:other' },
+  ]
+  assert.equal(fillResultRecordId({ recordId: 'old' }, 'plugin:menu-image', records), 'old')
+  assert.equal(fillResultRecordId({ recordId: 'deleted' }, 'plugin:menu-image', records), 'deleted')
+  assert.equal(fillResultRecordId({ recordId: '' }, 'plugin:menu-image', records), 'new')
+  assert.equal(fillResultRecordId(undefined, 'plugin:menu-image', records), '')
+})

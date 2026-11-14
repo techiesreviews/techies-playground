@@ -121,7 +121,7 @@ Launch must perform this sequence:
 
 1. Refuse to proceed if a referenced local ZIP is absent.
 2. Validate and normalize the complete recipe.
-3. Show the full-screen Playground shell and start progress reporting. When an uploaded plugin of the recipe has a saved key and the vault session is locked, show **Unlock your license vault** over the frame (master password, **Unlock and start**, **Start without keys**) and wait; an unlock in the Licenses manager also continues the launch, Start without keys launches without the fill, and Escape (anywhere on the page while the prompt shows) or closing the shell abandons the launch. The prompt is not modal, so Close in the bar stays reachable.
+3. Show the full-screen Playground shell and start progress reporting. When an uploaded plugin of the recipe has a saved key and the vault session is locked, show **Unlock your license vault** over the frame (master password, **Unlock and start**, **Start without keys**) and wait; an unlock in the Licenses manager also continues the launch, Start without keys launches without the fill, and Escape inside the prompt or closing the shell abandons the launch. The prompt is not modal, so Close in the bar and the Licenses manager stay reachable (Escape in the manager closes only the manager).
 4. If WordPress is `latest`, fetch the WordPress.org version list again. Abort if the exact stable version cannot be confirmed.
 5. Resolve the runtime site identity from name, exact WordPress version, and PHP version.
 6. Request persistent browser storage when storage is `browser` without waiting for the answer (Firefox keeps the request pending until the visitor answers its prompt); failure to grant persistence is non-fatal.

@@ -97,18 +97,20 @@ import {
   isVaultSessionUnlocked,
   lockVaultSession,
   startVaultSession,
+  saveIfCurrent,
   subscribeVaultSession,
   unlockVaultSessionIfCurrent,
   waitForVaultUnlock,
 } from './lib/vault-session'
 import {
+  fillResultRecordId,
   fillSavedLicenseKeys,
   licenseFillLabel,
   licenseFillSummary,
   packagesWithSavedKeys,
   pluginFolderFromAssetPath,
 } from './lib/license-fill'
-import { CHECKS, CHECKS_PLUGIN, CHECKS_PLUGIN_PATH, addCheckToSetup, checkResultsPath, checksInSetup } from './lib/checks'
+import { CHECKS, CHECKS_PLUGIN, CHECKS_PLUGIN_PATH, addCheckToSetup, checkResultsPath, checksInSetup, nextMenuIndex } from './lib/checks'
 import {
   assertZipFile,
   getPlugin,
@@ -896,13 +898,8 @@ function LicenseManager({ packages, anchorRef, fillResults, onRecordsChange, onC
       })
   }, [unlocked])
 
-  // A result shows on the record whose key the launch used; one that failed before any key
-  // was read shows on the plugin's newest record (records arrive newest first).
   function showsFillResult(record) {
-    const result = fillResults.get(record.pluginId)
-    if (!result) return false
-    if (result.recordId) return result.recordId === record.id
-    return records.find((candidate) => candidate.pluginId === record.pluginId)?.id === record.id
+    return fillResultRecordId(fillResults.get(record.pluginId), record.pluginId, records) === record.id
   }
 
   async function refreshRecords(signal) {
@@ -1342,8 +1339,11 @@ function AddKeyForm({ plugin, onSaved, onSavedElsewhere, onCancel }) {
         const unlock = () => (vaultState === 'none' ? createLicenseVault(password) : unlockLicenseVault(password))
         if (!await unlockVaultSessionIfCurrent(unlock, () => openRef.current)) return
       }
-      await addLicense(getVaultSessionKey(), { name: plugin.label, pluginId: `plugin:${plugin.id}`, licenseKey })
-      if (!openRef.current) {
+      const stillOpen = await saveIfCurrent(
+        () => addLicense(getVaultSessionKey(), { name: plugin.label, pluginId: `plugin:${plugin.id}`, licenseKey }),
+        () => openRef.current,
+      )
+      if (!stillOpen) {
         onSavedElsewhere()
         return
       }
@@ -1613,11 +1613,10 @@ function ChecksMenu({ checks, anchorRef, onOpenCheck, onClose }) {
         return
       }
       const items = [...(menuRef.current?.querySelectorAll('[role="menuitem"]') || [])]
-      const index = items.indexOf(document.activeElement)
-      const next = { ArrowDown: index + 1, ArrowUp: index - 1, Home: 0, End: items.length - 1 }[event.key]
-      if (next === undefined) return
+      const next = nextMenuIndex(event.key, items.indexOf(document.activeElement), items.length)
+      if (next === null) return
       event.preventDefault()
-      items[(next + items.length) % items.length]?.focus()
+      items[next].focus()
     }
     function handleOutsidePointer(event) {
       if (menuRef.current?.contains(event.target) || anchorRef.current?.contains(event.target)) return
@@ -1677,15 +1676,6 @@ function VaultUnlockPrompt({ onUnlocked, onSkip, onCancel }) {
     }
   }, [])
 
-  // Not modal, so the bar's Close stays reachable; Escape cancels from anywhere on the page.
-  useEffect(() => {
-    function handleEscape(event) {
-      if (event.key === 'Escape') onCancel()
-    }
-    window.addEventListener('keydown', handleEscape)
-    return () => window.removeEventListener('keydown', handleEscape)
-  }, [onCancel])
-
   async function handleSubmit(event) {
     event.preventDefault()
     if (busy) return
@@ -1704,7 +1694,7 @@ function VaultUnlockPrompt({ onUnlocked, onSkip, onCancel }) {
 
   return (
     <div className="absolute inset-0 z-10 grid place-items-center bg-neutral-950/40 p-4">
-      <form role="dialog" aria-labelledby="vault-unlock-title" aria-describedby="vault-unlock-description" onSubmit={handleSubmit} className="grid w-full max-w-md gap-4 rounded-[min(2vw,var(--radius-xl))] bg-white p-5 shadow-2xl ring-1 ring-neutral-950/10">
+      <form role="dialog" aria-labelledby="vault-unlock-title" aria-describedby="vault-unlock-description" onSubmit={handleSubmit} onKeyDown={(event) => { if (event.key === 'Escape') onCancel() }} className="grid w-full max-w-md gap-4 rounded-[min(2vw,var(--radius-xl))] bg-white p-5 shadow-2xl ring-1 ring-neutral-950/10">
         <div className="grid gap-1">
           <h2 id="vault-unlock-title" className="text-lg font-semibold text-balance">Unlock your license vault</h2>
           <p id="vault-unlock-description" className="text-pretty text-base/7 text-neutral-600 sm:text-sm/6">Once per session. Your saved keys then go in by themselves.</p>
@@ -3336,7 +3326,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
               type="button"
               aria-label="Close Playground"
               onClick={requestPlaygroundClose}
-              className="relative shrink-0 rounded-md p-1.5 text-neutral-300 max-sm:p-2.5 hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
+              className="relative shrink-0 rounded-md p-1.5 text-neutral-300 max-sm:px-2.5 hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
             >
               <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:w-[calc(100%+0.625rem)]" aria-hidden="true" />
               <XMarkIcon className="size-4 shrink-0 fill-current" />

@@ -81,3 +81,13 @@ function techies_playground_open_check() {
 add_action( 'admin_print_footer_scripts', 'techies_playground_open_check' );
 add_action( 'wp_print_footer_scripts', 'techies_playground_open_check' );
 `
+
+// Where focus goes in the Checks menu for a key: arrows wrap, Home and End jump; null for
+// any other key or an empty menu.
+export function nextMenuIndex(key, index, count) {
+  if (!count) return null
+  // With no item focused (index -1), ArrowUp goes to the last item and ArrowDown to the first.
+  const from = index < 0 && key === 'ArrowUp' ? 0 : index
+  const next = { ArrowDown: from + 1, ArrowUp: from - 1, Home: 0, End: count - 1 }[key]
+  return next === undefined ? null : (next + count) % count
+}
