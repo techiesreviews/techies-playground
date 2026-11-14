@@ -18,5 +18,16 @@
   ],
   "observability": {
     "enabled": true
+  },
+  "env": {
+    "preview": {
+      "name": "playground-preview",
+      "routes": [
+        {
+          "pattern": "preview-play.techies.tools",
+          "custom_domain": true
+        }
+      ]
+    }
   }
 }

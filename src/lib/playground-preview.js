@@ -1,8 +1,9 @@
+import { PLAYGROUND_ORIGIN } from './playground-host.js'
+
 export const PREVIEW_PREFIX = '#preview='
-const PLAYGROUND_ORIGIN = 'https://playground.wordpress.net'
 
 // Playground puts the scope in every site URL. Elementor IDNA-encodes whole URLs by
-// splitting on dots, so `net/scope:<scope>/wp-admin/admin` must stay under the
+// splitting on dots, so `tools/scope:<scope>/wp-admin/admin` must stay under the
 // 63-character DNS label limit or WordPress fails during init.
 export function createLauncherScope(random = () => crypto.randomUUID()) {
   return `launcher-${random().replace(/-/g, '').slice(0, 12)}`

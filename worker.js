@@ -6,7 +6,9 @@ const SECURITY_HEADERS = Object.freeze({
     "font-src 'self' data:",
     "form-action 'self'",
     "frame-ancestors 'self'",
-    "frame-src https://playground.wordpress.net",
+    // Our Playground hosts (playground-host/), plus the public one for the switch back
+    // in src/lib/playground-host.js.
+    "frame-src https://wp.techies.tools https://preview-wp.techies.tools https://playground.wordpress.net",
     "img-src 'self' data: blob: https://ps.w.org https://ts.w.org",
     "object-src 'none'",
     "script-src 'self'",

@@ -24,7 +24,7 @@ export const DEFAULT_RECIPE = Object.freeze({
   repositoryTheme: '',
 })
 
-const PHP_VERSIONS = new Set(['7.4', '8.0', '8.1', '8.2', '8.3', '8.4', '8.5'])
+export const PHP_VERSIONS = new Set(['7.4', '8.0', '8.1', '8.2', '8.3', '8.4', '8.5'])
 const STORAGE_MODES = new Set(['temporary', 'browser'])
 const PERMALINK_STRUCTURES = new Set(['', '/%postname%/', '/%year%/%monthnum%/%postname%/'])
 const LOCALE = /^[a-z]{2,3}_[A-Z]{2}(?:_[A-Za-z0-9]+)?$/

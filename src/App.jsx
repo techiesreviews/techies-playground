@@ -31,6 +31,7 @@ import { installPlugin, installTheme, zipWpContent } from '@wp-playground/bluepr
 import { startPlaygroundWeb } from '@wp-playground/client'
 import { detectPackageType, registerPackageDrop } from './lib/package-upload'
 import { buildPreviewPlugin, createLauncherScope, hostPreviewSession } from './lib/playground-preview'
+import { PLAYGROUND_ORIGIN, PLAYGROUND_READY_TIMEOUT_MS, PLAYGROUND_REMOTE_URL, withTimeout } from './lib/playground-host'
 import {
   DEFAULT_RECIPE,
   buildPlaygroundBlueprint,
@@ -75,6 +76,7 @@ import {
 import {
   migrateStorageDefault,
   persistedSiteId,
+  persistedSitesKey,
   shouldWarnBeforeUnload,
   spinupPersistenceLabel,
 } from './lib/playground-persistence'
@@ -101,7 +103,7 @@ import {
 } from './lib/vault'
 
 const DRAFT_KEY = 'private-playground-launcher:draft'
-const PERSISTED_SITES_KEY = 'private-playground-launcher:persisted-sites'
+const PERSISTED_SITES_KEY = persistedSitesKey(PLAYGROUND_ORIGIN)
 const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-storage-default-v1'
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
@@ -1962,17 +1964,20 @@ export default function App() {
       if (usesBrowserStorage && navigator.storage?.persist) {
         await navigator.storage.persist().catch(() => false)
       }
-      const client = await startPlaygroundWeb({
-        iframe: iframeRef.current,
-        remoteUrl: 'https://playground.wordpress.net/remote.html',
-        scope,
-        blueprint: buildPlaygroundBlueprint(runtimeRecipe, { includeOneTimeSetup: !hasPersistedSite }),
-        ...(launchedRecipe.phpExtensionManifestUrl ? {
-          extensions: [{ source: { format: 'manifest', manifestUrl: launchedRecipe.phpExtensionManifestUrl } }],
-        } : {}),
-        ...(hasPersistedSite ? { mounts: [mountDescriptor], shouldInstallWordPress: false } : {}),
-      })
-      await client.isReady()
+      const client = await withTimeout((async () => {
+        const startedClient = await startPlaygroundWeb({
+          iframe: iframeRef.current,
+          remoteUrl: PLAYGROUND_REMOTE_URL,
+          scope,
+          blueprint: buildPlaygroundBlueprint(runtimeRecipe, { includeOneTimeSetup: !hasPersistedSite }),
+          ...(launchedRecipe.phpExtensionManifestUrl ? {
+            extensions: [{ source: { format: 'manifest', manifestUrl: launchedRecipe.phpExtensionManifestUrl } }],
+          } : {}),
+          ...(hasPersistedSite ? { mounts: [mountDescriptor], shouldInstallWordPress: false } : {}),
+        })
+        await startedClient.isReady()
+        return startedClient
+      })(), PLAYGROUND_READY_TIMEOUT_MS, 'WordPress Playground did not start within 2 minutes. Check your connection, then launch again.')
       if (launchId !== launchIdRef.current) return
       const wordpressVersionResponse = await client.run({
         code: `<?php
