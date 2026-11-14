@@ -113,9 +113,9 @@ test('fails the response instead of serving a truncated file when a part is miss
   await assert.rejects(response.text())
 })
 
-test('sends /cors-proxy/ requests to the proxy instead of the split-file list', async () => {
+test('sends /cors-proxy.php requests to the proxy instead of the split-file list', async () => {
   const requests = []
-  const response = await worker.fetch(new Request('https://wp.techies.tools/cors-proxy/?https://example.com/', { headers: { 'Sec-Fetch-Site': 'cross-site' } }), env(requests), ctx)
+  const response = await worker.fetch(new Request('https://wp.techies.tools/cors-proxy.php?https://example.com/', { headers: { 'Sec-Fetch-Site': 'cross-site' } }), env(requests), ctx)
   assert.equal(response.status, 403)
   assert.equal(requests.length, 0)
 })
