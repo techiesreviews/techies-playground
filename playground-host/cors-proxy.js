@@ -1,0 +1,156 @@
+// A CORS proxy for Playground on its own origin. Playground fetches cross-origin URLs
+// (WordPress release ZIPs, outgoing WordPress HTTP requests such as licence activation)
+// directly first and retries through `${CORS_PROXY_URL}${url}` when the browser blocks
+// them. The public proxy only answers playground.wordpress.net, so our build sets
+// CORS_PROXY_URL=/cors-proxy/? and this Worker answers it. The rules follow upstream's
+// packages/playground/php-cors-proxy: no cookies, Authorization only on opt-in,
+// redirects relayed through the proxy, X-Playground-Cors-Proxy on every answer.
+export const CORS_PROXY_PATH = '/cors-proxy/'
+
+const ALLOWED_METHODS = new Set(['GET', 'HEAD', 'POST'])
+const MAX_RESPONSE_SIZE = 100 * 1024 * 1024
+const OWN_HOSTS = new Set(['wp.techies.tools', 'preview-wp.techies.tools'])
+
+const DROPPED_REQUEST_HEADERS = new Set([
+  'cookie',
+  'host',
+  'origin',
+  'referer',
+  'x-cors-proxy-allowed-request-headers',
+  'x-cors-proxy-content-type',
+  'x-cors-proxy-range',
+])
+const OPT_IN_REQUEST_HEADERS = new Set(['authorization'])
+const DROPPED_RESPONSE_HEADERS = new Set([
+  'set-cookie',
+  'authorization',
+  'www-authenticate',
+  'cache-control',
+  'access-control-allow-origin',
+  'access-control-allow-credentials',
+  'access-control-allow-methods',
+  'access-control-allow-headers',
+  'access-control-expose-headers',
+  'strict-transport-security',
+])
+
+export function isCorsProxyRequest(url) {
+  return url.pathname === CORS_PROXY_PATH
+}
+
+function answer(status, message, extra = {}) {
+  return new Response(message, {
+    status,
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Playground-Cors-Proxy': 'true',
+      ...extra,
+    },
+  })
+}
+
+function isPrivateHost(hostname) {
+  const host = hostname.replace(/^\[|\]$/g, '').toLowerCase()
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal')) return true
+  if (host.includes(':')) {
+    // IPv6 literal: loopback, unspecified, unique local, link local, IPv4-mapped.
+    return host === '::1' || host === '::' || /^f[cd]/.test(host) || /^fe[89ab]/.test(host) || host.startsWith('::ffff:')
+  }
+  const octets = host.split('.')
+  if (octets.length !== 4 || !octets.every((part) => /^\d{1,3}$/.test(part))) return false
+  const [a, b] = octets.map(Number)
+  return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127)
+    || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || a >= 224
+}
+
+function targetFrom(requestUrl) {
+  const raw = requestUrl.search.slice(1)
+  if (!raw) throw new Error('No URL provided.')
+  let target
+  try {
+    target = new URL(raw)
+  } catch {
+    throw new Error('Invalid URL.')
+  }
+  if (target.protocol !== 'https:' && target.protocol !== 'http:') throw new Error('Only HTTP and HTTPS URLs can be proxied.')
+  if (target.username || target.password) throw new Error('URLs with credentials cannot be proxied.')
+  if (isPrivateHost(target.hostname)) throw new Error('Private addresses cannot be proxied.')
+  if (OWN_HOSTS.has(target.hostname) || target.hostname === requestUrl.hostname) throw new Error('The Playground host cannot proxy itself.')
+  return target
+}
+
+function isSameOriginRequest(request, requestUrl) {
+  // Browsers always send Sec-Fetch-Site and a page on another site cannot forge it.
+  if (request.headers.get('Sec-Fetch-Site') !== 'same-origin') return false
+  const origin = request.headers.get('Origin')
+  return !origin || origin === requestUrl.origin
+}
+
+function forwardedHeaders(request) {
+  const optedIn = new Set((request.headers.get('X-Cors-Proxy-Allowed-Request-Headers') || '')
+    .split(',').map((name) => name.trim().toLowerCase()).filter(Boolean))
+  const headers = new Headers()
+  for (const [name, value] of request.headers) {
+    const lower = name.toLowerCase()
+    if (DROPPED_REQUEST_HEADERS.has(lower) || lower.startsWith('sec-') || lower.startsWith('cf-') || lower.startsWith('x-forwarded-')) continue
+    if (OPT_IN_REQUEST_HEADERS.has(lower) && !optedIn.has(lower)) continue
+    headers.set(name, value)
+  }
+  const contentType = request.headers.get('X-Cors-Proxy-Content-Type')
+  if (contentType && !/[\r\n]/.test(contentType)) headers.set('Content-Type', contentType)
+  const range = request.headers.get('X-Cors-Proxy-Range')?.trim()
+  if (range && !/[\r\n]/.test(range)) headers.set('Range', range)
+  return headers
+}
+
+export async function handleCorsProxy(request, { fetch: fetchImpl = fetch, limiter } = {}) {
+  const requestUrl = new URL(request.url)
+  if (!isSameOriginRequest(request, requestUrl)) return answer(403, 'Forbidden')
+  if (request.method === 'OPTIONS') return answer(204, null, { Allow: 'GET, HEAD, POST, OPTIONS' })
+  if (!ALLOWED_METHODS.has(request.method)) return answer(405, 'Method not allowed', { Allow: 'GET, HEAD, POST, OPTIONS' })
+
+  if (limiter) {
+    const { success } = await limiter.limit({ key: request.headers.get('CF-Connecting-IP') || 'unknown' })
+    if (!success) return answer(429, 'Too many requests', { 'Retry-After': '60' })
+  }
+
+  let target
+  try {
+    target = targetFrom(requestUrl)
+  } catch (error) {
+    return answer(400, `Bad request: ${error.message}`)
+  }
+
+  let upstream
+  try {
+    upstream = await fetchImpl(target.href, {
+      method: request.method,
+      headers: forwardedHeaders(request),
+      body: request.method === 'POST' ? request.body : undefined,
+      redirect: 'manual',
+      ...(request.method === 'POST' && request.body ? { duplex: 'half' } : {}),
+    })
+  } catch {
+    return answer(502, 'Bad gateway: the target could not be reached.')
+  }
+
+  const length = Number(upstream.headers.get('Content-Length'))
+  if (request.method !== 'HEAD' && length >= MAX_RESPONSE_SIZE) return answer(413, 'Response too large')
+
+  const headers = new Headers()
+  for (const [name, value] of upstream.headers) {
+    if (!DROPPED_RESPONSE_HEADERS.has(name.toLowerCase())) headers.append(name, value)
+  }
+  const location = upstream.headers.get('Location')
+  if (location) {
+    headers.set('Location', `${requestUrl.origin}${CORS_PROXY_PATH}?${new URL(location, target).href}`)
+  }
+  headers.set('X-Playground-Cors-Proxy', 'true')
+  headers.set('Cache-Control', 'no-store')
+  return new Response(request.method === 'HEAD' ? null : upstream.body, {
+    status: upstream.status,
+    statusText: upstream.statusText,
+    headers,
+  })
+}

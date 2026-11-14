@@ -10,6 +10,8 @@
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
+    // Serve /remote.html as is; the default would redirect it to /remote.
+    "html_handling": "none",
     "not_found_handling": "none"
   },
   "routes": [
@@ -21,9 +23,25 @@
   "observability": {
     "enabled": true
   },
+  // Per-visitor limit for the CORS proxy (cors-proxy.js). A launch with plugins makes a
+  // few dozen proxied requests; WordPress admin pages add a few per page.
+  "ratelimits": [
+    {
+      "name": "CORS_PROXY_LIMIT",
+      "namespace_id": "2361",
+      "simple": { "limit": 300, "period": 60 }
+    }
+  ],
   "env": {
     "preview": {
       "name": "playground-wp-preview",
+      "ratelimits": [
+        {
+          "name": "CORS_PROXY_LIMIT",
+          "namespace_id": "2362",
+          "simple": { "limit": 300, "period": 60 }
+        }
+      ],
       "routes": [
         {
           "pattern": "preview-wp.techies.tools",

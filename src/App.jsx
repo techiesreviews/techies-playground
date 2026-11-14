@@ -28,10 +28,9 @@ import {
   XMarkIcon,
 } from '@heroicons/react/16/solid'
 import { installPlugin, installTheme, zipWpContent } from '@wp-playground/blueprints'
-import { startPlaygroundWeb } from '@wp-playground/client'
 import { detectPackageType, registerPackageDrop } from './lib/package-upload'
 import { buildPreviewPlugin, createLauncherScope, hostPreviewSession } from './lib/playground-preview'
-import { PLAYGROUND_ORIGIN, PLAYGROUND_READY_TIMEOUT_MS, PLAYGROUND_REMOTE_URL, withTimeout } from './lib/playground-host'
+import { PLAYGROUND_ORIGIN, PLAYGROUND_READY_TIMEOUT_MS, PLAYGROUND_REMOTE_URL, loadPlaygroundClient, withTimeout } from './lib/playground-host'
 import {
   DEFAULT_RECIPE,
   buildPlaygroundBlueprint,
@@ -1965,6 +1964,7 @@ export default function App() {
         await navigator.storage.persist().catch(() => false)
       }
       const client = await withTimeout((async () => {
+        const { startPlaygroundWeb } = await loadPlaygroundClient()
         const startedClient = await startPlaygroundWeb({
           iframe: iframeRef.current,
           remoteUrl: PLAYGROUND_REMOTE_URL,

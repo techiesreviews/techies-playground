@@ -70,28 +70,32 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
+      # The launcher bundles @wp-playground/blueprints and loads the client from the
+      # host, so the host is built from the release that matches the blueprints pin.
       - name: Read the pinned Playground release
         id: release
         run: |
-          client="$(node -p "require('./package.json').dependencies['@wp-playground/client']")"
-          blueprints="$(node -p "require('./package.json').dependencies['@wp-playground/blueprints']")"
-          if [ "$client" != "$blueprints" ] || ! printf '%s' "$client" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "@wp-playground/client ($client) and @wp-playground/blueprints ($blueprints) must pin the same exact version." >&2
+          version="$(node -p "require('./package.json').dependencies['@wp-playground/blueprints']")"
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "@wp-playground/blueprints must pin an exact version, found $version." >&2
             exit 1
           fi
-          echo "version=$client" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Restore the Playground build
         id: cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .playground-build/wasm-wordpress-net
-          key: playground-website-${{ steps.release.outputs.version }}-v1
+          key: playground-website-${{ steps.release.outputs.version }}-cors-proxy-v1
 
       - name: Build Playground ${{ steps.release.outputs.version }} from the official repository
         if: steps.cache.outputs.cache-hit != 'true'
         env:
           PLAYGROUND_VERSION: ${{ steps.release.outputs.version }}
+          # Our host answers /cors-proxy/ (playground-host/cors-proxy.js); the public
+          # proxy only serves playground.wordpress.net. Change the cache key with it.
+          CORS_PROXY_URL: /cors-proxy/?
         run: |
           git clone --branch "v${PLAYGROUND_VERSION}" --single-branch --depth 1 \
             --recurse-submodules --shallow-submodules \
@@ -112,6 +116,7 @@ jobs:
           # LAUNCHER_ORIGINS holds several --launcher-origin flags; split them on purpose.
           # shellcheck disable=SC2086
           node scripts/prepare-playground-host.mjs .playground-build/wasm-wordpress-net playground-host/dist $LAUNCHER_ORIGINS
+          grep -rqF '"/cors-proxy/?"' playground-host/dist/assets || { echo "The Playground build does not use /cors-proxy/." >&2; exit 1; }
 
       - name: Deploy the Playground host
         uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3

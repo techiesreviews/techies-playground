@@ -22,6 +22,18 @@ export function playgroundOrigin(value) {
 
 export const PLAYGROUND_ORIGIN = playgroundOrigin(import.meta.env?.VITE_PLAYGROUND_ORIGIN)
 export const PLAYGROUND_REMOTE_URL = `${PLAYGROUND_ORIGIN}/remote.html`
+// startPlaygroundWeb only accepts a remote.html from playground.wordpress.net, the page's
+// own origin or the origin the client script came from, so the launcher loads the
+// client from the same Playground host (the documented way to self-host).
+export const PLAYGROUND_CLIENT_URL = `${PLAYGROUND_ORIGIN}/client/index.js`
+
+export async function loadPlaygroundClient(importer = (url) => import(/* @vite-ignore */ url)) {
+  try {
+    return await importer(PLAYGROUND_CLIENT_URL)
+  } catch {
+    throw new Error(`WordPress Playground could not be loaded from ${new URL(PLAYGROUND_ORIGIN).host}. Check your connection, then launch again.`)
+  }
+}
 
 // A first boot downloads about 40 MB (PHP and WordPress); two minutes covers slow links.
 export const PLAYGROUND_READY_TIMEOUT_MS = 120_000

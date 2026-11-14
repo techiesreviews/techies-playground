@@ -139,3 +139,16 @@ test('reports an unreachable target as a bad gateway', async () => {
   assert.equal(response.status, 502)
   assert.equal(response.headers.get('X-Playground-Cors-Proxy'), 'true')
 })
+
+test('applies the per-visitor rate limit before contacting the target', async () => {
+  const upstream = recorder()
+  const keys = []
+  const limiter = { limit: async ({ key }) => { keys.push(key); return { success: false } } }
+  const request = proxied('https://example.com/', { headers: { 'CF-Connecting-IP': '203.0.113.7' } })
+  const response = await handleCorsProxy(request, { fetch: upstream.fetch, limiter })
+  assert.equal(response.status, 429)
+  assert.deepEqual(keys, ['203.0.113.7'])
+  assert.equal(upstream.calls.length, 0)
+  const allowed = { limit: async () => ({ success: true }) }
+  assert.equal((await handleCorsProxy(proxied('https://example.com/'), { fetch: upstream.fetch, limiter: allowed })).status, 200)
+})
