@@ -1622,10 +1622,14 @@ function ChecksMenu({ checks, anchorRef, onOpenCheck, onClose }) {
       if (menuRef.current?.contains(event.target) || anchorRef.current?.contains(event.target)) return
       onClose()
     }
+    // A click inside the WordPress frame never reaches this document, but it moves focus
+    // into the frame, which blurs this window.
     window.addEventListener('keydown', handleKey)
+    window.addEventListener('blur', onClose)
     document.addEventListener('pointerdown', handleOutsidePointer)
     return () => {
       window.removeEventListener('keydown', handleKey)
+      window.removeEventListener('blur', onClose)
       document.removeEventListener('pointerdown', handleOutsidePointer)
     }
   }, [anchorRef, onClose])
@@ -3238,7 +3242,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
 
       <section className={showPlayground ? 'fixed inset-0 z-50 grid bg-white' : 'hidden'} aria-label="WordPress Playground">
         <div className="grid min-h-0 grid-rows-[2rem_1fr] overflow-hidden bg-white">
-          <div className="flex min-w-0 items-center gap-1.5 bg-[#1d2327] px-2 text-white max-sm:gap-2.5">
+          <div className="relative z-10 flex min-w-0 items-center gap-1.5 bg-[#1d2327] px-2 text-white max-sm:gap-2.5">
             {confirmingPlaygroundClose ? (
               <>
                 <p className="min-w-0 flex-1 truncate text-sm/5 font-medium">Discard this temporary site?</p>
