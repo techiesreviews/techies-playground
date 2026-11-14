@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { FREEMIUS_DATE_STAMP_PLUGIN, FREEMIUS_DATE_STAMP_PLUGIN_PATH } from './freemius-date-stamp.js'
 import { buildPlaygroundBlueprint, extractVersionHint, isWordPressVersion, normalizePluginId, pluginLabelFromFilename, validateRecipe } from './recipe.js'
 
 test('normalizes versioned plugin filenames into stable vault ids', () => {
@@ -85,6 +86,18 @@ test('builds a valid advanced Playground blueprint', () => {
 
   const resumed = buildPlaygroundBlueprint({ name: 'Advanced demo', multisite: true, wxrUrl: 'https://example.com/content.xml' }, { includeOneTimeSetup: false })
   assert.equal(resumed.steps.some((step) => step.step === 'enableMultisite' || step.step === 'importWxr'), false)
+})
+
+test('writes the Freemius date-stamp plugin into every site before plugins install', () => {
+  for (const options of [{}, { includeOneTimeSetup: false }]) {
+    const blueprint = buildPlaygroundBlueprint({ name: 'Licence demo', repositoryPlugins: ['woocommerce'], repositoryTheme: 'astra' }, options)
+    const writes = blueprint.steps.filter((step) => step.step === 'writeFile')
+    assert.deepEqual(writes, [{ step: 'writeFile', path: FREEMIUS_DATE_STAMP_PLUGIN_PATH, data: FREEMIUS_DATE_STAMP_PLUGIN }])
+    const writeIndex = blueprint.steps.indexOf(writes[0])
+    assert.ok(writeIndex < blueprint.steps.findIndex((step) => step.step === 'installPlugin'))
+    assert.ok(writeIndex < blueprint.steps.findIndex((step) => step.step === 'installTheme'))
+  }
+  assert.equal(buildPlaygroundBlueprint({ name: 'Plain demo' }).steps.some((step) => step.step === 'writeFile' && step.path === FREEMIUS_DATE_STAMP_PLUGIN_PATH), true)
 })
 
 test('installs WordPress.org plugins through official Blueprint resources', () => {
