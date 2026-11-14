@@ -637,8 +637,8 @@ function SavedRecipeRow({ record, active, editing, missingCount, keyCounts, star
     themeCount ? '1 theme' : '',
   ].filter(Boolean).join(', ')
   return (
-    <div className={`group flex min-w-0 items-center gap-2 border-t border-neutral-950/8 py-4 first:border-t-0 first:pt-0 last:pb-0 ${active || editing ? 'text-neutral-950' : 'text-neutral-700'}`}>
-      <div className="relative min-w-0 flex-1">
+    <div className={`group flex min-w-0 flex-wrap items-center justify-end gap-2 border-t border-neutral-950/8 py-4 first:border-t-0 first:pt-0 last:pb-0 ${active || editing ? 'text-neutral-950' : 'text-neutral-700'}`}>
+      <div className="relative min-w-0 flex-1 basis-56">
         <button
           type="button"
           onClick={() => onChoose(record)}
@@ -1337,7 +1337,13 @@ function AddKeyForm({ plugin, onSaved, onSavedElsewhere, onCancel }) {
     try {
       if (!getVaultSessionKey()) {
         const unlock = () => (vaultState === 'none' ? createLicenseVault(password) : unlockLicenseVault(password))
-        if (!await unlockVaultSessionIfCurrent(unlock, () => openRef.current)) return
+        if (!await unlockVaultSessionIfCurrent(unlock, () => openRef.current)) {
+          if (!openRef.current) return
+          setMessage('The vault was locked or reset meanwhile. Try again.')
+          setVaultState('checking')
+          setBusy(false)
+          return
+        }
       }
       const stillOpen = await saveIfCurrent(
         () => addLicense(getVaultSessionKey(), { name: plugin.label, pluginId: `plugin:${plugin.id}`, licenseKey }),
@@ -1686,7 +1692,12 @@ function VaultUnlockPrompt({ onUnlocked, onSkip, onCancel }) {
     setBusy(true)
     setMessage('')
     try {
-      if (!await unlockVaultSessionIfCurrent(() => unlockLicenseVault(password), () => openRef.current)) return
+      if (!await unlockVaultSessionIfCurrent(() => unlockLicenseVault(password), () => openRef.current)) {
+        if (!openRef.current) return
+        setMessage('The vault was locked or reset meanwhile. Unlock again, or start without keys.')
+        setBusy(false)
+        return
+      }
       setPassword('')
       onUnlocked()
     } catch (caught) {
