@@ -109,12 +109,12 @@ const CHANGELOG_ENTRIES = [
   {
     version: '0.9.1',
     date: 'November 14, 2026',
-    title: 'Freemius licences activate',
-    summary: 'Plugins that sell licences through Freemius, such as WP Activity Log, can activate their licence in Playground.',
+    title: 'Freemius licence calls get through',
+    summary: 'Plugins that sell licences through Freemius, such as WP Activity Log, can now reach Freemius from Playground to activate their licence.',
     changes: [
       'Licence activation for Freemius-based plugins no longer fails with "You must provide valid formatted date stamp".',
       'Their licence calls go through the Playground host, which now passes licence updates on to Freemius and to no other site.',
-      'Other licence systems that sign their requests, such as WooCommerce.com updates, are not covered yet.',
+      'Other licence systems that sign their requests, such as WooCommerce.com updates, are not covered.',
     ],
   },
   {

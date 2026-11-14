@@ -28,7 +28,7 @@ function techies_playground_freemius_api_request( $response, $args, $url ) {
 	if ( false !== $response ) {
 		return $response;
 	}
-	$host = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
+	$host = rtrim( strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) ), '.' );
 	if ( 'api.freemius.com' !== $host && 'sandbox-api.freemius.com' !== $host ) {
 		return $response;
 	}

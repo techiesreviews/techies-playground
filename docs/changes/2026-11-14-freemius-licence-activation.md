@@ -2,8 +2,8 @@
 
 - Date: 2026-11-14
 - Owner: fleet-lead build agent (Claude Opus 5.5)
-- Status: complete; deployed-preview check pending at writing (the lead records it with the release)
-- Disposition: kept
+- Status: in-progress; the deployed-preview check and Lex's real licence test are pending at writing (the lead records them with the release)
+- Disposition: pending (kept once the preview check passes)
 - Related version: 0.9.1
 - Related commit/issue: Orbit TOOLS-249
 
@@ -40,7 +40,7 @@ Moving the date into the URL as `auth_date=<the same value>` (a parameter Freemi
 | Headless Chromium 159 (Playwright 1.65.1), launcher built locally (`VITE_PLAYGROUND_ORIGIN=https://preview-wp.techies.tools`), Playground host preview-wp.techies.tools at dev e90c433 | `launch-probe.mjs chromium http://127.0.0.1:4173 probe`, first plugin version (`auth_date` only) | Date check passes | Mu-plugin loaded; raw signed GET went direct with `auth_date` and got 401 "Invalid Authorization header."; SDK GET returned `api_blocked` (the answer had only `content-length` and `content-type` headers); PUT failed direct (CORS, `net::ERR_FAILED`) and got 405 from the old proxy | Executed; led to the opt-in |
 | Same, current plugin (with the opt-in) | Same command | SDK GET reaches Freemius | SDK GET and raw GET went through `/cors-proxy.php` with `auth_date` and got 401 "Invalid Authorization header." (no `api_blocked`); PUT still 405 from the not-yet-deployed proxy | Executed |
 | Local Node, real network | `handleCorsProxy` from this branch with a signed GET and PUT (fake key, `auth_date`, opt-in) to `api.freemius.com` | Both forwarded | GET 401 and PUT 401 "Invalid Authorization header.", `X-API-Server` present | Executed |
-| Deployed preview (preview-play and preview-wp) after landing | `launch-probe.mjs` probe in Chromium; plain and zip in Chromium and Firefox | Signed GET and PUT fail only on "Invalid Authorization header"; launches complete | Recorded by the lead with the release | Pending |
+| Deployed preview (preview-play and preview-wp) after landing | `launch-probe.mjs` probe, plain and zip in Chromium and Firefox (Firefox buffers the proxied PUT body instead of streaming it) | Signed GET and PUT fail only on "Invalid Authorization header"; launches complete | Recorded by the lead with the release | Pending |
 
 ## Result
 
@@ -48,7 +48,7 @@ Locally, the date check passes and the Freemius SDK gets usable answers through 
 
 ## Disposition and rationale
 
-Kept: it is the smallest change that lets the Freemius SDK talk to its API from a browser, it touches only the two Freemius API hosts, and the proxy's Authorization opt-in rule is unchanged.
+Pending, expected kept: it is the smallest change that lets the Freemius SDK talk to its API from a browser, it touches only the two Freemius API hosts, and the proxy's Authorization opt-in rule is unchanged.
 
 ## Documentation impact
 
