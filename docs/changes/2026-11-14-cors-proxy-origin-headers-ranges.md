@@ -2,7 +2,7 @@
 
 - Date: 2026-11-14
 - Owner: fleet-lead build agent (Claude Opus 5.5)
-- Status: complete; the deployed-preview check is recorded in the release PR
+- Status: complete; deployed-preview check pending at writing (the release PR records it)
 - Disposition: kept
 - Related version: 0.9.0 (production never had the proxy; no bump)
 - Related commit/issue: Orbit TOOLS-236; release second look SL-1 (P0) and SL-2 (P1) on PR #24; follows [2026-11-14-cors-proxy-compressed-ranges-open.md](2026-11-14-cors-proxy-compressed-ranges-open.md)
