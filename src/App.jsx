@@ -1010,6 +1010,8 @@ function LicenseManager({ packages, anchorRef, fillResults, onRecordsChange, onC
     setMessage('')
     try {
       await addLicense(getVaultSessionKey(), { name: licenseName, pluginId: packageId, licenseKey })
+      // The key is saved even if the manager closed meanwhile, so Key saved must update.
+      onRecordsChange()
       if (signal.aborted) return
       setLicenseKey('')
       setShowLicenseKey(false)
@@ -1054,6 +1056,7 @@ function LicenseManager({ packages, anchorRef, fillResults, onRecordsChange, onC
     setMessage('')
     try {
       await deleteLicense(record.id)
+      onRecordsChange()
       if (signal.aborted) return
       await refreshRecords(signal)
       if (signal.aborted) return
@@ -1708,8 +1711,8 @@ function VaultUnlockPrompt({ onUnlocked, onSkip, onCancel }) {
   }
 
   return (
-    <div className="absolute inset-0 z-10 grid place-items-center bg-neutral-950/40 p-4">
-      <form role="dialog" aria-labelledby="vault-unlock-title" aria-describedby="vault-unlock-description" onSubmit={handleSubmit} onKeyDown={(event) => { if (event.key === 'Escape') onCancel() }} className="grid w-full max-w-md gap-4 rounded-[min(2vw,var(--radius-xl))] bg-white p-5 shadow-2xl ring-1 ring-neutral-950/10">
+    <div className="absolute inset-0 z-10 grid justify-items-center overflow-y-auto bg-neutral-950/40 p-4">
+      <form role="dialog" aria-labelledby="vault-unlock-title" aria-describedby="vault-unlock-description" onSubmit={handleSubmit} onKeyDown={(event) => { if (event.key === 'Escape') onCancel() }} className="my-auto grid w-full max-w-md gap-4 rounded-[min(2vw,var(--radius-xl))] bg-white p-5 shadow-2xl ring-1 ring-neutral-950/10">
         <div className="grid gap-1">
           <h2 id="vault-unlock-title" className="text-lg font-semibold text-balance">Unlock your license vault</h2>
           <p id="vault-unlock-description" className="text-pretty text-base/7 text-neutral-600 sm:text-sm/6">Once per session. Your saved keys then go in by themselves.</p>
