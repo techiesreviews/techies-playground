@@ -1,7 +1,9 @@
 // Serves our copy of WordPress Playground. Cloudflare answers every request that matches
 // a static asset (with the `_headers` rules) before this Worker runs; the Worker only
-// sees the rest. Its one job is to join files that were split to stay under the 25 MiB
-// per-file limit (scripts/prepare-playground-host.mjs writes /split-files.json).
+// sees the rest: the CORS proxy (cors-proxy.js), and files that were split to stay under
+// the 25 MiB per-file limit (scripts/prepare-playground-host.mjs writes /split-files.json).
+import { handleCorsProxy, isCorsProxyRequest } from './cors-proxy.js'
+
 const SPLIT_MANIFEST = '/split-files.json'
 const CONTENT_TYPES = { zip: 'application/zip', wasm: 'application/wasm' }
 
@@ -44,10 +46,11 @@ async function pumpParts(env, url, parts, writable) {
 
 export default {
   async fetch(request, env, ctx) {
+    const url = new URL(request.url)
+    if (isCorsProxyRequest(url)) return handleCorsProxy(request, { limiter: env.CORS_PROXY_LIMIT })
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       return plain(405, 'Method not allowed', { Allow: 'GET, HEAD' })
     }
-    const url = new URL(request.url)
     let manifest
     try {
       manifest = await readSplitManifest(env, url)
