@@ -143,3 +143,40 @@ test('cancels copy after pending storage or decryption while preserving active c
     else delete globalThis.navigator
   }
 })
+
+test('reads the newest saved key for each requested package only', async () => {
+  const { readLicenseKeysForPackages } = await import('./license-vault.js')
+  const originalIndexedDB = globalThis.indexedDB
+  const key = await deriveLicenseVaultKey('synthetic master password', new Uint8Array(16), 1000)
+  async function seal(id, pluginId, name, plaintext, createdAt) {
+    const aad = new TextEncoder().encode(`license-v1\0${id}\0${pluginId}\0${name}`)
+    return { id, pluginId, name, createdAt, ...await encryptLicenseSecret(key, plaintext, aad) }
+  }
+  const records = [
+    await seal('a', 'plugin:menu-image', 'Old', 'synthetic-old', '2026-11-01T00:00:00.000Z'),
+    await seal('b', 'plugin:menu-image', 'New', 'synthetic-new', '2026-11-10T00:00:00.000Z'),
+    await seal('c', 'plugin:other', 'Other', 'synthetic-other', '2026-11-12T00:00:00.000Z'),
+  ]
+  globalThis.indexedDB = { open() {
+    const request = { result: { close() {}, transaction() {
+      const transaction = { objectStore() { return { getAll() {
+        const read = { result: records }
+        queueMicrotask(() => { read.onsuccess(); transaction.oncomplete() })
+        return read
+      } } } }
+      return transaction
+    } } }
+    queueMicrotask(() => request.onsuccess())
+    return request
+  } }
+  try {
+    const keys = await readLicenseKeysForPackages(key, ['plugin:menu-image', 'plugin:missing'], new AbortController().signal)
+    assert.deepEqual([...keys.entries()], [['plugin:menu-image', 'synthetic-new']])
+    await assert.rejects(readLicenseKeysForPackages(key, ['plugin:menu-image']), /active vault session/)
+    const aborted = new AbortController()
+    aborted.abort()
+    await assert.rejects(readLicenseKeysForPackages(key, ['plugin:menu-image'], aborted.signal), { name: 'AbortError' })
+  } finally {
+    globalThis.indexedDB = originalIndexedDB
+  }
+})

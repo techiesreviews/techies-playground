@@ -182,6 +182,28 @@ export async function copyLicenseToClipboard(key, id, signal) {
   await navigator.clipboard.writeText(plaintext)
 }
 
+// Decrypts the newest saved key of each requested package for the automatic fill after a
+// launch. The plaintext stays in memory; the caller hands it only to the running Playground.
+export async function readLicenseKeysForPackages(key, packageIds, signal) {
+  if (!signal) throw new Error('An active vault session is required.')
+  signal.throwIfAborted()
+  const wanted = new Set(packageIds)
+  const records = await transact(LICENSE_STORE, 'readonly', (store) => store.getAll())
+  signal.throwIfAborted()
+  const newest = new Map()
+  for (const record of records) {
+    if (!wanted.has(record.pluginId)) continue
+    const current = newest.get(record.pluginId)
+    if (!current || String(record.createdAt).localeCompare(String(current.createdAt)) > 0) newest.set(record.pluginId, record)
+  }
+  const keys = new Map()
+  for (const [packageId, record] of newest) {
+    keys.set(packageId, await decryptLicenseSecret(key, record, licenseAdditionalData(record)))
+    signal.throwIfAborted()
+  }
+  return keys
+}
+
 export function deleteLicense(id) {
   return transact(LICENSE_STORE, 'readwrite', (store) => store.delete(id))
 }
