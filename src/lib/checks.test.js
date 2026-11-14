@@ -59,4 +59,6 @@ test('menu keys move through the checks and wrap', async () => {
   assert.equal(nextMenuIndex('End', 0, 3), 2)
   assert.equal(nextMenuIndex('Enter', 1, 3), null)
   assert.equal(nextMenuIndex('ArrowDown', 0, 0), null)
+  assert.equal(nextMenuIndex('ArrowUp', -1, 1), 0)
+  assert.equal(nextMenuIndex('ArrowDown', -1, 1), 0)
 })

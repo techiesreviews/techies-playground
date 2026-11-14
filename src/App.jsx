@@ -646,7 +646,7 @@ function SavedRecipeRow({ record, active, editing, missingCount, keyCounts, star
         >
           <span className="flex min-w-0 items-center gap-2">
             <BookmarkIcon className={`size-4 h-lh shrink-0 ${active ? 'fill-teal-700' : 'fill-neutral-400'}`} />
-            <span className="min-w-0">
+            <span className="min-w-0 [overflow-wrap:anywhere]">
               <span className="font-medium">{record.recipe.name}</span>
               <span className="text-neutral-600"> — {packageSummary}, WP {record.recipe.wordpress}, PHP {record.recipe.php}</span>
               {missingCount > 0 && <span className="text-amber-700"> — {missingCount} local ZIP{missingCount === 1 ? '' : 's'} missing</span>}
@@ -3253,7 +3253,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
 
       <section className={showPlayground ? 'fixed inset-0 z-50 grid bg-white' : 'hidden'} aria-label="WordPress Playground">
         <div className="grid min-h-0 grid-rows-[2rem_1fr] overflow-hidden bg-white">
-          <div className="relative z-10 flex min-w-0 items-center gap-1.5 bg-[#1d2327] px-2 text-white max-sm:gap-2.5">
+          <div className="relative z-20 flex min-w-0 items-center gap-1.5 bg-[#1d2327] px-2 text-white max-sm:gap-2.5">
             {confirmingPlaygroundClose ? (
               <>
                 <p className="min-w-0 flex-1 truncate text-sm/5 font-medium">Discard this temporary site?</p>
