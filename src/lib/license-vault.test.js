@@ -171,7 +171,7 @@ test('reads the newest saved key for each requested package only', async () => {
   } }
   try {
     const keys = await readLicenseKeysForPackages(key, ['plugin:menu-image', 'plugin:missing'], new AbortController().signal)
-    assert.deepEqual([...keys.entries()], [['plugin:menu-image', 'synthetic-new']])
+    assert.deepEqual([...keys.entries()], [['plugin:menu-image', { recordId: 'b', licenseKey: 'synthetic-new' }]])
     await assert.rejects(readLicenseKeysForPackages(key, ['plugin:menu-image']), /active vault session/)
     const aborted = new AbortController()
     aborted.abort()
@@ -216,13 +216,14 @@ test('a second vault creation never overwrites the first one', async () => {
   } }
   try {
     // Both start while no vault exists; only the first one may write its settings.
-    const first = createLicenseVault('first master password')
-    const second = createLicenseVault('second master password')
-    await first
-    const firstMeta = stored.get('vault')
-    await assert.rejects(second, /already exists/)
-    assert.equal(stored.get('vault'), firstMeta)
-    assert.ok(!writes.includes('put'))
+    const outcomes = await Promise.allSettled([
+      createLicenseVault('first master password'),
+      createLicenseVault('second master password'),
+    ])
+    assert.deepEqual(outcomes.map((outcome) => outcome.status).sort(), ['fulfilled', 'rejected'])
+    assert.match(outcomes.find((outcome) => outcome.status === 'rejected').reason.message, /already exists/)
+    assert.deepEqual(writes, ['add', 'add'])
+    assert.equal(stored.size, 1)
   } finally {
     globalThis.indexedDB = originalIndexedDB
   }
