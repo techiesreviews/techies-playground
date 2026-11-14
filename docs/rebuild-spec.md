@@ -59,7 +59,7 @@ If saved recipes exist, that tab is initially active; otherwise plugins is activ
 
 #### Saved recipes
 
-Each row shows name, plugin/theme count, WordPress/PHP versions, missing local ZIP count and, when the recipe has uploaded plugins, **keys ready** or **N keys missing** (uploaded plugins without a saved license). A teal **Start** button at the end of the row loads the recipe and launches it at once with its WordPress/PHP versions and plugins; it is disabled while a launch runs or a local ZIP is missing. Selecting loads the recipe. Edit loads it and changes the save action to Update recipe. Updating a renamed record removes the old ID so no stale duplicate remains. Removal deletes only the recipe record, not packages or persisted WordPress data.
+Each row shows name, plugin/theme count, WordPress/PHP versions, missing local ZIP count and, when the recipe has uploaded plugins, **keys ready** or **N keys missing** (uploaded plugins without a saved license). A teal **Start** button at the end of the row (below the text when the row is too narrow) loads the recipe and launches it at once with its WordPress/PHP versions and plugins; it is disabled while a launch runs or a local ZIP is missing. Selecting loads the recipe. Edit loads it and changes the save action to Update recipe. Updating a renamed record removes the old ID so no stale duplicate remains. Removal deletes only the recipe record, not packages or persisted WordPress data.
 
 #### Plugins
 

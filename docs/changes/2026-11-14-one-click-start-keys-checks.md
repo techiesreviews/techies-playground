@@ -57,6 +57,7 @@ Code Profiler profiles by requesting the site from itself. In browser Playground
 | Chromium, 320 px (after the third second look) | Bar button sizes; Tab inside the Checks menu | 36 px buttons with 46 px tap areas, Close on screen; Tab closes the menu and moves on | Licenses, Checks, Export snapshot, Update all and Close each 36 px, Close ends at 312 px; after Tab the menu is gone and focus is on Export snapshot | script output |
 | Chromium, 320 px (after the PR review of the prompt) | Open Licenses over the unlock prompt and press Escape; then Escape in the prompt; measure the bar | Escape closes only the manager; Escape in the prompt closes the launch; Close fits the bar | manager closed, prompt still open; prompt Escape closed the shell; bar 32 px, Close 36 x 28 px from 2 to 30 px | script output |
 | Chromium, 320 px, touch (after the last second look) | Open Checks, click inside WordPress; hit-test 6 px below Checks | menu closes; the tap reaches Checks, not the frame | menu closed; hit test returned Checks | script output |
+| Chromium, 320 px | Saved recipe with an 80-character name | Start never squeezes the name | the name wraps over the full row and Start moves below it | screenshot |
 | Deployed preview | Proof run after merge | see PR | recorded in the PR and the lead's report | pending at time of writing |
 
 ## Result
