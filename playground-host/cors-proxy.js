@@ -217,13 +217,6 @@ export async function handleCorsProxy(request, { fetch: fetchImpl = fetch, limit
     return answer(502, 'Bad gateway: the target could not be reached.')
   }
 
-  // A compressed slice cannot be decompressed on its own, and Cloudflare may ask the target
-  // for compression even when the Worker asks for identity: fail clearly, not with wrong bytes.
-  const encoding = (upstream.headers.get('Content-Encoding') || 'identity').trim().toLowerCase()
-  if (upstream.status === 206 && encoding !== 'identity') {
-    return answer(502, 'Bad gateway: the target sent a compressed byte range.')
-  }
-
   const length = Number(upstream.headers.get('Content-Length'))
   if (request.method !== 'HEAD' && length >= MAX_RESPONSE_SIZE) return answer(413, 'Response too large')
 
