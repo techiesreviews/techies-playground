@@ -3308,7 +3308,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
               onClick={() => setShowLicenseManager(true)}
               className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-sm:px-2.5 [anchor-name:--license-trigger]"
             >
-              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:w-[calc(100%+0.625rem)]" aria-hidden="true" />
+              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)]" aria-hidden="true" />
               <KeyIcon className="size-4 shrink-0 fill-neutral-300" />
               <span className="max-sm:sr-only">Licenses</span>
               {licenseFill.length > 0 && (
@@ -3330,7 +3330,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
                   onClick={() => setShowChecksMenu((open) => !open)}
                   className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-sm:px-2.5 disabled:cursor-not-allowed disabled:opacity-50 aria-expanded:bg-white/15"
                 >
-                  <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:w-[calc(100%+0.625rem)]" aria-hidden="true" />
+                  <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)]" aria-hidden="true" />
                   <ChartBarIcon className="size-4 shrink-0 fill-neutral-300" />
                   <span className="max-sm:sr-only">Checks</span>
                 </button>
@@ -3344,7 +3344,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
               onClick={exportSiteSnapshot}
               className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-sm:px-2.5 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:w-[calc(100%+0.625rem)]" aria-hidden="true" />
+              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)]" aria-hidden="true" />
               <ArrowDownTrayIcon className="size-4 shrink-0 fill-neutral-300" />
               <span className="max-sm:sr-only">{snapshotExporting ? 'Exporting…' : 'Export snapshot'}</span>
             </button>
@@ -3355,7 +3355,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
               onClick={updateAllPackages}
               className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-sm:px-2.5 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:w-[calc(100%+0.625rem)]" aria-hidden="true" />
+              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)]" aria-hidden="true" />
               <ArrowPathIcon className="size-4 shrink-0 fill-neutral-300" />
               <span className="max-sm:sr-only">{updateCheck.checking ? 'Updating…' : 'Update all'}</span>
             </button>
@@ -3367,7 +3367,7 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
               onClick={requestPlaygroundClose}
               className="relative shrink-0 rounded-md p-1.5 text-neutral-300 max-sm:px-2.5 hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
             >
-              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:w-[calc(100%+0.625rem)]" aria-hidden="true" />
+              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)]" aria-hidden="true" />
               <XMarkIcon className="size-4 shrink-0 fill-current" />
             </button>
               </>
