@@ -1,7 +1,10 @@
 // A CORS proxy for Playground on its own origin. Playground fetches cross-origin URLs
-// (WordPress release ZIPs, outgoing WordPress HTTP requests such as licence activation)
-// directly first and retries through `${CORS_PROXY_URL}${url}` when the browser blocks
-// them. The public proxy only answers playground.wordpress.net, so our build sets
+// (WordPress release ZIPs, outgoing WordPress HTTP requests) directly first and retries
+// through `${CORS_PROXY_URL}${url}` when the browser blocks them. Freemius licence calls
+// skip the direct attempt: the launcher's must-use plugin (src/lib/freemius-plugin.js)
+// sends calls to api., sandbox-api. and wp.freemius.com straight here, because
+// Playground's retry loses the request body in Firefox.
+// The public proxy only answers playground.wordpress.net, so our build sets
 // CORS_PROXY_URL=/cors-proxy.php? and this Worker answers it. The path must end in .php:
 // Playground's service worker caches same-origin GETs while ignoring the query string, so
 // every /cors-proxy/?<url> would share one cache entry. It skips a .php path, except

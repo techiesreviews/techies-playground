@@ -26,13 +26,13 @@ For a deployment preparation, also run `npm run deploy:check`. Per the Release s
 
 ## Current automated suite
 
-The suite uses Node's built-in test runner and contains 124 tests in 20 files in the current working tree. `npm test` names its files (`src/**/*.test.js`, `scripts/*.test.mjs`), so a locally prepared `playground-host/dist` adds none.
+The suite uses Node's built-in test runner and contains 168 tests in 26 files in the current working tree. `npm test` names its files (`src/**/*.test.js`, `scripts/*.test.mjs`), so a locally prepared `playground-host/dist` adds none.
 
 Use the shared [Agent Kit](agents/agent-scripts.md): `scripts/agents/kit doctor`, `scripts/agents/kit unit` (the same files as `npm test`), and `scripts/agents/kit build`. The unit tests are Node tests only; browser specs and `kit shots` are not integrated. Real browser checks below use T3 separately and must not be inferred from the Node results.
 
 | Test module | Coverage |
 | --- | --- |
-| `freemius-plugin.test.js` | Runs the Freemius must-use plugin in PHP 8.3 (php-wasm) against stubbed WordPress functions: `auth_date` from the `Date` header, the proxy opt-in for Authorization, only the two Freemius API hosts, no double stamping, untouched string headers and preempted answers. |
+| `freemius-plugin.test.js` | Runs the Freemius must-use plugin in PHP 8.3 (php-wasm) against stubbed WordPress functions: `auth_date` from the `Date` header, the proxy opt-in for Authorization, calls sent straight to `/cors-proxy.php` on the site's scheme, host and port (direct to Freemius without a usable site address), only `api.`, `sandbox-api.` and `wp.freemius.com`, no double stamping, untouched string headers and preempted answers. |
 | `recipe.test.js` | Stable IDs, version hints, labels, default storage, validation, advanced settings, Blueprint output (the Freemius plugin written before installs), directory installs, secret-field rejection, credential URL aliases, safe/unsafe persistence boundaries, public URL controls and external setup warnings. |
 | `wordpress-versions.test.js` | Live version normalization, exact latest resolution, preserved saved versions, fetch contract. |
 | `wordpress-org-plugins.test.js` | Slugs, normalized/sanitized results, entity decoding, artwork host allowlist, search and featured request parameters. |
@@ -40,11 +40,16 @@ Use the shared [Agent Kit](agents/agent-scripts.md): `scripts/agents/kit doctor`
 | `github-repository.test.js` | Public star-count normalization and the fixed Techies Playground repository API request. |
 | `package-upload.test.js` | Plugin/classic/block-theme header classification, misleading filenames, invalid/nested/ambiguous archives, 150-file drop forwarding, text drags, nested drag state, leave reset and listener cleanup. |
 | `vault.test.js` | Separate theme storage and IndexedDB transaction completion. |
-| `license-vault.test.js` | Authenticated encryption round trip, wrong-password failure, deletion transaction completion, abort during clipboard read/decryption, active-session copy and missing-session rejection. |
+| `license-vault.test.js` | Authenticated encryption round trip, wrong-password failure, deletion transaction completion, abort during clipboard read/decryption, active-session copy and missing-session rejection, newest key per requested package for the automatic fill, a second vault creation never overwriting the first, a key that no longer opens the vault (reset elsewhere) saving nothing. |
+| `checks.test.js` | The two checks, a check counting only when its plugin (WordPress.org or uploaded, free or Pro) is in the setup, adding a check once, where results open, and the checks must-use plugin. |
+| `license-fill.test.js` | Plugin folder from the install path, the key-only request body, the fill code reading keys from the body, result parsing and unknown statuses, saved-key packages, summary and plain-word labels, the fill run itself (one PHP request, locked vault, no folder, unreported plugin, errors cut to 200 characters, abort, a Lock while keys are read sends nothing, a PHP run that never answers ends when the launch closes, the record id of the key used). |
+| `checks-php.test.js` | The checks must-use plugin in real PHP 8.3: each `techies-check` value prints only its own script, and nothing prints without one. |
+| `license-fill-php.test.js` | The fill code in real PHP 8.3 against stub WordPress and Freemius: each key reaches only its folder's Freemius instance (no prefix mix-ups), active licences are left alone, refusals and exceptions are reported with the key replaced by `[key]`, non-Freemius plugins are reported. |
+| `vault-session.test.js` | The in-memory session key, lock, listeners, a launch's wait for an unlock, skip or close (and that it stops listening), a late unlock after its prompt closed being dropped. |
 | `saved-recipes.test.js` | Upsert, rename-replace, safe round trip, invalid-record dropping. |
 | `spinup-history.test.js` | Safe metadata, order/cap, invalid-record dropping, theme metadata, saved-environment deduplication. |
 | `plugin-preferences.test.js` | Recency ordering, multi-field search, valid timestamp persistence and deletion. |
-| `playground-persistence.test.js` | Unload warning, one-time storage-default migration, site identity/persistence labels. |
+| `playground-persistence.test.js` | Unload warning, one-time storage-default migration, site identity/persistence labels, asking for persistent storage without waiting (Firefox keeps that request pending until the visitor answers). |
 | `playground-preview.test.js` | Preview target validation, preserved query/fragment, modified clicks, external/download/ordinary navigation exclusions, direct popup mapping, standalone execution of the generated mu-plugin script. |
 | `sync-wordpress-release.test.mjs` | Stable release selection, branch normalization, minor version bump, no-op and generated release edits. |
 | `playground-host.test.js` | The Playground host setting and its validation, client and remote URLs, loading the client with a readable failure, the two-minute start deadline that ends once WordPress runs. |
@@ -79,6 +84,7 @@ Use synthetic ZIPs/test packages and non-production vendor licenses.
 | Identity change | Change recipe name, exact WordPress, or PHP and launch. | A distinct OPFS environment is used. |
 | Packages | Launch local and directory plugins plus local/directory theme. | Plugins activate; selected theme is active; local theme verification passes. |
 | History | Launch temporary and saved configurations repeatedly. | Newest first, max 30, saved identity deduplicated, status labels correct. |
+| One-click start, keys, Checks | Upload a free Freemius plugin ZIP, Add key with a fake key, add Query Monitor and Code Profiler in Checks, save the recipe, reload, press Start, unlock once. Open Checks for each tool. Repeat in Firefox with Save playground in browser on. | The stored ZIP installs and activates; Licenses shows `0 of 1 active` and the manager shows Freemius's refusal; Query Monitor's panel opens; Code Profiler's page opens without the Query Monitor panel and profiles. See [the change record](changes/2026-11-14-one-click-start-keys-checks.md). |
 | Snapshot | Export after setup. | A readable `<name>-wp-content.zip` downloads. |
 | Update all | Use a package with an available safe test update. | Success/failure summary matches WordPress result and UI returns to Plugins. |
 | License vault | Create, wrong-password unlock, add, lock, unlock, copy, delete, reset. | Ciphertext persists; wrong password fails; plaintext appears only in field/clipboard; reset deletes all entries. |

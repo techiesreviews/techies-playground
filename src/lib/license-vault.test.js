@@ -143,3 +143,174 @@ test('cancels copy after pending storage or decryption while preserving active c
     else delete globalThis.navigator
   }
 })
+
+test('reads the newest saved key for each requested package only', async () => {
+  const { readLicenseKeysForPackages } = await import('./license-vault.js')
+  const originalIndexedDB = globalThis.indexedDB
+  const key = await deriveLicenseVaultKey('synthetic master password', new Uint8Array(16), 1000)
+  async function seal(id, pluginId, name, plaintext, createdAt) {
+    const aad = new TextEncoder().encode(`license-v1\0${id}\0${pluginId}\0${name}`)
+    return { id, pluginId, name, createdAt, ...await encryptLicenseSecret(key, plaintext, aad) }
+  }
+  const records = [
+    await seal('a', 'plugin:menu-image', 'Old', 'synthetic-old', '2026-11-01T00:00:00.000Z'),
+    await seal('b', 'plugin:menu-image', 'New', 'synthetic-new', '2026-11-10T00:00:00.000Z'),
+    await seal('c', 'plugin:other', 'Other', 'synthetic-other', '2026-11-12T00:00:00.000Z'),
+  ]
+  globalThis.indexedDB = { open() {
+    const request = { result: { close() {}, transaction() {
+      const transaction = { objectStore() { return { getAll() {
+        const read = { result: records }
+        queueMicrotask(() => { read.onsuccess(); transaction.oncomplete() })
+        return read
+      } } } }
+      return transaction
+    } } }
+    queueMicrotask(() => request.onsuccess())
+    return request
+  } }
+  try {
+    const keys = await readLicenseKeysForPackages(key, ['plugin:menu-image', 'plugin:missing'], new AbortController().signal)
+    assert.deepEqual([...keys.entries()], [['plugin:menu-image', { recordId: 'b', licenseKey: 'synthetic-new' }]])
+    await assert.rejects(readLicenseKeysForPackages(key, ['plugin:menu-image']), /active vault session/)
+    const aborted = new AbortController()
+    aborted.abort()
+    await assert.rejects(readLicenseKeysForPackages(key, ['plugin:menu-image'], aborted.signal), { name: 'AbortError' })
+  } finally {
+    globalThis.indexedDB = originalIndexedDB
+  }
+})
+
+test('a second vault creation never overwrites the first one', async () => {
+  const { createLicenseVault } = await import('./license-vault.js')
+  const originalIndexedDB = globalThis.indexedDB
+  const stored = new Map()
+  const writes = []
+  globalThis.indexedDB = { open() {
+    const request = { result: { close() {}, transaction() {
+      const transaction = { objectStore() { return {
+        get(id) { const read = { result: stored.get(id) }; queueMicrotask(() => { read.onsuccess(); transaction.oncomplete() }); return read },
+        put(record) { writes.push('put'); stored.set(record.id, record); const write = {}; queueMicrotask(() => { write.onsuccess(); transaction.oncomplete() }); return write },
+        add(record) {
+          writes.push('add')
+          const write = {}
+          queueMicrotask(() => {
+            if (stored.has(record.id)) {
+              write.error = Object.assign(new Error('Key already exists'), { name: 'ConstraintError' })
+              write.onerror()
+              transaction.error = write.error
+              transaction.onabort?.()
+              return
+            }
+            stored.set(record.id, record)
+            write.onsuccess()
+            transaction.oncomplete()
+          })
+          return write
+        },
+      } } }
+      return transaction
+    } } }
+    queueMicrotask(() => request.onsuccess())
+    return request
+  } }
+  try {
+    // Both start while no vault exists; only the first one may write its settings.
+    const outcomes = await Promise.allSettled([
+      createLicenseVault('first master password'),
+      createLicenseVault('second master password'),
+    ])
+    assert.deepEqual(outcomes.map((outcome) => outcome.status).sort(), ['fulfilled', 'rejected'])
+    assert.match(outcomes.find((outcome) => outcome.status === 'rejected').reason.message, /already exists/)
+    assert.deepEqual(writes, ['add', 'add'])
+    assert.equal(stored.size, 1)
+  } finally {
+    globalThis.indexedDB = originalIndexedDB
+  }
+})
+
+// A small IndexedDB stand-in: a transaction completes once its last request has settled,
+// abort() rolls back its puts, and beforeTransaction(n) runs before the nth transaction opens.
+function fakeVaultDatabase(stored, { beforeTransaction = () => {} } = {}) {
+  let opened = 0
+  return { open() {
+    const request = { result: { close() {}, transaction() {
+      beforeTransaction(++opened)
+      let pending = 0
+      let aborted = false
+      const writes = []
+      const transaction = {
+        error: null,
+        abort() {
+          aborted = true
+          queueMicrotask(() => transaction.onabort?.())
+        },
+        objectStore() { return {
+          get(id) { return settle({ result: stored.get(id) }) },
+          put(record) { writes.push(record); return settle({}) },
+        } },
+      }
+      function settle(operation) {
+        pending += 1
+        queueMicrotask(() => {
+          if (aborted) return
+          operation.onsuccess?.()
+          pending -= 1
+          if (pending === 0 && !aborted) queueMicrotask(() => {
+            if (aborted || pending) return
+            for (const record of writes) stored.set(record.id, record)
+            transaction.oncomplete?.()
+          })
+        })
+        return operation
+      }
+      return transaction
+    } } }
+    queueMicrotask(() => request.onsuccess())
+    return request
+  } }
+}
+
+async function vaultMeta(key, salt = 'AAAAAAAAAAAAAAAAAAAAAA==') {
+  const verifierText = 'private-playground-license-vault:v1'
+  const verifier = await encryptLicenseSecret(key, verifierText, new TextEncoder().encode(verifierText))
+  return { id: 'vault', salt, iterations: 1000, verifier }
+}
+
+test('a key from a vault that was reset and recreated elsewhere cannot save a license', async () => {
+  const { addLicense } = await import('./license-vault.js')
+  const originalIndexedDB = globalThis.indexedDB
+  const currentKey = await deriveLicenseVaultKey('new vault password', new Uint8Array(16), 1000)
+  const staleKey = await deriveLicenseVaultKey('old vault password', new Uint8Array(16), 1000)
+  const stored = new Map([['vault', await vaultMeta(currentKey)]])
+  globalThis.indexedDB = fakeVaultDatabase(stored)
+  const licenses = () => [...stored.keys()].filter((id) => id !== 'vault')
+  try {
+    await assert.rejects(addLicense(staleKey, { name: 'Menu Image', pluginId: 'plugin:menu-image', licenseKey: 'sk_x' }), { name: 'VaultChangedError' })
+    assert.equal(licenses().length, 0)
+    const id = await addLicense(currentKey, { name: 'Menu Image', pluginId: 'plugin:menu-image', licenseKey: 'sk_x' })
+    assert.deepEqual(licenses(), [id])
+  } finally {
+    globalThis.indexedDB = originalIndexedDB
+  }
+})
+
+test('a vault reset and recreated between the key check and the write saves nothing', async () => {
+  const { addLicense } = await import('./license-vault.js')
+  const originalIndexedDB = globalThis.indexedDB
+  const oldKey = await deriveLicenseVaultKey('old vault password', new Uint8Array(16), 1000)
+  const newKey = await deriveLicenseVaultKey('new vault password', new Uint8Array(16), 1000)
+  const stored = new Map([['vault', await vaultMeta(oldKey)]])
+  const recreated = await vaultMeta(newKey, 'AQEBAQEBAQEBAQEBAQEBAQ==')
+  // Transaction 1 is the verifier read; another tab resets and recreates the vault before
+  // transaction 2, the write.
+  globalThis.indexedDB = fakeVaultDatabase(stored, { beforeTransaction(n) {
+    if (n === 2) { stored.clear(); stored.set('vault', recreated) }
+  } })
+  try {
+    await assert.rejects(addLicense(oldKey, { name: 'Menu Image', pluginId: 'plugin:menu-image', licenseKey: 'sk_x' }), { name: 'VaultChangedError' })
+    assert.deepEqual([...stored.keys()], ['vault'])
+  } finally {
+    globalThis.indexedDB = originalIndexedDB
+  }
+})

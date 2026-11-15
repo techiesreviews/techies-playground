@@ -42,6 +42,7 @@ Techies Playground is a browser-local control panel that assembles and launches 
 | Browser-saved environment | A Playground WordPress filesystem mounted to OPFS and resumable by recipe identity. |
 | Temporary environment | An in-memory Playground whose site changes are discarded when closed. |
 | Site identity | Normalized combination of recipe name, resolved WordPress version, and PHP version. It selects the OPFS path. |
+| Check | A free plugin that measures a setup (Query Monitor, Code Profiler; `src/lib/checks.js`). It counts when its plugin is in the recipe, and its results are read inside WordPress. |
 | Snapshot | A downloaded ZIP of the running site's `wp-content`, not a full server image. |
 
 ## System map
@@ -72,7 +73,7 @@ Release `dev` to `main` (`kit pr --release --base main`)
 
 ## Invariants that must survive a rebuild
 
-1. There is no app-owned upload or search proxy. ZIPs, decrypted licenses, and WordPress data never pass through a Techies server. The one exception is Playground's own CORS proxy on the Playground host: when WordPress makes an outgoing request the browser blocks (for example a licence activation), Playground retries it through `/cors-proxy.php` on `wp.techies.tools`, as it did through `wordpress-playground-cors-proxy.net` before self-hosting. That Worker refuses browsers on other sites, rate-limits every caller, stores nothing and has request logging off. Every launched site gets a must-use plugin (`src/lib/freemius-plugin.js`) that sends calls to the Freemius licence API through this proxy with their signature, and the proxy passes PUT, PATCH and DELETE on to the Freemius API hosts only.
+1. There is no app-owned upload or search proxy. ZIPs, decrypted licenses, and WordPress data never pass through a Techies server. The one exception is Playground's own CORS proxy on the Playground host: when WordPress makes an outgoing request the browser blocks (for example a licence activation), Playground retries it through `/cors-proxy.php` on `wp.techies.tools`, as it did through `wordpress-playground-cors-proxy.net` before self-hosting. That Worker refuses browsers on other sites, rate-limits every caller, stores nothing and has request logging off. Every launched site gets a must-use plugin (`src/lib/freemius-plugin.js`) that sends calls to Freemius (`api.`, `sandbox-api.` and `wp.freemius.com`) straight to this proxy with their signature, and the proxy passes PUT, PATCH and DELETE on to the Freemius API hosts only.
 2. Every recipe is normalized through `validateRecipe` before it is saved, exported, imported, launched, or added to history.
 3. Recipes and history never include ZIP contents or license keys.
 4. Local plugin/theme IDs remain separate from WordPress.org slugs.
@@ -80,7 +81,7 @@ Release `dev` to `main` (`kit pr --release --base main`)
 6. `latest` must be resolved from WordPress.org at launch and the launched exact version must be verified before setup continues.
 7. New browser-saved sites run one-time setup, then mount OPFS. Resumed sites mount OPFS before startup and skip WordPress installation and one-time setup.
 8. Temporary running sites warn before page unload and require confirmation before closing from the Playground header.
-9. The license master password and derived `CryptoKey` are never persisted. Locking or closing the manager drops the in-memory key reference.
+9. The license master password and derived `CryptoKey` are never persisted. After one unlock the key stays in memory for the page session (`src/lib/vault-session.js`) so launches can fill saved keys into Freemius-based plugins; Lock, reloading or closing the tab drops it. A decrypted key travels only in the body of one PHP request to the running Playground (`src/lib/license-fill.js`), never in a recipe, Blueprint, URL, file or log.
 10. Deployment means landing verified changes on `dev` and releasing `dev` to `main`, with the changelog and version updated for a change users can see (the Release section of `docs/agents/kitchen-extras.md`): agent work through a reviewed `kit pr`, the daily WordPress sync PRs (opened against `dev`) reviewed and merged on GitHub, then `kit pr --release --base main`. `main` only takes `dev`. The GitHub pipeline deploys pushes to `main` to Cloudflare.
 
 ## Current implementation shape
@@ -89,7 +90,7 @@ Release `dev` to `main` (`kit pr --release --base main`)
 - `src/App.jsx` is deliberately the orchestration and presentation center. Pure data rules live in `src/lib` and are tested with Node's built-in test runner.
 - `worker.js` only serves built assets through a Cloudflare Worker and adds security headers.
 - There is no router, global state library, server database, analytics client, or authentication layer.
-- The source-controlled app version is `0.9.0` in the current working tree.
+- The source-controlled app version is `0.10.1` in the current working tree.
 
 ## Where to look next
 

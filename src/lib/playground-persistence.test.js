@@ -31,3 +31,16 @@ test('keeps the saved-site list per Playground host, because each host has its o
   assert.equal(persistedSitesKey('https://wp.techies.tools'), `${legacy}@https://wp.techies.tools`)
   assert.equal(persistedSitesKey('https://preview-wp.techies.tools'), `${legacy}@https://preview-wp.techies.tools`)
 })
+
+test('asks for persistent storage without waiting for the answer', async () => {
+  const { requestPersistentStorage } = await import('./playground-persistence.js')
+  let calls = 0
+  // Firefox keeps this promise pending until the visitor answers its permission prompt.
+  assert.equal(requestPersistentStorage({ persist() { calls += 1; return new Promise(() => {}) } }), undefined)
+  assert.equal(calls, 1)
+  requestPersistentStorage({ persist: () => Promise.reject(new Error('denied')) })
+  requestPersistentStorage({ persist() { throw new Error('unsupported') } })
+  requestPersistentStorage(undefined)
+  requestPersistentStorage({})
+  await new Promise((resolve) => setImmediate(resolve))
+})

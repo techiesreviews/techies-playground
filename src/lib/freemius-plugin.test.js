@@ -3,9 +3,10 @@ import assert from 'node:assert/strict'
 import { getPHPLoaderModule } from '@php-wasm/node-8-3'
 import { loadPHPRuntime, PHP } from '@php-wasm/universal'
 import { FREEMIUS_PLUGIN, FREEMIUS_PLUGIN_PATH } from './freemius-plugin.js'
+import { CORS_PROXY_PATH } from '../../playground-host/cors-proxy.js'
 
 // Runs the must-use plugin in real PHP 8.3 with the few WordPress functions it calls
-// stubbed: add_filter, wp_parse_url, and wp_remote_request, which applies
+// stubbed: add_filter, wp_parse_url, site_url, and wp_remote_request, which applies
 // pre_http_request the way WordPress does and records the requests that would be sent.
 const HARNESS = `<?php
 $GLOBALS['filters'] = array();
@@ -16,6 +17,9 @@ function add_filter( $hook, $callback, $priority = 10, $accepted_args = 1 ) {
 }
 function wp_parse_url( $url, $component = -1 ) {
 	return parse_url( $url, $component );
+}
+function site_url() {
+	return $GLOBALS['site_url'];
 }
 function wp_remote_request( $url, $args = array() ) {
 	$response = $GLOBALS['preempt'];
@@ -30,6 +34,7 @@ function wp_remote_request( $url, $args = array() ) {
 }
 $input = json_decode( base64_decode( getenv( 'CASE' ) ), true );
 $GLOBALS['preempt'] = $input['preempt'];
+$GLOBALS['site_url'] = $input['siteUrl'];
 require '/plugin.php';
 $result = wp_remote_request( $input['url'], $input['args'] );
 $GLOBALS['preempt'] = false;
@@ -47,11 +52,14 @@ async function php() {
   return phpPromise
 }
 
-async function send(url, args, { preempt = false } = {}) {
+const SITE_URL = 'https://wp.example.test/scope:launcher-abc'
+const PROXY = `https://wp.example.test${CORS_PROXY_PATH}?`
+
+async function send(url, args, { preempt = false, siteUrl = SITE_URL } = {}) {
   const runtime = await php()
   const response = await runtime.run({
     scriptPath: '/harness.php',
-    env: { CASE: Buffer.from(JSON.stringify({ url, args, preempt })).toString('base64') },
+    env: { CASE: Buffer.from(JSON.stringify({ url, args, preempt, siteUrl })).toString('base64') },
   })
   assert.equal(response.errors, '', response.errors)
   return JSON.parse(response.text)
@@ -73,10 +81,36 @@ test('the plugin is a must-use plugin file', () => {
   assert.match(FREEMIUS_PLUGIN, /^<\?php\n/)
 })
 
-test('copies the Date header into auth_date and opts Authorization into the proxy for api.freemius.com, changing nothing else', async () => {
+test('sends api.freemius.com calls straight to the Playground host\'s CORS proxy, with the Date header copied into auth_date and Authorization opted in, changing nothing else', async () => {
   const args = signed()
   const { sent } = await send('https://api.freemius.com/v1/plugins/123/installs/456.json?fields=id,is_active', args)
-  assert.deepEqual(sent, [{ url: `https://api.freemius.com/v1/plugins/123/installs/456.json?fields=id,is_active&${STAMP}`, args: optedIn(args) }])
+  assert.deepEqual(sent, [{ url: `${PROXY}https://api.freemius.com/v1/plugins/123/installs/456.json?fields=id,is_active&${STAMP}`, args: optedIn(args) }])
+})
+
+test('sends wp.freemius.com calls (the licence opt-in POST) straight to the proxy with their body unchanged', async () => {
+  const args = { method: 'POST', timeout: 60, body: { license_key: 'sk_fake', format: 'json' } }
+  const url = 'https://wp.freemius.com/action/service/user/install/?show_pending=1'
+  const { sent } = await send(url, args)
+  assert.deepEqual(sent, [{ url: `${PROXY}${url}`, args: { ...args, headers: { [OPT_IN]: 'authorization' } } }])
+})
+
+test('builds the proxy address from the site\'s scheme, host and port', async () => {
+  for (const [siteUrl, proxy] of [
+    ['http://127.0.0.1:8787/scope:x', `http://127.0.0.1:8787${CORS_PROXY_PATH}?`],
+    ['https://preview-wp.techies.tools', `https://preview-wp.techies.tools${CORS_PROXY_PATH}?`],
+    ['HTTPS://Wp.Example.test', `https://Wp.Example.test${CORS_PROXY_PATH}?`],
+    ['http://[::1]:8787/scope:x', `http://[::1]:8787${CORS_PROXY_PATH}?`],
+  ]) {
+    const { sent } = await send('https://api.freemius.com/v1/ping.json', { method: 'GET' }, { siteUrl })
+    assert.equal(sent[0].url, `${proxy}https://api.freemius.com/v1/ping.json`, siteUrl)
+  }
+})
+
+test('without a usable site address, stamps and opts in but sends to Freemius directly', async () => {
+  for (const siteUrl of ['', '/scope:x', 'not a url', 'ftp://wp.example.test/scope:x']) {
+    const { sent } = await send('https://api.freemius.com/v1/ping.json', signed({ method: 'GET', body: null }), { siteUrl })
+    assert.equal(sent[0].url, `https://api.freemius.com/v1/ping.json?${STAMP}`, siteUrl)
+  }
 })
 
 test('stamps sandbox-api.freemius.com, the http fallback, any letter case, a trailing dot, existing queries and a lowercase header name', async () => {
@@ -91,14 +125,14 @@ test('stamps sandbox-api.freemius.com, the http fallback, any letter case, a tra
   ]) {
     const { sent } = await send(url, signed({ method: 'GET', body: null }))
     assert.equal(sent.length, 1, url)
-    assert.equal(sent[0].url, expected, url)
+    assert.equal(sent[0].url, `${PROXY}${expected}`, url)
     assert.equal(sent[0].args.headers[OPT_IN], 'authorization', url)
   }
   const { sent } = await send('https://api.freemius.com/v1/ping.json', { headers: { date: DATE } })
-  assert.deepEqual(sent, [{ url: `https://api.freemius.com/v1/ping.json?${STAMP}`, args: { headers: { date: DATE, [OPT_IN]: 'authorization' } } }])
+  assert.deepEqual(sent, [{ url: `${PROXY}https://api.freemius.com/v1/ping.json?${STAMP}`, args: { headers: { date: DATE, [OPT_IN]: 'authorization' } } }])
 })
 
-test('opts unsigned and already stamped Freemius requests into the proxy without stamping them again', async () => {
+test('sends unsigned and already stamped Freemius requests through the proxy without stamping them again', async () => {
   for (const [url, args] of [
     ['https://api.freemius.com/v1/ping.json', { method: 'GET', headers: { 'User-Agent': 'Freemius' } }],
     ['https://api.freemius.com/v1/ping.json', { method: 'GET', headers: { Date: '' } }],
@@ -107,7 +141,7 @@ test('opts unsigned and already stamped Freemius requests into the proxy without
     ['https://api.freemius.com/v1/ping.json?auth_date=other', signed()],
   ]) {
     const { sent } = await send(url, args)
-    assert.deepEqual(sent, [{ url, args: { ...args, headers: { ...args.headers, [OPT_IN]: 'authorization' } } }], url)
+    assert.deepEqual(sent, [{ url: `${PROXY}${url}`, args: { ...args, headers: { ...args.headers, [OPT_IN]: 'authorization' } } }], url)
   }
 })
 
@@ -119,13 +153,14 @@ test('adds authorization to an existing proxy opt-in list once', async () => {
 
   const ready = optedIn(signed(), 'Cookie, Authorization')
   const url = `https://api.freemius.com/v1/ping.json?${STAMP}`
-  assert.deepEqual((await send(url, ready)).sent, [{ url, args: ready }])
+  assert.deepEqual((await send(url, ready)).sent, [{ url: `${PROXY}${url}`, args: ready }])
 })
 
-test('leaves requests to every other host, and headers given as one string, untouched', async () => {
+test('leaves requests to every other host (the proxy itself included), and headers given as one string, untouched', async () => {
   for (const url of [
     'https://freemius.com/v1/ping.json',
-    'https://wp.freemius.com/action/service/user/install/',
+    `${PROXY}https://api.freemius.com/v1/ping.json?${STAMP}`,
+    'https://evil-wp.freemius.com/action/service/user/install/',
     'https://api.freemius.com.evil.test/v1/ping.json',
     'https://evil-api.freemius.com/v1/ping.json',
     'https://evil.test/api.freemius.com/v1/ping.json',

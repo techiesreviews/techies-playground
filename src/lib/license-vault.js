@@ -67,8 +67,42 @@ function getRecord(storeName, id) {
   return transact(storeName, 'readonly', (store) => store.get(id))
 }
 
-function putRecord(storeName, record) {
-  return transact(storeName, 'readwrite', (store) => store.put(record))
+// add() fails when the id exists, so two creations that both started before a vault
+// existed cannot overwrite each other's salt and verifier.
+function addRecord(storeName, record) {
+  return transact(storeName, 'readwrite', (store) => store.add(record))
+}
+
+function vaultChangedError() {
+  return Object.assign(new Error('The vault changed in another tab. Unlock it again to save this key.'), { name: 'VaultChangedError' })
+}
+
+// Writes the license only if the meta record is still the one whose verifier the key opened,
+// in one transaction, so a reset and recreation after that check cannot slip in before the write.
+function putLicenseIfVaultUnchanged(checkedMeta, record) {
+  return openDatabase().then((database) => new Promise((resolve, reject) => {
+    const transaction = database.transaction([META_STORE, LICENSE_STORE], 'readwrite')
+    let changed = false
+    const read = transaction.objectStore(META_STORE).get(META_ID)
+    read.onsuccess = () => {
+      const meta = read.result
+      if (!meta || meta.salt !== checkedMeta.salt || meta.verifier?.iv !== checkedMeta.verifier.iv
+        || meta.verifier?.ciphertext !== checkedMeta.verifier.ciphertext) {
+        changed = true
+        transaction.abort()
+        return
+      }
+      transaction.objectStore(LICENSE_STORE).put(record)
+    }
+    transaction.oncomplete = () => {
+      database.close()
+      resolve()
+    }
+    transaction.onabort = () => {
+      database.close()
+      reject(changed ? vaultChangedError() : transaction.error || new Error('The license vault transaction was aborted.'))
+    }
+  }))
 }
 
 function licenseAdditionalData({ id, name, pluginId }) {
@@ -124,12 +158,17 @@ export async function createLicenseVault(password) {
   const salt = crypto.getRandomValues(new Uint8Array(16))
   const key = await deriveLicenseVaultKey(password, salt)
   const verifier = await encryptLicenseSecret(key, VERIFIER_TEXT, encoder.encode(VERIFIER_TEXT))
-  await putRecord(META_STORE, {
-    id: META_ID,
-    salt: bytesToBase64(salt),
-    iterations: DEFAULT_ITERATIONS,
-    verifier,
-  })
+  try {
+    await addRecord(META_STORE, {
+      id: META_ID,
+      salt: bytesToBase64(salt),
+      iterations: DEFAULT_ITERATIONS,
+      verifier,
+    })
+  } catch (caught) {
+    if (caught?.name === 'ConstraintError') throw new Error('The encrypted license vault already exists.')
+    throw caught
+  }
   return key
 }
 
@@ -160,10 +199,21 @@ export async function addLicense(key, { name, pluginId, licenseKey }) {
   if (!normalizedPluginId) throw new Error('Choose the plugin this license belongs to.')
   if (typeof licenseKey !== 'string' || !licenseKey.trim()) throw new Error('Enter a license key.')
 
+  // The key may come from a session that outlived the vault (reset and recreated in another
+  // tab); a license encrypted with it could never be read, so it must open the current vault.
+  const meta = await getRecord(META_STORE, META_ID)
+  let opensVault = false
+  try {
+    opensVault = Boolean(meta) && await decryptLicenseSecret(key, meta.verifier, encoder.encode(VERIFIER_TEXT)) === VERIFIER_TEXT
+  } catch {
+    opensVault = false
+  }
+  if (!opensVault) throw vaultChangedError()
+
   const id = crypto.randomUUID()
   const metadata = { id, name: normalizedName, pluginId: normalizedPluginId }
   const encrypted = await encryptLicenseSecret(key, licenseKey.trim(), licenseAdditionalData(metadata))
-  await putRecord(LICENSE_STORE, {
+  await putLicenseIfVaultUnchanged(meta, {
     ...metadata,
     ...encrypted,
     createdAt: new Date().toISOString(),
@@ -180,6 +230,28 @@ export async function copyLicenseToClipboard(key, id, signal) {
   const plaintext = await decryptLicenseSecret(key, record, licenseAdditionalData(record))
   signal.throwIfAborted()
   await navigator.clipboard.writeText(plaintext)
+}
+
+// Decrypts the newest saved key of each requested package for the automatic fill after a
+// launch, with the id of the record it came from. The plaintext stays in memory; the caller hands it only to the running Playground.
+export async function readLicenseKeysForPackages(key, packageIds, signal) {
+  if (!signal) throw new Error('An active vault session is required.')
+  signal.throwIfAborted()
+  const wanted = new Set(packageIds)
+  const records = await transact(LICENSE_STORE, 'readonly', (store) => store.getAll())
+  signal.throwIfAborted()
+  const newest = new Map()
+  for (const record of records) {
+    if (!wanted.has(record.pluginId)) continue
+    const current = newest.get(record.pluginId)
+    if (!current || String(record.createdAt).localeCompare(String(current.createdAt)) > 0) newest.set(record.pluginId, record)
+  }
+  const keys = new Map()
+  for (const [packageId, record] of newest) {
+    keys.set(packageId, { recordId: record.id, licenseKey: await decryptLicenseSecret(key, record, licenseAdditionalData(record)) })
+    signal.throwIfAborted()
+  }
+  return keys
 }
 
 export function deleteLicense(id) {
