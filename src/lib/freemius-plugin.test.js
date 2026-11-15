@@ -98,6 +98,8 @@ test('builds the proxy address from the site\'s scheme, host and port', async ()
   for (const [siteUrl, proxy] of [
     ['http://127.0.0.1:8787/scope:x', `http://127.0.0.1:8787${CORS_PROXY_PATH}?`],
     ['https://preview-wp.techies.tools', `https://preview-wp.techies.tools${CORS_PROXY_PATH}?`],
+    ['HTTPS://Wp.Example.test', `https://Wp.Example.test${CORS_PROXY_PATH}?`],
+    ['http://[::1]:8787/scope:x', `http://[::1]:8787${CORS_PROXY_PATH}?`],
   ]) {
     const { sent } = await send('https://api.freemius.com/v1/ping.json', { method: 'GET' }, { siteUrl })
     assert.equal(sent[0].url, `${proxy}https://api.freemius.com/v1/ping.json`, siteUrl)
@@ -105,7 +107,7 @@ test('builds the proxy address from the site\'s scheme, host and port', async ()
 })
 
 test('without a usable site address, stamps and opts in but sends to Freemius directly', async () => {
-  for (const siteUrl of ['', '/scope:x', 'not a url']) {
+  for (const siteUrl of ['', '/scope:x', 'not a url', 'ftp://wp.example.test/scope:x']) {
     const { sent } = await send('https://api.freemius.com/v1/ping.json', signed({ method: 'GET', body: null }), { siteUrl })
     assert.equal(sent[0].url, `https://api.freemius.com/v1/ping.json?${STAMP}`, siteUrl)
   }
