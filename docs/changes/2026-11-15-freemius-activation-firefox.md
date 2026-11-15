@@ -2,10 +2,10 @@
 
 - Date: 2026-11-15
 - Owner: fleet-lead build agent (Claude Opus 5.5)
-- Status: in-progress; the deployed-preview check is recorded below once the change lands on `dev`
-- Disposition: pending (kept once the preview check passes)
+- Status: complete (preview); production waits for Lex's go
+- Disposition: kept
 - Related version: 0.10.1
-- Related commit/issue: Orbit TOOLS-252 (parent TOOLS-249); follows [2026-11-14-freemius-licence-activation.md](2026-11-14-freemius-licence-activation.md)
+- Related commit/issue: Orbit TOOLS-252 (parent TOOLS-249); PR #33, merged to `dev` as 92e6134; follows [2026-11-14-freemius-licence-activation.md](2026-11-14-freemius-licence-activation.md)
 
 ## Context
 
@@ -56,15 +56,17 @@ A Freemius call sent straight to the proxy on the site's own host succeeds on th
 | Local, Node 24.22.2 | Same after the change; `scripts/agents/kit unit --affected` | Pass | 10/10; RESULT: ok unit 49/49 (6 files) | Executed |
 | Launcher built from this branch (`VITE_PLAYGROUND_ORIGIN=https://preview-wp.techies.tools`, `vite preview` on 127.0.0.1:4173), host preview-wp at 8e4a40c, Firefox and Chromium | Activation probe (Menu Image, fake key) | "Invalid license key." in both | Both: "Invalid license key."; the one Freemius request was `POST https://preview-wp.techies.tools/cors-proxy.php?https://wp.freemius.com/action/service/user/install/` → 200 `{"error":"Invalid license key."}` | Executed |
 | Same | `launch-probe.mjs … probe` (signed GET/PUT) | Body kept | Both browsers: all four calls went to `/cors-proxy.php`, 401 "Invalid Authorization header.", PUT echoes carry `"is_active":true` | Executed |
-| Deployed preview after landing on `dev` | Activation probe, signed GET/PUT probe, plain and ZIP launches in Firefox and Chromium | As above; launches complete | Recorded after the deploy | Pending |
+| Deployed preview at `dev` 92e6134 (Deploy preview run 43666899140 green; the served launcher bundle contains `techies_playground_freemius_proxy_url`), Playwright 1.65.1 headless Firefox and Chromium | Activation probe (Menu Image, `activate_migrated_license`, fake key) | "Invalid license key." in both | Both: "Invalid license key."; the one Freemius request was `POST https://preview-wp.techies.tools/cors-proxy.php?https://wp.freemius.com/action/service/user/install/` → 200 `{"error":"Invalid license key."}` | Executed 2026-11-15 |
+| Same | `launch-probe.mjs … probe` (FooGallery, signed GET/PUT, fake key) | Body kept | Both browsers: SDK and raw GET/PUT all sent to `/cors-proxy.php`, 401 "Invalid Authorization header."; both PUT echoes carry `"is_active":true` (Firefox's had none before) | Executed 2026-11-15 |
+| Same | `launch-probe.mjs … plain` and `… zip` | Launches complete | Firefox and Chromium: plain site reaches wp-admin (Akismet, Hello Dolly inactive); ZIP site reaches wp-admin with the probe plugin active; no failed requests or HTTP errors apart from Firefox's known service-worker message "Failed to load ''". The ~200 s per run is the script's fixed wait, not launch time | Executed 2026-11-15 |
 
 ## Result
 
-The body was lost in Playground's CORS retry in Firefox, not in our proxy or plugin. Sending Freemius calls straight to the proxy avoids that retry; locally against the deployed host, both browsers now reach Freemius with the body and get Freemius's own answers.
+The body was lost in Playground's CORS retry in Firefox, not in our proxy or plugin. Sending Freemius calls straight to the proxy avoids that retry; on the deployed preview both browsers now reach Freemius with the body and get Freemius's own answers ("Invalid license key." for a fake key), and plain and ZIP launches still work.
 
 ## Disposition and rationale
 
-Pending, expected kept: the smallest change in our code that makes activation work in Firefox, with Chromium unchanged in outcome.
+Kept: the smallest change in our code that makes activation work in Firefox, with Chromium unchanged in outcome, proven on the deployed preview in both browsers. Resumed saved sites get the new plugin too: the Blueprint writes it on every launch, new or resumed (`recipe.test.js`, "writes the Freemius plugin into every site before plugins install"); no separate browser run for a resumed site.
 
 ## Documentation impact
 
