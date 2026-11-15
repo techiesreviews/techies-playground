@@ -32,7 +32,7 @@ Use the shared [Agent Kit](agents/agent-scripts.md): `scripts/agents/kit doctor`
 
 | Test module | Coverage |
 | --- | --- |
-| `freemius-plugin.test.js` | Runs the Freemius must-use plugin in PHP 8.3 (php-wasm) against stubbed WordPress functions: `auth_date` from the `Date` header, the proxy opt-in for Authorization, only the two Freemius API hosts, no double stamping, untouched string headers and preempted answers. |
+| `freemius-plugin.test.js` | Runs the Freemius must-use plugin in PHP 8.3 (php-wasm) against stubbed WordPress functions: `auth_date` from the `Date` header, the proxy opt-in for Authorization, calls sent straight to `/cors-proxy.php` on the site's scheme, host and port (direct to Freemius without a usable site address), only `api.`, `sandbox-api.` and `wp.freemius.com`, no double stamping, untouched string headers and preempted answers. |
 | `recipe.test.js` | Stable IDs, version hints, labels, default storage, validation, advanced settings, Blueprint output (the Freemius plugin written before installs), directory installs, secret-field rejection, credential URL aliases, safe/unsafe persistence boundaries, public URL controls and external setup warnings. |
 | `wordpress-versions.test.js` | Live version normalization, exact latest resolution, preserved saved versions, fetch contract. |
 | `wordpress-org-plugins.test.js` | Slugs, normalized/sanitized results, entity decoding, artwork host allowlist, search and featured request parameters. |

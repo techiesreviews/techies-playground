@@ -1,0 +1,4 @@
+Evidence helpers for [2026-11-15-freemius-activation-firefox.md](../2026-11-15-freemius-activation-firefox.md), not part of the test suite.
+
+- `firefox-stream-body.mjs`: Playwright, Firefox and Chromium. Shows Firefox turning a `ReadableStream` request body into the text `[object ReadableStream]`, leaving `Request.body` unset, and passing Playground's `fetch('data:,', { body: stream })` probe anyway.
+- `techies-freemius-activation-probe.php`: a test-only plugin; on `wp-admin/?techies_freemius_probe=1` it activates a fake key in Menu Image through Menu Image's own Freemius SDK (`activate_migrated_license`, as the launcher's key fill does) and prints every Freemius request and the result. Zip it as `techies-freemius-probe/techies-freemius-probe.php` (file name `techies-freemius-probe.zip`, which the launcher reads as the plugin slug) and run `../2026-11-14-freemius-licence-activation/launch-probe.mjs` with `repositoryPlugins: ['menu-image']` in place of `foogallery`.

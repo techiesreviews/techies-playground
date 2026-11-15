@@ -129,6 +129,15 @@ const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-stora
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
   {
+    version: '0.10.1',
+    date: 'November 15, 2026',
+    title: 'Freemius licences activate in Firefox',
+    summary: 'Freemius-based plugins, such as Menu Image or WP Activity Log, now activate their licence in Firefox as they already did in Chrome.',
+    changes: [
+      'In Firefox, activating a Freemius licence no longer fails with "Your server is blocking the access to Freemius\' API": the activation now reaches Freemius with its details, and a wrong key gets Freemius\'s own answer, such as "Invalid license key."',
+    ],
+  },
+  {
     version: '0.10.0',
     date: 'November 14, 2026',
     title: 'One-click start, saved keys and Checks',
