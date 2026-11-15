@@ -61,6 +61,7 @@ Code Profiler profiles by requesting the site from itself. In browser Playground
 | Chromium, 568 x 320 | Unlock prompt with a wrong-password alert | both choices reachable | Start without keys visible after scrolling the prompt (y 244, 36 px tall) | script output |
 | Chromium, local build | Type a 5-character password under Add key, press Save key, then Launch | Save refuses; Launch still starts | Save: "Use a master password with at least 12 characters."; the Playground shell opened | script output |
 | Chromium, 320 px, touch | Hit-test 6, 10 and 13 px below the Checks button (button ends at 30 px) | tap areas reach 44 px from the top of the screen | all three points hit Checks | script output |
+| Node 24, worktree (after the landing second look) | `node --test src/lib/license-vault.test.js` with a new test that resets and recreates the vault between the key check and the write | `VaultChangedError`, nothing saved | the new test failed on the old code (the license was written into the new vault) and passes now: the meta record is compared and the license written in one IndexedDB transaction. Add key, unlock and launch password fields stay at 16 px on wide screens too (iOS focus zoom) | local run |
 | Deployed preview | Proof run after merge | see PR | recorded in the PR and the lead's report | pending at time of writing |
 
 ## Result

@@ -1283,7 +1283,8 @@ function LicenseFillLine({ id, result }) {
   return <span id={id} className={`block px-2 pb-1 text-base/7 font-normal [overflow-wrap:anywhere] sm:text-sm/6 ${tone === 'ok' ? 'text-teal-700' : tone === 'warn' ? 'text-amber-700' : 'text-neutral-500'}`}>{text}</span>
 }
 
-const inputClassName = 'w-full rounded-lg bg-white px-3 py-2.5 text-base/7 font-normal text-neutral-900 ring-1 ring-neutral-950/10 outline-none focus-visible:outline-2 -outline-offset-1 focus-visible:outline-teal-600 sm:py-2 sm:text-sm/6'
+// Stays at 16 px on every screen: iOS Safari zooms the page into a smaller field on focus.
+const inputClassName = 'w-full rounded-lg bg-white px-3 py-2.5 text-base/7 font-normal text-neutral-900 ring-1 ring-neutral-950/10 outline-none focus-visible:outline-2 -outline-offset-1 focus-visible:outline-teal-600 sm:py-2'
 
 // Lives inside the launch form, so it is a group of fields with its own Save button
 // instead of a nested <form>; Enter in a field saves instead of launching. No HTML

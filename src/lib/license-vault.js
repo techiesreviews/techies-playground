@@ -67,14 +67,42 @@ function getRecord(storeName, id) {
   return transact(storeName, 'readonly', (store) => store.get(id))
 }
 
-function putRecord(storeName, record) {
-  return transact(storeName, 'readwrite', (store) => store.put(record))
-}
-
 // add() fails when the id exists, so two creations that both started before a vault
 // existed cannot overwrite each other's salt and verifier.
 function addRecord(storeName, record) {
   return transact(storeName, 'readwrite', (store) => store.add(record))
+}
+
+function vaultChangedError() {
+  return Object.assign(new Error('The vault changed in another tab. Unlock it again to save this key.'), { name: 'VaultChangedError' })
+}
+
+// Writes the license only if the meta record is still the one whose verifier the key opened,
+// in one transaction, so a reset and recreation after that check cannot slip in before the write.
+function putLicenseIfVaultUnchanged(checkedMeta, record) {
+  return openDatabase().then((database) => new Promise((resolve, reject) => {
+    const transaction = database.transaction([META_STORE, LICENSE_STORE], 'readwrite')
+    let changed = false
+    const read = transaction.objectStore(META_STORE).get(META_ID)
+    read.onsuccess = () => {
+      const meta = read.result
+      if (!meta || meta.salt !== checkedMeta.salt || meta.verifier?.iv !== checkedMeta.verifier.iv
+        || meta.verifier?.ciphertext !== checkedMeta.verifier.ciphertext) {
+        changed = true
+        transaction.abort()
+        return
+      }
+      transaction.objectStore(LICENSE_STORE).put(record)
+    }
+    transaction.oncomplete = () => {
+      database.close()
+      resolve()
+    }
+    transaction.onabort = () => {
+      database.close()
+      reject(changed ? vaultChangedError() : transaction.error || new Error('The license vault transaction was aborted.'))
+    }
+  }))
 }
 
 function licenseAdditionalData({ id, name, pluginId }) {
@@ -180,14 +208,12 @@ export async function addLicense(key, { name, pluginId, licenseKey }) {
   } catch {
     opensVault = false
   }
-  if (!opensVault) {
-    throw Object.assign(new Error('The vault changed in another tab. Unlock it again to save this key.'), { name: 'VaultChangedError' })
-  }
+  if (!opensVault) throw vaultChangedError()
 
   const id = crypto.randomUUID()
   const metadata = { id, name: normalizedName, pluginId: normalizedPluginId }
   const encrypted = await encryptLicenseSecret(key, licenseKey.trim(), licenseAdditionalData(metadata))
-  await putRecord(LICENSE_STORE, {
+  await putLicenseIfVaultUnchanged(meta, {
     ...metadata,
     ...encrypted,
     createdAt: new Date().toISOString(),
