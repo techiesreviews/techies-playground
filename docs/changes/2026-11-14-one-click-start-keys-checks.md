@@ -61,7 +61,8 @@ Code Profiler profiles by requesting the site from itself. In browser Playground
 | Chromium, 568 x 320 | Unlock prompt with a wrong-password alert | both choices reachable | Start without keys visible after scrolling the prompt (y 244, 36 px tall) | script output |
 | Chromium, local build | Type a 5-character password under Add key, press Save key, then Launch | Save refuses; Launch still starts | Save: "Use a master password with at least 12 characters."; the Playground shell opened | script output |
 | Chromium, 320 px, touch | Hit-test 6, 10 and 13 px below the Checks button (button ends at 30 px) | tap areas reach 44 px from the top of the screen | all three points hit Checks | script output |
-| Node 24, worktree (after the landing second look) | `node --test src/lib/license-vault.test.js` with a new test that resets and recreates the vault between the key check and the write | `VaultChangedError`, nothing saved | the new test failed on the old code (the license was written into the new vault) and passes now: the meta record is compared and the license written in one IndexedDB transaction. Add key, unlock and launch password fields stay at 16 px on wide screens too (iOS focus zoom) | local run |
+| Node 24, worktree (after the landing second look) | `node --test src/lib/license-vault.test.js` with a new test that resets and recreates the vault between the key check and the write | `VaultChangedError`, nothing saved | the new test failed on the old code (the license was written into the new vault) and passes now: the meta record is compared and the license written in one IndexedDB transaction | local run |
+| Source inspection (after the landing second look) | `inputClassName` in `src/App.jsx` without `sm:text-sm/6` (Add key password, confirmation and key fields, and the launch unlock password) | 16 px at every width (iOS focus zoom) | the class keeps `text-base/7` at every breakpoint; font size not measured in a browser | source inspection |
 | Deployed preview | Proof run after merge | see PR | recorded in the PR and the lead's report | pending at time of writing |
 
 ## Result
@@ -81,6 +82,7 @@ Kept. It is the approved Tuesday slice.
 - After Tuesday (not in this change): our own results panel for Checks, an update-waiting status per plugin, automatic keys for other vendors.
 - Code Profiler Pro's admin page slug is unverified.
 - Firefox: Playground drops the POST body when it retries a Freemius API call through the CORS proxy, so Freemius activation (filled in or typed) fails there. Needs its own fix in the Freemius must-use plugin or the Playground build.
+- Accepted trade-off: on phones the Playground bar buttons keep 44 px tap areas that reach 12 px below the 32 px bar, so the top 12 px of WordPress under Licenses, Checks, Export snapshot, Update all and Close belongs to the bar (taps there go to the bar). Making the bar itself 44 px tall on phones is the alternative if this gets in the way.
 - A real (not fake) Freemius key through Start is Lex's to try; PR #30 already showed a real WP Activity Log key activating.
 
 ## Screenshots
