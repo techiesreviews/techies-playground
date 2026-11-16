@@ -63,7 +63,7 @@ export async function removeCachedWebsitePages(cacheStorage, keptPages) {
     const cache = await cacheStorage.open(name)
     for (const request of await cache.keys()) {
       const { pathname } = new URL(request.url)
-      if (/\.html?$/i.test(pathname) && !keptPages.includes(pathname) && !/^\/wp-[^/]+\//.test(pathname)) {
+      if (/\.html?$/i.test(pathname) && !keptPages.includes(pathname) && !/^\/wp-(\d+\.\d+|beta|nightly|trunk)\//.test(pathname)) {
         await cache.delete(request)
         removed.push(pathname)
       }

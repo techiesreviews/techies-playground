@@ -48,7 +48,6 @@ The 2026-11-15 architecture review found two risks on the Playground host origin
 | Local | `npm audit` before and after | High count drops | 7 high, 3 moderate → 1 high, 2 moderate | Local run |
 | preview-wp, after the merge to dev | Start a site, install a plugin, licence fill, Checks; `/index.html` answers 404; the proxy refuses a navigation | All work | Not run yet | — |
 
-The preview-wp check after the merge (start a site, install a plugin, licence fill, Checks) is recorded in the PR.
 
 ## Result
 
@@ -65,4 +64,4 @@ Pending the preview-wp check. Expected: kept, as it closes the review's one medi
 ## Follow-ups and open questions
 
 - S5 (the launcher still trusts playground.wordpress.net for scripts and frames) and the isomorphic-git warning stay open.
-- `remote.html` stays, and only framing is limited to the launchers. Playground 3.1.64's remote exposes its API with Comlink on `window` for messages from any origin (`exposeAPI` in `@php-wasm/universal` uses `windowEndpoint(self.parent)`), so a page on another site that opens `remote.html` in a new window might be able to drive it. Not tried. A possible follow-up: serve `/remote.html` only for `Sec-Fetch-Dest: iframe` (the Worker runs first for that path).
+- `remote.html` stays, and only framing is limited to the launchers. Playground 3.1.64's remote exposes its API with Comlink on `window` for messages from any origin (`exposeAPI` in `@php-wasm/universal` uses `windowEndpoint(self.parent)`), so a page on another site that opens `remote.html` in a new window might be able to drive it. Not tried. A possible follow-up: serve `/remote.html` only for `Sec-Fetch-Dest: iframe`, which needs `"run_worker_first": ["/remote.html"]` in `playground-host/wrangler.jsonc` (static assets are answered before the Worker today).
