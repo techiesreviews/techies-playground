@@ -50,6 +50,38 @@ export function isKept(relativePath, { phpVersions = PHP_VERSIONS, offlineAssets
   return true
 }
 
+// Playground's service worker answers a page it once cached without asking the server
+// (cache first, ignoring the query string) and keeps that cache until the next Playground
+// release. A browser that opened /index.html before the website pages left the host
+// would keep opening it, so remote.html, which the worker always fetches fresh, removes
+// such pages from Playground's caches. Self-contained: it runs as an inline script.
+export async function removeCachedWebsitePages(cacheStorage, keptPages) {
+  if (!cacheStorage) return []
+  const removed = []
+  for (const name of await cacheStorage.keys()) {
+    if (!name.startsWith('playground-cache')) continue
+    const cache = await cacheStorage.open(name)
+    for (const request of await cache.keys()) {
+      const { pathname } = new URL(request.url)
+      if (/\.html?$/i.test(pathname) && !keptPages.includes(pathname) && !/^\/wp-[^/]+\//.test(pathname)) {
+        await cache.delete(request)
+        removed.push(pathname)
+      }
+    }
+  }
+  return removed
+}
+
+export function withCachedPageCleanup(html) {
+  const head = html.match(/<head[^>]*>/i)
+  if (!head) throw new Error('remote.html has no <head> for the cached-page cleanup.')
+  const kept = JSON.stringify([...LAUNCHER_PAGES].map((page) => `/${page}`))
+  // A failed cleanup must never stop Playground from starting.
+  const script = `<script>(${removeCachedWebsitePages})(self.caches, ${kept}).catch(() => {})</script>`
+  const at = head.index + head[0].length
+  return `${html.slice(0, at)}${script}${html.slice(at)}`
+}
+
 function launcherOrigin(value) {
   let url
   try {
@@ -163,6 +195,11 @@ export async function preparePlaygroundHost({
     await mkdir(path.dirname(to), { recursive: true })
     const top = file.split('/')[0]
     if (file.includes('/') && /^wp-(\d+\.\d+|beta)$/.test(top)) wordpressDirectories.add(top)
+    if (file === 'remote.html') {
+      await writeFile(to, withCachedPageCleanup(await readFile(from, 'utf8')))
+      fileCount += 1
+      continue
+    }
     const { size } = await stat(from)
     if (size > fileSizeLimit) {
       const parts = await splitFile(from, to, size, partSize)

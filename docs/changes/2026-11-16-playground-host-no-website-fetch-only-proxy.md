@@ -30,6 +30,7 @@ The 2026-11-15 architecture review found two risks on the Playground host origin
 ## Implementation or prototype
 
 - `scripts/prepare-playground-host.mjs`: `isKept` drops HTML pages other than the launcher pages and WordPress release files, ahead of the offline-list exception; `php-8-6.html` is covered by the new rule.
+- `scripts/prepare-playground-host.mjs` also starts the prepared `remote.html` with an inline script that deletes website pages (HTML outside `wp-*/` other than the launcher pages) from Playground's `playground-cache-*` caches. The GPT second look found that Playground's service worker answers a page it once cached without asking the server (cache first, ignoring the query string) and keeps that cache until a new Playground release, whose cache name comes from the upstream commit, so rebuilding the same release would not clear it. A browser that had opened `/index.html` before would otherwise keep opening it. The worker always fetches `remote.html` fresh, so the next launch cleans the cache.
 - `playground-host/cors-proxy.js`: `isFetchRequest` (`Sec-Fetch-Dest: empty`) joins the same-origin gate, so OPTIONS and the Freemius PUT, PATCH and DELETE go through it too.
 - `.github/workflows/deploy-site.yml`: before the deploy, the host job refuses a prepared folder with `index.html` or with any page outside `wp-*/` other than the three launcher pages; after it, it checks the host answers 404 for `/index.html`.
 - Dependencies (review finding S4): vite 7.3.6 → 7.3.8, wrangler 4.122.0 → 4.155.0, the sharp override 0.35.4 → 0.35.5, plus `npm audit fix` for the build tools below them (undici, source-map-js, fast-uri). `npm audit`: 10 (7 high, 3 moderate) before, 3 (1 high, 2 moderate) after. What is left is isomorphic-git through `@wp-playground/blueprints`, which only clears with an upstream Playground release and is not reachable from the launcher (see the review).
@@ -42,6 +43,8 @@ The 2026-11-15 architecture review found two risks on the Playground host origin
 | Local, before the workflow change | `node --test scripts/deploy-workflow.test.mjs` | New test fails | 1 failed: no `index.html` guard | Local run |
 | Local, after | `npm test` | All pass | 171 passed, 0 failed | Local run |
 | Local | `npm run build`; `npx wrangler deploy --dry-run` | Build and dry run succeed | Both succeeded with vite 7.3.8 and wrangler 4.155.0 | Local run |
+| Local, before the cleanup | `node --test scripts/prepare-playground-host.test.mjs` with the cleanup tests | New tests fail | Failed: no cleanup export | Local run |
+| Local | The cleanup applied to preview-wp's live `remote.html`; its inline script parsed | Parses, opens the head | Parsed; the script is the first thing in `<head>` | Local run |
 | Local | `npm audit` before and after | High count drops | 7 high, 3 moderate → 1 high, 2 moderate | Local run |
 | preview-wp, after the merge to dev | Start a site, install a plugin, licence fill, Checks; `/index.html` answers 404; the proxy refuses a navigation | All work | Not run yet | — |
 
