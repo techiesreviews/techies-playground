@@ -8,6 +8,8 @@ import {
   isKept,
   parseArguments,
   preparePlaygroundHost,
+  removeCachedWebsitePages,
+  withCachedPageCleanup,
 } from './prepare-playground-host.mjs'
 
 const offered = new Set(['7.4', '8.0', '8.1', '8.2', '8.3', '8.4', '8.5'])
@@ -95,6 +97,58 @@ test('drops the public Playground website pages, even when the offline list name
   }
 })
 
+function fakeCacheStorage(entries) {
+  const stores = new Map(Object.entries(entries).map(([name, urls]) => [name, new Set(urls)]))
+  return {
+    stores,
+    keys: async () => [...stores.keys()],
+    open: async (name) => ({
+      keys: async () => [...stores.get(name)].map((url) => new Request(url)),
+      delete: async (request) => stores.get(name).delete(request.url),
+    }),
+  }
+}
+
+test('removes website pages a browser cached before they left the host, and nothing else', async () => {
+  // Playground's service worker answers a cached page without asking the server, ignoring
+  // the query string, until the next Playground release.
+  const storage = fakeCacheStorage({
+    'playground-cache-abc': [
+      'https://wp.techies.tools/index.html',
+      'https://wp.techies.tools/index.html?blueprint-url=https://evil.test/b.json',
+      'https://wp.techies.tools/builder/builder.html',
+      'https://wp.techies.tools/remote.html',
+      'https://wp.techies.tools/wordpress-popup.html',
+      'https://wp.techies.tools/wp-7.1/readme.html',
+      'https://wp.techies.tools/assets/remote-AAAA.js',
+      'https://wp.techies.tools/wp-7.1/wordpress-static.zip',
+    ],
+    'site-data': ['https://wp.techies.tools/index.html'],
+  })
+  await removeCachedWebsitePages(storage, ['/remote.html', '/wordpress-bridge.html', '/wordpress-popup.html'])
+  assert.deepEqual([...storage.stores.get('playground-cache-abc')], [
+    'https://wp.techies.tools/remote.html',
+    'https://wp.techies.tools/wordpress-popup.html',
+    'https://wp.techies.tools/wp-7.1/readme.html',
+    'https://wp.techies.tools/assets/remote-AAAA.js',
+    'https://wp.techies.tools/wp-7.1/wordpress-static.zip',
+  ])
+  assert.deepEqual([...storage.stores.get('site-data')], ['https://wp.techies.tools/index.html'])
+  assert.deepEqual(await removeCachedWebsitePages(undefined, []), [])
+})
+
+test('remote.html runs the cleanup on load, before its own scripts', async () => {
+  const html = '<!doctype html><html><head><title>x</title><script type="module" src="/assets/remote.js"></script></head><body></body></html>'
+  const cleaned = withCachedPageCleanup(html)
+  const script = cleaned.match(/<head><script>([\s\S]*?)<\/script>/)?.[1]
+  assert.ok(script, 'an inline script opens the head')
+  const storage = fakeCacheStorage({ 'playground-cache-abc': ['https://wp.techies.tools/index.html', 'https://wp.techies.tools/remote.html'] })
+  await new Function('self', `return ${script}`)({ caches: storage })
+  assert.deepEqual([...storage.stores.get('playground-cache-abc')], ['https://wp.techies.tools/remote.html'])
+  assert.ok(cleaned.endsWith('<title>x</title><script type="module" src="/assets/remote.js"></script></head><body></body></html>'))
+  assert.throws(() => withCachedPageCleanup('<html><body></body></html>'), /remote\.html/)
+})
+
 test('headers allow framing only by the launcher and cache hashed assets for a year', () => {
   const headers = buildHeaders({
     launcherOrigins: ['https://play.techies.tools'],
@@ -129,7 +183,7 @@ async function fixture() {
   const root = await mkdtemp(path.join(tmpdir(), 'playground-host-'))
   const source = path.join(root, 'source')
   const files = {
-    'remote.html': '<html></html>',
+    'remote.html': '<html><head></head></html>',
     'remote.html.map': '{}',
     'index.html': '<html>website</html>',
     'builder/builder.html': '<html>builder</html>',
@@ -191,6 +245,7 @@ test('prepares a trimmed host folder and splits files above the per-file limit',
       parts: ['/wp-7.1/wordpress-static.zip.part0', '/wp-7.1/wordpress-static.zip.part1', '/wp-7.1/wordpress-static.zip.part2'],
     },
   })
+  assert.match(await readFile(path.join(out, 'remote.html'), 'utf8'), /^<html><head><script>[\s\S]*removeCachedWebsitePages[\s\S]*<\/script><\/head><\/html>$/)
   const joined = await Promise.all([0, 1, 2].map((index) => readFile(path.join(out, `wp-7.1/wordpress-static.zip.part${index}`), 'utf8')))
   assert.equal(joined.join(''), 'x'.repeat(25))
   const headers = await readFile(path.join(out, '_headers'), 'utf8')
