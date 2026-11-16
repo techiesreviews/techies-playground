@@ -56,5 +56,7 @@ test('the host job refuses to deploy, and checks it does not serve, the public P
   const guard = host.indexOf('test ! -e playground-host/dist/index.html')
   assert.ok(guard !== -1, 'the prepared folder is checked for index.html')
   assert.ok(guard < host.indexOf('cloudflare/wrangler-action'), 'the check runs before the deploy')
-  assert.match(host, /"\$PLAYGROUND_ORIGIN\/index\.html"\)" = 404/, 'the deployed host answers 404 for index.html')
+  const pages = host.indexOf('"./remote.html ./wordpress-bridge.html ./wordpress-popup.html "')
+  assert.ok(pages !== -1 && pages < host.indexOf('cloudflare/wrangler-action'), 'only the launcher pages are deployed')
+  assert.match(host, /index_status="\$\(curl [^\n]*"\$PLAYGROUND_ORIGIN\/index\.html"\)"\n\s*test "\$index_status" = 404/, 'the deployed host answers 404 for index.html')
 })

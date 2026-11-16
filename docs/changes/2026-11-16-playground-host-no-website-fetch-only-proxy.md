@@ -2,8 +2,8 @@
 
 - Date: 2026-11-16
 - Owner: fleet-lead (builder: Claude Opus 5.5)
-- Status: complete
-- Disposition: kept
+- Status: in-progress
+- Disposition: pending
 - Related version: unreleased
 - Related commit/issue: TOOLS-324 (security pick S1 and S2 from the TOOLS-268 architecture review, picked under TOOLS-294)
 
@@ -31,7 +31,7 @@ The 2026-11-15 architecture review found two risks on the Playground host origin
 
 - `scripts/prepare-playground-host.mjs`: `isKept` drops HTML pages other than the launcher pages and WordPress release files, ahead of the offline-list exception; `php-8-6.html` is covered by the new rule.
 - `playground-host/cors-proxy.js`: `isFetchRequest` (`Sec-Fetch-Dest: empty`) joins the same-origin gate, so OPTIONS and the Freemius PUT, PATCH and DELETE go through it too.
-- `.github/workflows/deploy-site.yml`: the host job refuses a prepared folder with `index.html` before the deploy, and after it checks the host answers 404 for `/index.html`.
+- `.github/workflows/deploy-site.yml`: before the deploy, the host job refuses a prepared folder with `index.html` or with any page outside `wp-*/` other than the three launcher pages; after it, it checks the host answers 404 for `/index.html`.
 - Dependencies (review finding S4): vite 7.3.6 → 7.3.8, wrangler 4.122.0 → 4.155.0, the sharp override 0.35.4 → 0.35.5, plus `npm audit fix` for the build tools below them (undici, source-map-js, fast-uri). `npm audit`: 10 (7 high, 3 moderate) before, 3 (1 high, 2 moderate) after. What is left is isomorphic-git through `@wp-playground/blueprints`, which only clears with an upstream Playground release and is not reachable from the launcher (see the review).
 
 ## Tests and evidence
@@ -43,6 +43,7 @@ The 2026-11-15 architecture review found two risks on the Playground host origin
 | Local, after | `npm test` | All pass | 171 passed, 0 failed | Local run |
 | Local | `npm run build`; `npx wrangler deploy --dry-run` | Build and dry run succeed | Both succeeded with vite 7.3.8 and wrangler 4.155.0 | Local run |
 | Local | `npm audit` before and after | High count drops | 7 high, 3 moderate → 1 high, 2 moderate | Local run |
+| preview-wp, after the merge to dev | Start a site, install a plugin, licence fill, Checks; `/index.html` answers 404; the proxy refuses a navigation | All work | Not run yet | — |
 
 The preview-wp check after the merge (start a site, install a plugin, licence fill, Checks) is recorded in the PR.
 
@@ -52,7 +53,7 @@ The host no longer serves a page that starts a Playground from its URL, and the 
 
 ## Disposition and rationale
 
-Kept: closes the review's one medium risk and one low risk without changing what a person sees.
+Pending the preview-wp check. Expected: kept, as it closes the review's one medium risk and one low risk without changing what a person sees.
 
 ## Documentation impact
 
@@ -61,3 +62,4 @@ Kept: closes the review's one medium risk and one low risk without changing what
 ## Follow-ups and open questions
 
 - S5 (the launcher still trusts playground.wordpress.net for scripts and frames) and the isomorphic-git warning stay open.
+- `remote.html` stays, and only framing is limited to the launchers. Playground 3.1.64's remote exposes its API with Comlink on `window` for messages from any origin (`exposeAPI` in `@php-wasm/universal` uses `windowEndpoint(self.parent)`), so a page on another site that opens `remote.html` in a new window might be able to drive it. Not tried. A possible follow-up: serve `/remote.html` only for `Sec-Fetch-Dest: iframe` (the Worker runs first for that path).
