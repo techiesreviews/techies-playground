@@ -117,6 +117,13 @@ function isSameOriginRequest(request, requestUrl) {
   return !origin || origin === requestUrl.origin
 }
 
+// Playground's own requests are fetch() calls, which send Sec-Fetch-Dest: empty. Any
+// other destination would load an outside file as a page, frame, script, worker or
+// image of the host origin; a service worker registered that way would outlive the site.
+function isFetchRequest(request) {
+  return request.headers.get('Sec-Fetch-Dest') === 'empty'
+}
+
 function forwardedHeaders(request) {
   const optedIn = new Set((request.headers.get('X-Cors-Proxy-Allowed-Request-Headers') || '')
     .split(',').map((name) => name.trim().toLowerCase()).filter(Boolean))
@@ -182,7 +189,7 @@ async function followWithoutAuthorization(fetchImpl, response, from, headers, re
 
 export async function handleCorsProxy(request, { fetch: fetchImpl = fetch, limiter } = {}) {
   const requestUrl = new URL(request.url)
-  if (!isSameOriginRequest(request, requestUrl)) return answer(403, 'Forbidden')
+  if (!isSameOriginRequest(request, requestUrl) || !isFetchRequest(request)) return answer(403, 'Forbidden')
   // OPTIONS does not depend on the target, so it names only the methods every target takes.
   if (request.method === 'OPTIONS') return answer(204, null, { Allow: ALLOWED_METHODS_HEADER })
   const isLicenceApiMethod = LICENCE_API_METHODS.has(request.method)

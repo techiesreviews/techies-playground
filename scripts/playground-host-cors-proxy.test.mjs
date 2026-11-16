@@ -7,6 +7,7 @@ const HOST = 'https://wp.techies.tools'
 function proxied(target, init = {}) {
   const headers = new Headers(init.headers)
   if (!headers.has('Sec-Fetch-Site')) headers.set('Sec-Fetch-Site', 'same-origin')
+  if (!headers.has('Sec-Fetch-Dest')) headers.set('Sec-Fetch-Dest', 'empty')
   return new Request(`${HOST}${CORS_PROXY_PATH}?${target}`, { ...init, headers })
 }
 
@@ -72,6 +73,26 @@ test('refuses requests from other sites', async () => {
   const noFetchMetadata = new Request(`${HOST}${CORS_PROXY_PATH}?https://example.com/`)
   assert.equal((await handleCorsProxy(noFetchMetadata, { fetch: upstream.fetch })).status, 403)
   assert.equal(upstream.calls.length, 0)
+})
+
+test('answers only fetch() and XHR requests, refusing pages, frames, scripts, workers and images', async () => {
+  // A same-origin script, worker or page loaded through the proxy would run with the
+  // Playground host's origin; Playground itself only fetches, which sends "empty".
+  const upstream = recorder()
+  for (const destination of ['document', 'iframe', 'frame', 'script', 'serviceworker', 'sharedworker', 'worker', 'image', 'style', 'object', 'embed']) {
+    const response = await handleCorsProxy(proxied('https://example.com/sw.js', { headers: { 'Sec-Fetch-Dest': destination } }), { fetch: upstream.fetch })
+    assert.equal(response.status, 403, destination)
+    assert.equal(response.headers.get('X-Playground-Cors-Proxy'), 'true', destination)
+  }
+  const noDestination = new Request(`${HOST}${CORS_PROXY_PATH}?https://example.com/`, { headers: { 'Sec-Fetch-Site': 'same-origin' } })
+  assert.equal((await handleCorsProxy(noDestination, { fetch: upstream.fetch })).status, 403)
+  const preflight = await handleCorsProxy(proxied('https://example.com/', { method: 'OPTIONS', headers: { 'Sec-Fetch-Dest': 'script' } }), { fetch: upstream.fetch })
+  assert.equal(preflight.status, 403)
+  assert.equal(upstream.calls.length, 0)
+
+  const fetched = await handleCorsProxy(proxied('https://example.com/'), { fetch: upstream.fetch })
+  assert.equal(fetched.status, 200)
+  assert.equal(upstream.calls.length, 1)
 })
 
 test('rejects missing, non-web, credentialed, private and looping targets', async () => {
@@ -239,6 +260,8 @@ test('a licence API PUT keeps every other protection', async () => {
   const put = (target, init = {}) => proxied(target, { method: 'PUT', body: 'x', ...init })
   const crossSite = await handleCorsProxy(put('https://api.freemius.com/', { headers: { 'Sec-Fetch-Site': 'cross-site' } }), { fetch: upstream.fetch })
   assert.equal(crossSite.status, 403)
+  const navigation = await handleCorsProxy(put('https://api.freemius.com/', { headers: { 'Sec-Fetch-Dest': 'document' } }), { fetch: upstream.fetch })
+  assert.equal(navigation.status, 403)
   const limited = await handleCorsProxy(put('https://api.freemius.com/'), { fetch: upstream.fetch, limiter: { limit: async () => ({ success: false }) } })
   assert.equal(limited.status, 429)
   const credentials = await handleCorsProxy(put('https://user:pass@api.freemius.com/'), { fetch: upstream.fetch })
