@@ -180,7 +180,7 @@ jobs:
           grep -rqF '"/cors-proxy.php?"' playground-host/dist/assets || { echo "The Playground build does not use /cors-proxy.php." >&2; exit 1; }
           # The host origin holds saved sites and licence keys: no page that starts a Playground from its URL.
           test ! -e playground-host/dist/index.html || { echo "The Playground host folder still has the public website (index.html)." >&2; exit 1; }
-          pages="$(cd playground-host/dist && find . -type f \( -name '*.html' -o -name '*.htm' \) -not -path './wp-*' | sort | tr '\n' ' ')"
+          pages="$(cd playground-host/dist && find . -regextype posix-extended -type f \( -iname '*.html' -o -iname '*.htm' \) -not -regex '\./wp-([0-9]+\.[0-9]+|beta|nightly|trunk)/.*' | sort | tr '\n' ' ')"
           test "$pages" = "./remote.html ./wordpress-bridge.html ./wordpress-popup.html " || { echo "Unexpected pages in the Playground host folder: $pages" >&2; exit 1; }
 
       - name: Deploy the Playground host
