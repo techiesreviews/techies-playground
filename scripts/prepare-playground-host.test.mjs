@@ -147,6 +147,22 @@ function fakeWindow(parent) {
 const crossOriginParent = { location: { get href() { throw new Error('SecurityError: cross-origin frame') } } }
 const sameOriginParent = { location: { href: 'https://wp.techies.tools/index.html?blueprint-url=https://evil.test/b.json' } }
 
+test('the cache cleanup and the host build agree on which pages are website pages', async () => {
+  const keptPages = ['/remote.html', '/wordpress-bridge.html', '/wordpress-popup.html']
+  const paths = [
+    'index.html', 'INDEX.HTML', 'api.html', 'builder/builder.html', 'wp-start.html', 'wp-foo/a.html',
+    'remote.html', 'wordpress-bridge.html', 'wordpress-popup.html',
+    // wp-beta and wp-nightly are trimmed for other reasons, so only release folders the build keeps.
+    'wp-7.1/readme.html', 'wp-trunk/readme.html', 'wp-7.1/wp-includes/empty.html',
+  ]
+  const storage = fakeCacheStorage({ 'playground-cache-abc': paths.map((file) => `https://wp.techies.tools/${file}`) })
+  const removed = new Set(await removeCachedWebsitePages(storage, keptPages))
+  for (const file of paths) {
+    const keptByBuild = isKept(file, { phpVersions: offered, offlineAssets: new Set() })
+    assert.equal(removed.has(`/${file}`), !keptByBuild, file)
+  }
+})
+
 test('Playground starts only inside a launcher frame on another origin', () => {
   assert.equal(isLauncherFrame(fakeWindow(crossOriginParent)), true)
   // remote.html opened as its own window, where the site that opened it could message it.
