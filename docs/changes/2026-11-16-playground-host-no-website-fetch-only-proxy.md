@@ -24,7 +24,7 @@ The 2026-11-15 architecture review found two risks on the Playground host origin
 
 - Leave unchanged: keeps the one medium risk open.
 - Drop only `index.html`: leaves `api.html`, the builder and the other start pages, which do the same.
-- Allow-list the launcher's pages (chosen): every HTML file outside a `wp-<version>` directory is dropped unless it is one of the three launcher pages, before the offline-list exception. The offline prefetch only runs when the WordPress site runs on the host origin, and it already fails on `/`, which the host has never served (`html_handling: none`; `/` answers 404 today), so leaving listed pages out changes nothing that worked.
+- Allow-list the launcher's pages (chosen): every HTML file outside the WordPress release folders (`wp-<x.y>`, `wp-beta`, `wp-nightly`, `wp-trunk`) is dropped unless it is one of the three launcher pages, before the offline-list exception. The offline prefetch only runs when the WordPress site runs on the host origin, and it already fails on `/`, which the host has never served (`html_handling: none`; `/` answers 404 today), so leaving listed pages out changes nothing that worked.
 - For S2, refusing only `serviceworker` and `script`: an allow-list of `empty` is shorter and also covers documents, frames, workers and images.
 
 ## Implementation or prototype
