@@ -15,12 +15,15 @@ const offered = new Set(['7.4', '8.0', '8.1', '8.2', '8.3', '8.4', '8.5'])
 test('keeps the runtime, offered PHP builds and offered WordPress builds', () => {
   for (const file of [
     'remote.html',
+    'wordpress-bridge.html',
+    'wordpress-popup.html',
     'sw.js',
-    'index.html',
+    'client/index.js',
     'assets/php_8_3-BNI3Jl72.wasm',
     'assets/php_7_4-Ab12Cd34.js',
     'assets/wp-7.1.tar-DIqobjh1.zst',
     'wp-6.3/wp-includes/css/dashicons.min.css',
+    'wp-7.1/readme.html',
     'wp-7.1/wordpress-static.zip',
     'wp-cli.phar',
     // Beta stays selectable: its archive, static ZIP, asset list, and the minified
@@ -65,9 +68,31 @@ test('drops source maps, unoffered PHP and WordPress builds, demos, test fixture
 })
 
 test('never drops a file the Playground service worker caches for offline use', () => {
-  const offlineAssets = new Set(['/demos/index.html', '/assets/wp-trunk.tar-AbCd1234.zst'])
-  assert.equal(isKept('demos/index.html', { phpVersions: offered, offlineAssets }), true)
+  const offlineAssets = new Set(['/demos/blueprints.phar', '/assets/wp-trunk.tar-AbCd1234.zst'])
+  assert.equal(isKept('demos/blueprints.phar', { phpVersions: offered, offlineAssets }), true)
   assert.equal(isKept('assets/wp-trunk.tar-AbCd1234.zst', { phpVersions: offered, offlineAssets }), true)
+})
+
+test('drops the public Playground website pages, even when the offline list names them', () => {
+  // The host origin holds saved sites and filled licence keys; a website page such as
+  // index.html?blueprint-url=… would run anyone's setup there. The launcher only needs
+  // remote.html and the two pages it opens.
+  const pages = [
+    'index.html',
+    'api.html',
+    'wordpress.html',
+    'gutenberg.html',
+    'php-playground.html',
+    'php-code-snippet-demo.html',
+    'php-code-snippet-e2e.html',
+    'builder/builder.html',
+    'demos/index.html',
+    'wp-cli.html',
+  ]
+  const offlineAssets = new Set(pages.map((page) => `/${page}`))
+  for (const page of pages) {
+    assert.equal(isKept(page, { phpVersions: offered, offlineAssets }), false, page)
+  }
 })
 
 test('headers allow framing only by the launcher and cache hashed assets for a year', () => {
@@ -106,6 +131,8 @@ async function fixture() {
   const files = {
     'remote.html': '<html></html>',
     'remote.html.map': '{}',
+    'index.html': '<html>website</html>',
+    'builder/builder.html': '<html>builder</html>',
     'assets/php_8_3-AAAAAAAA.wasm': 'php83',
     'assets/php_5_2-BBBBBBBB.wasm': 'php52',
     'wp-7.1/wordpress-static.zip': 'x'.repeat(25),
@@ -113,7 +140,7 @@ async function fixture() {
     'wp-beta/wordpress-static.zip': 'beta',
     'wp-beta/wp-includes/b.css': 'b',
     'wp-beta/wp-includes/b.min.css': 'b',
-    'assets-required-for-offline-mode.json': JSON.stringify(['/remote.html']),
+    'assets-required-for-offline-mode.json': JSON.stringify(['/index.html']),
   }
   for (const [name, content] of Object.entries(files)) {
     await mkdir(path.dirname(path.join(source, name)), { recursive: true })

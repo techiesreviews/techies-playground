@@ -50,3 +50,11 @@ test('the Playground build points its CORS proxy at the path the host answers', 
   assert.ok((jobs['playground-build'] ?? '').includes(`CORS_PROXY_URL: ${CORS_PROXY_PATH}?\n`), 'the build uses the proxy path')
   assert.ok((jobs['playground-host'] ?? '').includes(`'"${CORS_PROXY_PATH}?"'`), 'the host job checks the build uses the proxy path')
 })
+
+test('the host job refuses to deploy, and checks it does not serve, the public Playground website', async () => {
+  const host = readJobs(await readFile(workflowPath, 'utf8'))['playground-host'] ?? ''
+  const guard = host.indexOf('test ! -e playground-host/dist/index.html')
+  assert.ok(guard !== -1, 'the prepared folder is checked for index.html')
+  assert.ok(guard < host.indexOf('cloudflare/wrangler-action'), 'the check runs before the deploy')
+  assert.match(host, /"\$PLAYGROUND_ORIGIN\/index\.html"\)" = 404/, 'the deployed host answers 404 for index.html')
+})

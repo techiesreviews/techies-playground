@@ -23,12 +23,22 @@ const DROPPED_DIRECTORIES = new Set(['test-fixtures', 'demos', 'php-next', 'wp-n
 const BETA_DIRECTORY = 'wp-beta'
 const BETA_TOP_FILES = new Set(['wordpress-static.zip', 'wordpress-remote-asset-paths'])
 const BETA_FIRST_PAGE_FILE = /\.(min\.css|min\.js|woff2?|ttf|eot)$/
-const DROPPED_FILES = new Set(['.htaccess', 'php-8-6.html'])
+const DROPPED_FILES = new Set(['.htaccess'])
+// The host origin keeps saved sites and filled licence keys, so it serves no page that
+// starts a Playground from its URL (index.html?blueprint-url=…, the builder, demos).
+// The launcher frames remote.html, which opens the other two pages. WordPress's own
+// static pages (readme.html, wp-includes/empty.html) stay with their release.
+const LAUNCHER_PAGES = new Set(['remote.html', 'wordpress-bridge.html', 'wordpress-popup.html'])
+const WORDPRESS_DIRECTORY = /^wp-(\d+\.\d+|beta|nightly|trunk)$/
 
 export function isKept(relativePath, { phpVersions = PHP_VERSIONS, offlineAssets = new Set() } = {}) {
-  if (offlineAssets.has(`/${relativePath}`)) return true
   const segments = relativePath.split('/')
   const name = segments.at(-1)
+  // Checked before the offline list, which names the website pages too. Playground only
+  // prefetches that list when the launcher's site runs on the host origin, and the
+  // prefetch already fails on "/", which this host never served.
+  if (/\.html?$/i.test(name) && !LAUNCHER_PAGES.has(relativePath) && !WORDPRESS_DIRECTORY.test(segments[0])) return false
+  if (offlineAssets.has(`/${relativePath}`)) return true
   if (DROPPED_DIRECTORIES.has(segments[0]) || DROPPED_FILES.has(relativePath)) return false
   if (segments[0] === BETA_DIRECTORY) return segments.length === 2 ? BETA_TOP_FILES.has(name) : BETA_FIRST_PAGE_FILE.test(name)
   if (name.endsWith('.map') || name.endsWith('.php')) return false
