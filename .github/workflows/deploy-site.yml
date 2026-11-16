@@ -180,6 +180,8 @@ jobs:
           grep -rqF '"/cors-proxy.php?"' playground-host/dist/assets || { echo "The Playground build does not use /cors-proxy.php." >&2; exit 1; }
           # The host origin holds saved sites and licence keys: no page that starts a Playground from its URL.
           test ! -e playground-host/dist/index.html || { echo "The Playground host folder still has the public website (index.html)." >&2; exit 1; }
+          pages="$(cd playground-host/dist && find . -type f \( -name '*.html' -o -name '*.htm' \) -not -path './wp-*' | sort | tr '\n' ' ')"
+          test "$pages" = "./remote.html ./wordpress-bridge.html ./wordpress-popup.html " || { echo "Unexpected pages in the Playground host folder: $pages" >&2; exit 1; }
 
       - name: Deploy the Playground host
         uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3
@@ -198,7 +200,8 @@ jobs:
             sleep 20
           done
           curl -fsSI "$PLAYGROUND_ORIGIN/remote.html" | grep -i '^content-security-policy: frame-ancestors'
-          test "$(curl -sS -o /dev/null -w '%{http_code}' "$PLAYGROUND_ORIGIN/index.html")" = 404 || { echo "$PLAYGROUND_ORIGIN/index.html is still served." >&2; exit 1; }
+          index_status="$(curl -sS -o /dev/null -w '%{http_code}' "$PLAYGROUND_ORIGIN/index.html")"
+          test "$index_status" = 404 || { echo "$PLAYGROUND_ORIGIN/index.html answered $index_status, expected 404." >&2; exit 1; }
           split_file="$(node -p "Object.keys(require('./playground-host/dist/split-files.json'))[0] || ''")"
           if [ -n "$split_file" ]; then
             curl -fsS -o /dev/null -w '%{http_code} %{size_download} bytes\n' "$PLAYGROUND_ORIGIN$split_file"
