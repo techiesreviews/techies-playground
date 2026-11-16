@@ -50,11 +50,27 @@ export function isKept(relativePath, { phpVersions = PHP_VERSIONS, offlineAssets
   return true
 }
 
+// remote.html starts with an inline script that runs before Playground's own scripts.
+//
+// Playground starts only inside a launcher's frame. The host's frame rules let only the
+// launchers and this origin frame remote.html, and every launcher is on another origin.
+// So remote.html opened as its own window (any site that opened it could message it) or
+// framed by a page of this origin (such as a copy of the old public website still in a
+// browser's cache) stops loading before Playground's scripts run, and shows nothing.
+export function isLauncherFrame(view) {
+  if (view.parent === view) return false
+  try {
+    void view.parent.location.href
+    return false
+  } catch {
+    return true
+  }
+}
+
 // Playground's service worker answers a page it once cached without asking the server
 // (cache first, ignoring the query string) and keeps that cache until the next Playground
-// release. A browser that opened /index.html before the website pages left the host
-// would keep opening it, so remote.html, which the worker always fetches fresh, removes
-// such pages from Playground's caches. Self-contained: it runs as an inline script.
+// release. The worker always fetches remote.html fresh, so remote.html also deletes the
+// website pages from Playground's caches.
 export async function removeCachedWebsitePages(cacheStorage, keptPages) {
   if (!cacheStorage) return []
   const removed = []
@@ -72,12 +88,14 @@ export async function removeCachedWebsitePages(cacheStorage, keptPages) {
   return removed
 }
 
-export function withCachedPageCleanup(html) {
+export function withLauncherGuard(html) {
   const head = html.match(/<head[^>]*>/i)
-  if (!head) throw new Error('remote.html has no <head> for the cached-page cleanup.')
+  if (!head) throw new Error('remote.html has no <head> for the launcher guard.')
   const kept = JSON.stringify([...LAUNCHER_PAGES].map((page) => `/${page}`))
-  // A failed cleanup must never stop Playground from starting.
-  const script = `<script>(${removeCachedWebsitePages})(self.caches, ${kept}).catch(() => {})</script>`
+  // Both functions are self-contained, so their source runs as is. Stopping the load ends
+  // the parser before it reaches Playground's module scripts. A failed cache cleanup must
+  // never stop Playground from starting.
+  const script = `<script>if (!(${isLauncherFrame})(window)) { window.stop(); document.documentElement.replaceChildren() }\n(${removeCachedWebsitePages})(self.caches, ${kept}).catch(() => {})</script>`
   const at = head.index + head[0].length
   return `${html.slice(0, at)}${script}${html.slice(at)}`
 }
@@ -196,7 +214,7 @@ export async function preparePlaygroundHost({
     const top = file.split('/')[0]
     if (file.includes('/') && /^wp-(\d+\.\d+|beta)$/.test(top)) wordpressDirectories.add(top)
     if (file === 'remote.html') {
-      await writeFile(to, withCachedPageCleanup(await readFile(from, 'utf8')))
+      await writeFile(to, withLauncherGuard(await readFile(from, 'utf8')))
       fileCount += 1
       continue
     }
