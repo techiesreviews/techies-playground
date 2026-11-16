@@ -6,10 +6,11 @@ import path from 'node:path'
 import {
   buildHeaders,
   isKept,
+  isLauncherFrame,
   parseArguments,
   preparePlaygroundHost,
   removeCachedWebsitePages,
-  withCachedPageCleanup,
+  withLauncherGuard,
 } from './prepare-playground-host.mjs'
 
 const offered = new Set(['7.4', '8.0', '8.1', '8.2', '8.3', '8.4', '8.5'])
@@ -137,16 +138,52 @@ test('removes website pages a browser cached before they left the host, and noth
   assert.deepEqual(await removeCachedWebsitePages(undefined, []), [])
 })
 
-test('remote.html runs the cleanup on load, before its own scripts', async () => {
-  const html = '<!doctype html><html><head><title>x</title><script type="module" src="/assets/remote.js"></script></head><body></body></html>'
-  const cleaned = withCachedPageCleanup(html)
-  const script = cleaned.match(/<head><script>([\s\S]*?)<\/script>/)?.[1]
+function fakeWindow(parent) {
+  const view = { stopped: false, stop() { this.stopped = true } }
+  view.parent = parent === 'self' ? view : parent
+  return view
+}
+
+const crossOriginParent = { location: { get href() { throw new Error('SecurityError: cross-origin frame') } } }
+const sameOriginParent = { location: { href: 'https://wp.techies.tools/index.html?blueprint-url=https://evil.test/b.json' } }
+
+test('Playground starts only inside a launcher frame on another origin', () => {
+  assert.equal(isLauncherFrame(fakeWindow(crossOriginParent)), true)
+  // remote.html opened as its own window, where the site that opened it could message it.
+  assert.equal(isLauncherFrame(fakeWindow('self')), false)
+  // A page of the host origin, such as the old website still in a browser's cache.
+  assert.equal(isLauncherFrame(fakeWindow(sameOriginParent)), false)
+})
+
+function runGuard(html, view) {
+  const script = html.match(/<head><script>([\s\S]*?)<\/script>/)?.[1]
   assert.ok(script, 'an inline script opens the head')
+  const document = { emptied: false, documentElement: { replaceChildren() { document.emptied = true } } }
   const storage = fakeCacheStorage({ 'playground-cache-abc': ['https://wp.techies.tools/index.html', 'https://wp.techies.tools/remote.html'] })
-  await new Function('self', `return ${script}`)({ caches: storage })
+  new Function('window', 'document', 'self', script)(view, document, { caches: storage })
+  return { document, storage }
+}
+
+test('remote.html refuses to start outside a launcher frame and cleans the cache, before its own scripts', async () => {
+  const html = '<!doctype html><html><head><title>x</title><script type="module" src="/assets/remote.js"></script></head><body></body></html>'
+  const guarded = withLauncherGuard(html)
+  assert.ok(guarded.endsWith('<title>x</title><script type="module" src="/assets/remote.js"></script></head><body></body></html>'))
+
+  for (const parent of ['self', sameOriginParent]) {
+    const view = fakeWindow(parent)
+    const { document } = runGuard(guarded, view)
+    assert.equal(view.stopped, true)
+    assert.equal(document.emptied, true)
+  }
+
+  const launcher = fakeWindow(crossOriginParent)
+  const { document, storage } = runGuard(guarded, launcher)
+  assert.equal(launcher.stopped, false)
+  assert.equal(document.emptied, false)
+  await new Promise((resolve) => setTimeout(resolve, 0))
   assert.deepEqual([...storage.stores.get('playground-cache-abc')], ['https://wp.techies.tools/remote.html'])
-  assert.ok(cleaned.endsWith('<title>x</title><script type="module" src="/assets/remote.js"></script></head><body></body></html>'))
-  assert.throws(() => withCachedPageCleanup('<html><body></body></html>'), /remote\.html/)
+
+  assert.throws(() => withLauncherGuard('<html><body></body></html>'), /remote\.html/)
 })
 
 test('headers allow framing only by the launcher and cache hashed assets for a year', () => {
@@ -245,7 +282,7 @@ test('prepares a trimmed host folder and splits files above the per-file limit',
       parts: ['/wp-7.1/wordpress-static.zip.part0', '/wp-7.1/wordpress-static.zip.part1', '/wp-7.1/wordpress-static.zip.part2'],
     },
   })
-  assert.match(await readFile(path.join(out, 'remote.html'), 'utf8'), /^<html><head><script>[\s\S]*removeCachedWebsitePages[\s\S]*<\/script><\/head><\/html>$/)
+  assert.match(await readFile(path.join(out, 'remote.html'), 'utf8'), /^<html><head><script>[\s\S]*isLauncherFrame[\s\S]*removeCachedWebsitePages[\s\S]*<\/script><\/head><\/html>$/)
   const joined = await Promise.all([0, 1, 2].map((index) => readFile(path.join(out, `wp-7.1/wordpress-static.zip.part${index}`), 'utf8')))
   assert.equal(joined.join(''), 'x'.repeat(25))
   const headers = await readFile(path.join(out, '_headers'), 'utf8')
