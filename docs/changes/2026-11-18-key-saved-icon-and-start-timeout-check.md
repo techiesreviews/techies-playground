@@ -28,7 +28,7 @@ Lex tried the preview after PR #37 on 2026-11-17 and asked for two things:
 ## Implementation or prototype
 
 - `src/App.jsx` (`PluginRow`): the Key saved pill is removed; with a saved key a `KeyIcon` (`role="img"`, name and tooltip "License key saved for <label>", `p-1.5`, `size-4`, teal) is the first child of the hover group. Add key is unchanged.
-- The group (key, Replace, Delete) also shows on any device with a touchscreen (`any-pointer-coarse`), so a touchscreen laptop whose main pointer is a trackpad can reach it by touch; before, it showed only where the main pointer was touch.
+- The group (key, Replace, Delete) also shows on any device with a touchscreen (`any-pointer-coarse`), and Replace and Delete keep their 48 px tap areas there, so a touchscreen laptop whose main pointer is a trackpad can reach them by touch; before, the group showed only where the main pointer was touch.
 - `CHANGELOG_ENTRIES` 0.10.2, `package.json` and `package-lock.json` 0.10.2; `docs/rebuild-spec.md` describes the icon.
 - No change to the Playground host, `remote.html`'s guard or the CORS proxy (see Result).
 
@@ -52,6 +52,7 @@ Lex tried the preview after PR #37 on 2026-11-17 and asked for two things:
 | Local, same, 320×640 touch, 79-character label | Save a key | Icons wrap under the artwork inside the card; label wraps | Icons at 32–124 px inside the card, label wraps. The page is 324 px wide at 320 px both before and after this change (the same check on `017c0d6`), so that overflow is older and not from the icon | [320 px](assets/2026-11-18-key-icon-row-320.png), script output |
 | Local, after the touchscreen fix, Playwright Chromium | Same flow as a mouse-only desktop (1280×900), a desktop with touch (`hasTouch`) and a phone (390×844) | Mouse: hidden, shown on hover; any touch: shown | Mouse (`pointer: fine`, no coarse pointer): opacity 0, hover 1. Touch desktop and phone: opacity 1 at rest. No Key saved text in any. Chromium's touch emulation also makes the main pointer coarse, so a true fine-plus-touch laptop is not emulated | Script output |
 | Local, `kit build` CSS | Order of the media rules in `dist/assets/index-*.css` | The `any-pointer: coarse` rules come after the `pointer: fine` hide rules (same specificity), so they win on a touchscreen laptop | `(pointer:fine)` hide rules at bytes 35984–36090, `(any-pointer:coarse)` show rules at 36525–36607 | `grep -bo` |
+| Local, `kit build` CSS | The larger tap areas of Replace and Delete on a touchscreen laptop | `any-pointer-coarse:block` comes after `pointer-fine:hidden`, so the 48 px tap areas also work there | `pointer-fine\:hidden` at byte 36055, `any-pointer-coarse\:block` at 36607 | `grep -bo` |
 | Local | `npm test`; `scripts/agents/kit build` | Pass | 175 passed; build finished | Local run |
 
 ## Result
@@ -69,4 +70,6 @@ Pending: the icon waits for the preview check; the timeout stays open until Lex'
 
 ## Follow-ups and open questions
 
+- The launcher page is 324 px wide on a 320 px screen, before and after this change (seen while checking the icon at 320 px); not from this change, left for its own fix.
+- A real touchscreen laptop (main pointer a trackpad) is not emulated by Chromium; the touchscreen rules are checked by their order in the built CSS only.
 - Questions for Lex to tell the two remaining causes apart: which browser and device he used; whether the Playground area showed a progress bar or stayed blank during the two minutes (blank points to `remote.html` never connecting, a bar to a stalled download); whether it still happens on the preview now, and in a private window.
