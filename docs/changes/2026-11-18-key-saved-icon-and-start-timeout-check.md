@@ -5,7 +5,7 @@
 - Status: in-progress
 - Disposition: pending
 - Related version: 0.10.2
-- Related commit/issue: TOOLS-324 (fix round after [2026-11-16-playground-host-no-website-fetch-only-proxy.md](2026-11-16-playground-host-no-website-fetch-only-proxy.md), PR #37)
+- Related commit/issue: TOOLS-324 (fix round after [2026-11-16-playground-host-no-website-fetch-only-proxy.md](2026-11-16-playground-host-no-website-fetch-only-proxy.md), PR #37); supersedes the Key saved pill from [2026-11-14-one-click-start-keys-checks.md](2026-11-14-one-click-start-keys-checks.md)
 
 ## Context
 
@@ -16,7 +16,7 @@ Lex tried the preview after PR #37 on 2026-11-17 and asked for two things:
 
 ## Hypothesis and success criteria
 
-- Icon: with a saved key, the card shows a key icon as the first item of the Replace and Delete group, the same 28 px box and 4 px gap, with a mouse hidden until hover or while anything in the card has focus, always shown on touch devices; the Key saved pill is gone. The state stays readable to assistive technology.
+- Icon: with a saved key, the card shows a key icon as the first item of the Replace and Delete group, the same 28 px box and 4 px gap, with a mouse hidden until hover or while anything in the card has focus, always shown on any device with a touchscreen; the Key saved pill is gone. The state stays readable to assistive technology.
 - Timeout: reproduce the failure on the deployed preview in a real browser before changing anything, then make the smallest fix that keeps both security goals.
 
 ## Options considered
@@ -28,6 +28,7 @@ Lex tried the preview after PR #37 on 2026-11-17 and asked for two things:
 ## Implementation or prototype
 
 - `src/App.jsx` (`PluginRow`): the Key saved pill is removed; with a saved key a `KeyIcon` (`role="img"`, name and tooltip "License key saved for <label>", `p-1.5`, `size-4`, teal) is the first child of the hover group. Add key is unchanged.
+- The group (key, Replace, Delete) also shows on any device with a touchscreen (`any-pointer-coarse`), so a touchscreen laptop whose main pointer is a trackpad can reach it by touch; before, it showed only where the main pointer was touch.
 - `CHANGELOG_ENTRIES` 0.10.2, `package.json` and `package-lock.json` 0.10.2; `docs/rebuild-spec.md` describes the icon.
 - No change to the Playground host, `remote.html`'s guard or the CORS proxy (see Result).
 
@@ -49,6 +50,8 @@ Lex tried the preview after PR #37 on 2026-11-17 and asked for two things:
 | Local, same, 390×844 touch | Same | Icon always shown | Shown, same spacing | [phone](assets/2026-11-18-key-icon-row-phone.png) |
 | Local, same, 1280×900 | Save a key; park the mouse and blur; read the icon by role; Tab to the plugin checkbox | Readable while hidden; shown on keyboard focus | Focus lands on `#plugin-<id>` after Save key (group shown); `getByRole('img', { name: 'License key saved for wp security audit log' })` resolves at opacity 0; after Tab to the checkbox the group is at opacity 1 | Script output |
 | Local, same, 320×640 touch, 79-character label | Save a key | Icons wrap under the artwork inside the card; label wraps | Icons at 32–124 px inside the card, label wraps. The page is 324 px wide at 320 px both before and after this change (the same check on `017c0d6`), so that overflow is older and not from the icon | [320 px](assets/2026-11-18-key-icon-row-320.png), script output |
+| Local, after the touchscreen fix, Playwright Chromium | Same flow as a mouse-only desktop (1280×900), a desktop with touch (`hasTouch`) and a phone (390×844) | Mouse: hidden, shown on hover; any touch: shown | Mouse (`pointer: fine`, no coarse pointer): opacity 0, hover 1. Touch desktop and phone: opacity 1 at rest. No Key saved text in any. Chromium's touch emulation also makes the main pointer coarse, so a true fine-plus-touch laptop is not emulated | Script output |
+| Local, `kit build` CSS | Order of the media rules in `dist/assets/index-*.css` | The `any-pointer: coarse` rules come after the `pointer: fine` hide rules (same specificity), so they win on a touchscreen laptop | `(pointer:fine)` hide rules at bytes 35984–36090, `(any-pointer:coarse)` show rules at 36525–36607 | `grep -bo` |
 | Local | `npm test`; `scripts/agents/kit build` | Pass | 175 passed; build finished | Local run |
 
 ## Result
@@ -62,7 +65,7 @@ Pending: the icon waits for the preview check; the timeout stays open until Lex'
 
 ## Documentation impact
 
-`docs/rebuild-spec.md` (uploaded plugin card), `CHANGELOG_ENTRIES` 0.10.2, version 0.10.2.
+`docs/rebuild-spec.md` (uploaded plugin card), `CHANGELOG_ENTRIES` 0.10.2, version 0.10.2 (`package.json`, `package-lock.json`, `CONTEXT.md`), `docs/testing.md` (suite count 175).
 
 ## Follow-ups and open questions
 
