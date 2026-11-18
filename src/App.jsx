@@ -134,7 +134,7 @@ const CHANGELOG_ENTRIES = [
     title: 'Quieter uploaded plugin rows',
     summary: 'A saved license key now shows as a small key icon next to the replace and remove buttons.',
     changes: [
-      'In Choose plugins, the Key saved label is now a key icon that appears with the replace and remove buttons when you hover over the plugin, in the same spot and spacing.',
+      'In Choose plugins, the Key saved label is now a key icon in the same spot and spacing as the replace and remove buttons. With a mouse it appears with them when you hover over the plugin or move to it with the keyboard; on a touchscreen all three are always shown.',
     ],
   },
   {
@@ -1477,7 +1477,7 @@ function PluginRow({ plugin, selected, keySaved, addingKey, onToggle, onReplace,
           Add key
         </button>
       )}
-      <div className="flex shrink-0 items-center gap-1 pointer-fine:pointer-events-none pointer-fine:opacity-0 pointer-fine:group-hover:pointer-events-auto pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:pointer-events-auto pointer-fine:group-focus-within:opacity-100">
+      <div className="flex shrink-0 items-center gap-1 pointer-fine:pointer-events-none pointer-fine:opacity-0 pointer-fine:group-hover:pointer-events-auto pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:pointer-events-auto pointer-fine:group-focus-within:opacity-100 any-pointer-coarse:pointer-events-auto any-pointer-coarse:opacity-100">
         {keySaved && (
           <span role="img" aria-label={`License key saved for ${plugin.label}`} title={`License key saved for ${plugin.label}`} className="shrink-0 p-1.5 text-teal-700">
             <KeyIcon className="size-4 shrink-0 fill-current" />
