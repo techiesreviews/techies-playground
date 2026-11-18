@@ -1532,7 +1532,7 @@ function ThemeRow({ theme, selected, onSelect, onReplace, onRemove }) {
   const versionHint = theme.versionHint || extractVersionHint(theme.filename)
   const packageDetails = [versionHint && `version ${versionHint}`, size, 'stored only in this browser'].filter(Boolean).join(', ')
   return (
-    <div className="group flex min-w-0 flex-wrap items-start gap-3 border-t border-neutral-950/8 py-4 first:border-t-0 first:pt-0 last:pb-0">
+    <div className="group flex min-w-0 items-start gap-3 border-t border-neutral-950/8 py-4 first:border-t-0 first:pt-0 last:pb-0 any-pointer-coarse:flex-wrap">
       <PackageArtwork label={theme.label} kind="theme" />
       <div className="min-w-0 flex-1 basis-40 text-base/7 sm:text-sm/6">
         <Radio

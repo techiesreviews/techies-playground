@@ -52,6 +52,7 @@ test('Add key is at least 44 px tall on any touchscreen, 28 px with only a mouse
   const tokens = classTokens(button)
   // min-h-11 is 44 px (Tailwind: 1 unit = 4 px); with only a mouse the 20 px line (text-sm/5) plus py-1 gives 28 px.
   assert.ok(tokens.includes('any-pointer-coarse:min-h-11'), 'at least 44 px tall wherever a touchscreen exists')
+  assert.ok(tokens.includes('inline-flex') && tokens.includes('items-center'), 'icon and label stay centred in the taller box')
   assert.ok(tokens.includes('text-sm/5') && tokens.includes('py-1'), 'mouse-only height unchanged')
   assert.ok(!tokens.some((token) => token.startsWith('min-h-')), 'no mouse-only minimum height')
   const margins = tokens.filter((token) => /^-?m[xytrbls]?-/.test(token.split(':').at(-1)))
