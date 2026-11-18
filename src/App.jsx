@@ -134,7 +134,7 @@ const CHANGELOG_ENTRIES = [
     title: 'Easier to tap replace and remove',
     summary: 'On a touchscreen, the replace and remove buttons of an uploaded plugin are bigger and no longer get in each other\'s way.',
     changes: [
-      'In Choose plugins, the replace and remove buttons of an uploaded plugin are 44 pixels square on any device with a touchscreen, touchscreen laptops included, with a small space between them, so a tap or a click on one never reaches the other. With only a mouse they keep their smaller size.',
+      'In Choose plugins, the replace and remove buttons of an uploaded plugin are bigger on any device with a touchscreen, touchscreen laptops included, with a small space between them, so a tap or a click on one never reaches the other. On a narrow phone screen they move to their own line in the plugin\'s card. With only a mouse they keep their smaller size.',
     ],
   },
   {

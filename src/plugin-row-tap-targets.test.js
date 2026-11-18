@@ -23,6 +23,7 @@ function classTokens(button) {
 function boxSize(tokens, variant) {
   const padding = (prefix) => tokens.find((token) => token.startsWith(`${prefix}p-`) && /^\d+(\.\d+)?$/.test(token.slice(prefix.length + 2)))
   const token = (variant && padding(`${variant}:`)) || padding('')
+  assert.ok(token, 'a padding token sets the box size')
   return 16 + 2 * Number(token.split('p-').at(-1)) * 4
 }
 
@@ -42,3 +43,14 @@ for (const label of ['Replace ', 'Remove ']) {
     assert.deepEqual(margins, [], 'no margin pulls it under a neighbour')
   })
 }
+
+test('the key-saved icon keeps its 28 px box and the group keeps its 4 px gap', () => {
+  const start = pluginRow.indexOf('aria-label={`License key saved for')
+  assert.ok(start > 0, 'PluginRow has the key-saved icon')
+  const icon = pluginRow.slice(pluginRow.lastIndexOf('<span', start), pluginRow.indexOf('</span>', start))
+  const tokens = classTokens(icon)
+  assert.equal(boxSize(tokens, ''), 28)
+  assert.ok(!tokens.some((token) => token.includes(':p-')), 'no pointer-specific padding on the icon')
+  const group = pluginRow.slice(pluginRow.lastIndexOf('<div', start), start)
+  assert.ok(classTokens(group).includes('gap-1'), 'the icon group keeps gap-1 between its boxes')
+})
