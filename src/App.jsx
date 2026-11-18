@@ -129,6 +129,16 @@ const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-stora
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
   {
+    version: '0.10.4',
+    date: 'November 18, 2026',
+    title: 'Easier to tap theme buttons and Add key',
+    summary: 'On a touchscreen, the replace and remove buttons of an uploaded theme and the Add key button of a plugin are easier to tap.',
+    changes: [
+      'In Choose themes, the replace and remove buttons of an uploaded theme are bigger on any device with a touchscreen, with a small space between them, so a tap or a click on one never reaches the other. On a touchscreen laptop they are now always shown, as on a phone. On a narrow phone screen they move to their own line under the theme. With only a mouse they keep their smaller size.',
+      'In Choose plugins, the Add key button is taller on any device with a touchscreen, touchscreen laptops included, and only the button itself responds to a tap.',
+    ],
+  },
+  {
     version: '0.10.3',
     date: 'November 18, 2026',
     title: 'Easier to tap replace and remove',
@@ -1479,9 +1489,8 @@ function PluginRow({ plugin, selected, keySaved, addingKey, onToggle, onReplace,
           type="button"
           onClick={() => onAddKey(plugin.id)}
           aria-label={`Add a license key for ${plugin.label}`}
-          className="relative inline-flex shrink-0 items-center gap-1 rounded-lg bg-white py-1 pr-2.5 pl-1.5 text-sm/5 font-medium text-neutral-800 ring-1 ring-neutral-950/10 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+          className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-white py-1 pr-2.5 pl-1.5 text-sm/5 font-medium text-neutral-800 ring-1 ring-neutral-950/10 any-pointer-coarse:min-h-11 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
         >
-          <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
           <PlusIcon className="size-4 shrink-0 fill-neutral-500" />
           Add key
         </button>
@@ -1523,9 +1532,9 @@ function ThemeRow({ theme, selected, onSelect, onReplace, onRemove }) {
   const versionHint = theme.versionHint || extractVersionHint(theme.filename)
   const packageDetails = [versionHint && `version ${versionHint}`, size, 'stored only in this browser'].filter(Boolean).join(', ')
   return (
-    <div className="group flex min-w-0 items-start gap-3 border-t border-neutral-950/8 py-4 first:border-t-0 first:pt-0 last:pb-0">
+    <div className="group flex min-w-0 flex-wrap items-start gap-3 border-t border-neutral-950/8 py-4 first:border-t-0 first:pt-0 last:pb-0">
       <PackageArtwork label={theme.label} kind="theme" />
-      <div className="min-w-0 flex-1 text-base/7 sm:text-sm/6">
+      <div className="min-w-0 flex-1 basis-40 text-base/7 sm:text-sm/6">
         <Radio
           id={`theme-${theme.id}`}
           name="premium-theme"
@@ -1536,23 +1545,21 @@ function ThemeRow({ theme, selected, onSelect, onReplace, onRemove }) {
         />
         <p className="truncate pl-8 font-mono text-base/7 text-neutral-500 sm:pl-7 sm:text-sm/6">{theme.id}</p>
       </div>
-      <div className="flex shrink-0 items-center gap-1 pointer-fine:pointer-events-none pointer-fine:opacity-0 pointer-fine:group-hover:pointer-events-auto pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:pointer-events-auto pointer-fine:group-focus-within:opacity-100">
+      <div className="flex shrink-0 items-center gap-1 pointer-fine:pointer-events-none pointer-fine:opacity-0 pointer-fine:group-hover:pointer-events-auto pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:pointer-events-auto pointer-fine:group-focus-within:opacity-100 any-pointer-coarse:pointer-events-auto any-pointer-coarse:opacity-100">
         <button
           type="button"
           aria-label={`Replace ${theme.label} theme ZIP with a newer version`}
           onClick={() => onReplace(theme.id)}
-          className="relative shrink-0 rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+          className="shrink-0 rounded-md p-1.5 text-neutral-500 any-pointer-coarse:p-3.5 hover:bg-neutral-100 hover:text-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
         >
-          <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
           <ArrowPathIcon className="size-4 shrink-0 fill-current" />
         </button>
         <button
           type="button"
           aria-label={`Remove ${theme.label} theme from the vault`}
           onClick={() => onRemove(theme.id)}
-          className="relative shrink-0 rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+          className="shrink-0 rounded-md p-1.5 text-neutral-500 any-pointer-coarse:p-3.5 hover:bg-neutral-100 hover:text-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
         >
-          <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
           <TrashIcon className="size-4 shrink-0 fill-current" />
         </button>
       </div>
