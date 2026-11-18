@@ -129,6 +129,15 @@ const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-stora
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
   {
+    version: '0.10.3',
+    date: 'November 18, 2026',
+    title: 'Easier to tap replace and remove',
+    summary: 'On a touchscreen, the replace and remove buttons of an uploaded plugin are bigger and no longer get in each other\'s way.',
+    changes: [
+      'In Choose plugins, the replace and remove buttons of an uploaded plugin are 44 pixels square on any device with a touchscreen, touchscreen laptops included, with a small space between them, so a tap or a click on one never reaches the other. With only a mouse they keep their smaller size.',
+    ],
+  },
+  {
     version: '0.10.2',
     date: 'November 18, 2026',
     title: 'Quieter uploaded plugin rows',
@@ -1487,18 +1496,16 @@ function PluginRow({ plugin, selected, keySaved, addingKey, onToggle, onReplace,
           type="button"
           aria-label={`Replace ${plugin.label} ZIP with a newer version`}
           onClick={() => onReplace(plugin.id)}
-          className="relative shrink-0 rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+          className="shrink-0 rounded-md p-1.5 text-neutral-500 any-pointer-coarse:p-3.5 hover:bg-neutral-100 hover:text-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
         >
-          <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
           <ArrowPathIcon className="size-4 shrink-0 fill-current" />
         </button>
         <button
           type="button"
           aria-label={`Remove ${plugin.label} from the vault`}
           onClick={() => onRemove(plugin.id)}
-          className="relative shrink-0 rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+          className="shrink-0 rounded-md p-1.5 text-neutral-500 any-pointer-coarse:p-3.5 hover:bg-neutral-100 hover:text-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
         >
-          <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
           <TrashIcon className="size-4 shrink-0 fill-current" />
         </button>
       </div>
