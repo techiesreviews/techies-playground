@@ -1489,7 +1489,7 @@ function PluginRow({ plugin, selected, keySaved, addingKey, onToggle, onReplace,
           onClick={() => onReplace(plugin.id)}
           className="relative shrink-0 rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
         >
-          <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
+          <span className="pointer-fine:hidden any-pointer-coarse:block absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
           <ArrowPathIcon className="size-4 shrink-0 fill-current" />
         </button>
         <button
@@ -1498,7 +1498,7 @@ function PluginRow({ plugin, selected, keySaved, addingKey, onToggle, onReplace,
           onClick={() => onRemove(plugin.id)}
           className="relative shrink-0 rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
         >
-          <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
+          <span className="pointer-fine:hidden any-pointer-coarse:block absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
           <TrashIcon className="size-4 shrink-0 fill-current" />
         </button>
       </div>
