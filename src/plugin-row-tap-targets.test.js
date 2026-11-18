@@ -44,6 +44,20 @@ for (const label of ['Replace ', 'Remove ']) {
   })
 }
 
+test('Add key is at least 44 px tall on any touchscreen, 28 px with only a mouse, and has no tap area past its own box', () => {
+  const start = pluginRow.indexOf('aria-label={`Add a license key for')
+  assert.ok(start > 0, 'PluginRow has the Add key button')
+  const button = pluginRow.slice(pluginRow.lastIndexOf('<button', start), pluginRow.indexOf('</button>', start))
+  assert.doesNotMatch(button, /absolute/, 'no absolutely positioned tap overlay')
+  const tokens = classTokens(button)
+  // min-h-11 is 44 px (Tailwind: 1 unit = 4 px); with only a mouse the 20 px line (text-sm/5) plus py-1 gives 28 px.
+  assert.ok(tokens.includes('any-pointer-coarse:min-h-11'), 'at least 44 px tall wherever a touchscreen exists')
+  assert.ok(tokens.includes('text-sm/5') && tokens.includes('py-1'), 'mouse-only height unchanged')
+  assert.ok(!tokens.some((token) => token.startsWith('min-h-')), 'no mouse-only minimum height')
+  const margins = tokens.filter((token) => /^-?m[xytrbls]?-/.test(token.split(':').at(-1)))
+  assert.deepEqual(margins, [], 'no margin pulls it under a neighbour')
+})
+
 test('the key-saved icon keeps its 28 px box and the group keeps its 4 px gap', () => {
   const start = pluginRow.indexOf('aria-label={`License key saved for')
   assert.ok(start > 0, 'PluginRow has the key-saved icon')
