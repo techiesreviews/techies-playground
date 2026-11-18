@@ -53,3 +53,14 @@ test('the theme row button group shows on any touchscreen and keeps its 4 px gap
   assert.ok(tokens.includes('any-pointer-coarse:opacity-100'), 'shown wherever a touchscreen exists, touchscreen laptops included')
   assert.ok(tokens.includes('any-pointer-coarse:pointer-events-auto'), 'tappable wherever a touchscreen exists')
 })
+
+test('on a touchscreen a narrow theme row wraps the button group under the artwork; with only a mouse it does not', () => {
+  const row = themeRow.slice(themeRow.indexOf('<div className="group '), themeRow.indexOf('<PackageArtwork'))
+  const rowTokens = classTokens(row)
+  assert.ok(rowTokens.includes('any-pointer-coarse:flex-wrap'), 'wraps wherever a touchscreen exists')
+  assert.ok(!rowTokens.includes('flex-wrap'), 'a mouse-only row keeps one line')
+  const radio = themeRow.indexOf('<Radio')
+  const column = themeRow.slice(themeRow.lastIndexOf('<div', radio), radio)
+  const columnTokens = classTokens(column)
+  for (const token of ['min-w-0', 'flex-1', 'basis-40']) assert.ok(columnTokens.includes(token), `the text column keeps ${token}, so it stays at least 160 px before the group wraps`)
+})
