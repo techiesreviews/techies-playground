@@ -50,6 +50,9 @@ test('the theme row button group shows on any touchscreen and keeps its 4 px gap
   const tokens = classTokens(group)
   assert.ok(tokens.includes('gap-1'), 'the group keeps gap-1 between Replace and Delete')
   assert.ok(tokens.includes('pointer-fine:opacity-0'), 'with a mouse it still hides until hover or focus')
+  for (const token of ['group-hover:opacity-100', 'group-hover:pointer-events-auto', 'group-focus-within:opacity-100', 'group-focus-within:pointer-events-auto']) {
+    assert.ok(tokens.includes(`pointer-fine:${token}`), `with a mouse it shows on hover or keyboard focus (${token})`)
+  }
   assert.ok(tokens.includes('any-pointer-coarse:opacity-100'), 'shown wherever a touchscreen exists, touchscreen laptops included')
   assert.ok(tokens.includes('any-pointer-coarse:pointer-events-auto'), 'tappable wherever a touchscreen exists')
 })
