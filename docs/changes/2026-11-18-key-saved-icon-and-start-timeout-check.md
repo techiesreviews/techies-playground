@@ -16,7 +16,7 @@ Lex tried the preview after PR #37 on 2026-11-17 and asked for two things:
 
 ## Hypothesis and success criteria
 
-- Icon: with a saved key, the card shows a key icon as the first item of the Replace and Delete group, the same 28 px box and 4 px gap, hidden until hover or keyboard focus with a mouse, always shown on touch devices; the Key saved pill is gone. The state stays readable to assistive technology.
+- Icon: with a saved key, the card shows a key icon as the first item of the Replace and Delete group, the same 28 px box and 4 px gap, with a mouse hidden until hover or while anything in the card has focus, always shown on touch devices; the Key saved pill is gone. The state stays readable to assistive technology.
 - Timeout: reproduce the failure on the deployed preview in a real browser before changing anything, then make the smallest fix that keeps both security goals.
 
 ## Options considered
@@ -27,7 +27,7 @@ Lex tried the preview after PR #37 on 2026-11-17 and asked for two things:
 
 ## Implementation or prototype
 
-- `src/App.jsx` (`PluginRow`): the Key saved pill is removed; with a saved key a `KeyIcon` (`role="img"`, name "License key saved for <label>", tooltip "Key saved", `p-1.5`, `size-4`, teal) is the first child of the hover group. Add key is unchanged.
+- `src/App.jsx` (`PluginRow`): the Key saved pill is removed; with a saved key a `KeyIcon` (`role="img"`, name and tooltip "License key saved for <label>", `p-1.5`, `size-4`, teal) is the first child of the hover group. Add key is unchanged.
 - `CHANGELOG_ENTRIES` 0.10.2, `package.json` and `package-lock.json` 0.10.2; `docs/rebuild-spec.md` describes the icon.
 - No change to the Playground host, `remote.html`'s guard or the CORS proxy (see Result).
 
@@ -45,8 +45,10 @@ Lex tried the preview after PR #37 on 2026-11-17 and asked for two things:
 | preview, Playwright Chromium | Every `/cors-proxy.php` request answered 403 (what S2 returns to a request without `Sec-Fetch-Dest: empty`) | Shows whether S2 can cause the 2-minute message | The launcher shows "Failed to download WordPress 7.1.4 (HTTP 403)" after 4 s, not the 2-minute message | Script output, screenshot |
 | preview-wp | `sw.js` compared with production's (pre-#37 build) | — | Byte-identical (md5 b32c5b03…); the worker calls `skipWaiting()`, so no update can leave a worker waiting | `curl`, `md5sum` |
 | GitHub Actions | Deploy runs around 2026-11-17 09:17 UTC | — | None between 2026-11-16 22:27 and 2026-11-17 15:56 (WordPress sync on `main`) | `gh run list` |
-| Local, vite dev against preview-wp, Playwright Chromium 1280×900 | Upload the ZIP, save a fake key, move the mouse away, then hover the card | Icon hidden, then shown first in the group | Hidden (group opacity 0), no Key saved text; on hover shown at 695/727/759 px, 28 px boxes, 4 px gaps | Screenshots `row-idle.png`, `row-hover.png` (session) |
-| Local, same, 390×844 touch | Same | Icon always shown | Shown, same spacing | Screenshot `row-phone.png` (session) |
+| Local, vite dev against preview-wp, Playwright Chromium 1280×900 | Upload the ZIP, save a fake key, move the mouse away, then hover the card | Icon hidden, then shown first in the group | Hidden (group opacity 0), no Key saved text; on hover shown at 695/727/759 px, 28 px boxes, 4 px gaps | [idle](assets/2026-11-18-key-icon-row-idle.png), [hover](assets/2026-11-18-key-icon-row-hover.png) |
+| Local, same, 390×844 touch | Same | Icon always shown | Shown, same spacing | [phone](assets/2026-11-18-key-icon-row-phone.png) |
+| Local, same, 1280×900 | Save a key; park the mouse and blur; read the icon by role; Tab to the plugin checkbox | Readable while hidden; shown on keyboard focus | Focus lands on `#plugin-<id>` after Save key (group shown); `getByRole('img', { name: 'License key saved for wp security audit log' })` resolves at opacity 0; after Tab to the checkbox the group is at opacity 1 | Script output |
+| Local, same, 320×640 touch, 79-character label | Save a key | Icons wrap under the artwork inside the card; label wraps | Icons at 32–124 px inside the card, label wraps. The page is 324 px wide at 320 px both before and after this change (the same check on `017c0d6`), so that overflow is older and not from the icon | [320 px](assets/2026-11-18-key-icon-row-320.png), script output |
 | Local | `npm test`; `scripts/agents/kit build` | Pass | 175 passed; build finished | Local run |
 
 ## Result
