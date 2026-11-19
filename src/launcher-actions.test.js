@@ -4,7 +4,9 @@ import test from 'node:test'
 import * as savedRecipes from './lib/saved-recipes.js'
 import * as recipes from './lib/recipe.js'
 import { markPluginSelected } from './lib/plugin-preferences.js'
-import { assertZipFile } from './lib/vault.js'
+import { BlobWriter, TextReader, ZipWriter } from '@zip.js/zip.js'
+import { createPackageUploadQueue, detectPackageType } from './lib/package-upload.js'
+import { selectUploadedPlugin } from './lib/checks.js'
 
 // Execute the actual App event handlers with state setters and storage in memory.
 // This tests orchestration (including the former persistence effect), without pretending to render JSX.
@@ -72,21 +74,40 @@ for (const type of ['plugin', 'theme']) {
     const state = { recipe: recipes.validateRecipe({ name: 'Batch', repositoryTheme: 'twentytwentyfive' }), rows: [], error: '' }
     const setRecipe = (next) => { state.recipe = next(state.recipe) }
     const scope = {
-      ...recipes, assertZipFile, markPluginSelected,
+      ...recipes, detectPackageType, selectUploadedPlugin, markPluginSelected,
+      status: { step: 0 }, showPlayground: false, launchIdRef: { current: 1 },
+      setActiveSpinupId() {}, setUploadMessage() {},
+      installLiveUploads: async () => ({ failures: [], problems: [] }),
+      [type === 'theme' ? 'listPlugins' : 'listThemes']: async () => [],
+      [type === 'theme' ? 'setPlugins' : 'setThemes']() {},
       setError: (value) => { state.error = value }, setActiveSavedId() {}, setRecipe,
       [type === 'theme' ? 'getTheme' : 'getPlugin']: async (id) => packages.get(id),
-      [type === 'theme' ? 'saveTheme' : 'savePlugin']: async (record) => packages.set(record.id, record),
+      [type === 'theme' ? 'saveTheme' : 'savePlugin']: async (record) => {
+        if (record.id === 'storage-failed') throw new Error('The quota has been exceeded.')
+        packages.set(record.id, record)
+      },
       [type === 'theme' ? 'listThemes' : 'listPlugins']: async () => [...packages.values()],
       [type === 'theme' ? 'setThemes' : 'setPlugins']: (rows) => { state.rows = rows },
       [type === 'theme' ? 'setThemeRecency' : 'setPluginRecency']() {},
     }
-    const files = [new File(['bad'], 'invalid.zip'), new File(['PK\x03\x04'], 'first.zip'), new File(['bad'], 'bad-again.zip'), new File(['PK\x03\x04'], 'last.zip')]
+    async function archive(name) {
+      const writer = new ZipWriter(new BlobWriter(), { useWebWorkers: false })
+      const path = type === 'theme' ? 'example/style.css' : 'example/main.php'
+      const header = type === 'theme' ? '/* Theme Name: Example */' : '<?php\n/* Plugin Name: Example */'
+      await writer.add(path, new TextReader(header))
+      return new File([await writer.close()], name)
+    }
+    const files = [new File(['bad'], 'invalid.zip'), await archive('first.zip'), new File(['bad'], 'bad-again.zip'), await archive('storage-failed.zip'), await archive('last.zip')]
     const event = { target: { files, value: 'selected files' } }
-    const action = handler(type === 'theme' ? 'handleThemeZipImport' : 'handleZipImport', scope)
+    const enqueue = createPackageUploadQueue(() => handler('importDroppedPackages', scope), (error) => { throw error })
+    const picker = source.match(new RegExp(`name="${type}-zips"[^>]*onChange=\\{(\\w+)\\}`))[1]
+    const action = handler(picker, { uploadQueueRef: { current: enqueue } })
     await action(event)
     assert.deepEqual(state.rows.map((record) => record.id), ['first', 'last'])
     assert.match(state.error, /invalid.zip/)
     assert.match(state.error, /bad-again.zip/)
+    assert.match(state.error, /storage-failed.zip/)
+    assert.match(state.error, /The quota has been exceeded/)
     assert.equal(event.target.value, '')
     if (type === 'theme') {
       assert.equal(state.recipe.theme, 'last')

@@ -57,7 +57,7 @@ import {
   parseSavedRecipes,
   replaceSavedRecipe,
   SAVED_RECIPES_KEY,
-  serializeSavedRecipes,
+  updateSavedRecipes,
   upsertSavedRecipe,
 } from './lib/saved-recipes'
 import {
@@ -156,6 +156,15 @@ const PERSISTED_SITES_KEY = persistedSitesKey(PLAYGROUND_ORIGIN)
 const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-storage-default-v1'
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
+  {
+    version: '0.13.4',
+    date: 'November 23, 2026',
+    title: 'Recipe saves keep changes from other tabs',
+    summary: 'Saving or removing a recipe uses the latest library, so another open tab cannot erase newer recipes.',
+    changes: [
+      'Recipe saves, renames and removals read the current browser library before writing. Other open tabs refresh their lists automatically.',
+    ],
+  },
   {
     version: '0.13.3',
     date: 'November 22, 2026',
@@ -2134,8 +2143,14 @@ export default function App() {
   }, [recipe])
 
   useEffect(() => {
-    localStorage.setItem(SAVED_RECIPES_KEY, serializeSavedRecipes(savedRecipes))
-  }, [savedRecipes])
+    function refreshSavedRecipes(event) {
+      if (event.storageArea === localStorage && (event.key === SAVED_RECIPES_KEY || event.key === null)) {
+        setSavedRecipes(parseSavedRecipes(localStorage.getItem(SAVED_RECIPES_KEY)))
+      }
+    }
+    window.addEventListener('storage', refreshSavedRecipes)
+    return () => window.removeEventListener('storage', refreshSavedRecipes)
+  }, [])
 
   useEffect(() => {
     localStorage.setItem(SPINUP_HISTORY_KEY, serializeSpinupHistory(spinupHistory))
@@ -2167,21 +2182,22 @@ export default function App() {
     setRecipe((current) => ({ ...current, ...patch }))
   }
 
-  function saveRecipeToLibrary(candidate, replaceId = '') {
+  async function saveRecipeToLibrary(candidate, replaceId = '') {
     const safeRecipe = validateRecipe(candidate)
     const id = normalizePluginId(safeRecipe.name) || 'recipe'
-    setSavedRecipes((current) => replaceId
+    const records = await updateSavedRecipes(localStorage, (current) => replaceId
       ? replaceSavedRecipe(current, replaceId, safeRecipe)
       : upsertSavedRecipe(current, safeRecipe))
+    setSavedRecipes(records)
     setActiveSavedId(id)
     setEditingSavedId('')
     setSelectionMode('recipes')
   }
 
-  function handleSaveRecipe() {
+  async function handleSaveRecipe() {
     try {
       setError('')
-      saveRecipeToLibrary(recipe, editingSavedId)
+      await saveRecipeToLibrary(recipe, editingSavedId)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Review the recipe settings before saving.')
     }
@@ -2404,7 +2420,7 @@ export default function App() {
       const warning = externalSetupMessage(imported)
       if (warning && !window.confirm(`${warning}\n\nImport this recipe?`)) return
       setRecipe(imported)
-      saveRecipeToLibrary(imported)
+      await saveRecipeToLibrary(imported)
     } catch (caught) {
       setError(caught.message)
     } finally {
@@ -2568,10 +2584,15 @@ export default function App() {
     setActiveSpinupId(record.id)
   }
 
-  function removeSavedRecipe(id) {
-    setSavedRecipes((current) => current.filter((record) => record.id !== id))
-    if (activeSavedId === id) setActiveSavedId('')
-    if (editingSavedId === id) setEditingSavedId('')
+  async function removeSavedRecipe(id) {
+    try {
+      const records = await updateSavedRecipes(localStorage, (current) => current.filter((record) => record.id !== id))
+      setSavedRecipes(records)
+      if (activeSavedId === id) setActiveSavedId('')
+      if (editingSavedId === id) setEditingSavedId('')
+    } catch (caught) {
+      setError(caught.message)
+    }
   }
 
   function removeSpinup(id) {
