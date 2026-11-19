@@ -75,18 +75,23 @@ for (const type of ['plugin', 'theme']) {
       ...recipes, assertZipFile, markPluginSelected,
       setError: (value) => { state.error = value }, setActiveSavedId() {}, setRecipe,
       [type === 'theme' ? 'getTheme' : 'getPlugin']: async (id) => packages.get(id),
-      [type === 'theme' ? 'saveTheme' : 'savePlugin']: async (record) => packages.set(record.id, record),
+      [type === 'theme' ? 'saveTheme' : 'savePlugin']: async (record) => {
+        if (record.id === 'storage-failed') throw new Error('The quota has been exceeded.')
+        packages.set(record.id, record)
+      },
       [type === 'theme' ? 'listThemes' : 'listPlugins']: async () => [...packages.values()],
       [type === 'theme' ? 'setThemes' : 'setPlugins']: (rows) => { state.rows = rows },
       [type === 'theme' ? 'setThemeRecency' : 'setPluginRecency']() {},
     }
-    const files = [new File(['bad'], 'invalid.zip'), new File(['PK\x03\x04'], 'first.zip'), new File(['bad'], 'bad-again.zip'), new File(['PK\x03\x04'], 'last.zip')]
+    const files = [new File(['bad'], 'invalid.zip'), new File(['PK\x03\x04'], 'first.zip'), new File(['bad'], 'bad-again.zip'), new File(['PK\x03\x04'], 'storage-failed.zip'), new File(['PK\x03\x04'], 'last.zip')]
     const event = { target: { files, value: 'selected files' } }
     const action = handler(type === 'theme' ? 'handleThemeZipImport' : 'handleZipImport', scope)
     await action(event)
     assert.deepEqual(state.rows.map((record) => record.id), ['first', 'last'])
     assert.match(state.error, /invalid.zip/)
     assert.match(state.error, /bad-again.zip/)
+    assert.match(state.error, /storage-failed.zip/)
+    assert.match(state.error, /The quota has been exceeded/)
     assert.equal(event.target.value, '')
     if (type === 'theme') {
       assert.equal(state.recipe.theme, 'last')
