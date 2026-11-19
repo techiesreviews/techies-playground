@@ -127,7 +127,7 @@ The same comparison also verifies a live temporary launcher environment in a fre
 
 ## Build and delivery
 
-Vite produces `dist`. `wrangler.jsonc` binds that directory as `ASSETS`, uses SPA fallback, runs `worker.js` first, enables observability, and maps the custom domain `play.techies.tools`.
+Vite produces `dist`. `wrangler.jsonc` binds that directory as `ASSETS`, uses SPA fallback, runs `worker.js` first, keeps observability off (Workers Logs add cost), and maps the custom domain `play.techies.tools`.
 
 The Worker adds:
 
