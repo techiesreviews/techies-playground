@@ -56,7 +56,7 @@ import {
   parseSavedRecipes,
   replaceSavedRecipe,
   SAVED_RECIPES_KEY,
-  serializeSavedRecipes,
+  updateSavedRecipes,
   upsertSavedRecipe,
 } from './lib/saved-recipes'
 import {
@@ -128,6 +128,16 @@ const PERSISTED_SITES_KEY = persistedSitesKey(PLAYGROUND_ORIGIN)
 const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-storage-default-v1'
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
+  {
+    version: '0.10.5',
+    date: 'November 19, 2026',
+    title: 'Safer recipe saves and ZIP imports',
+    summary: 'Saving in another tab keeps your recipes, and one invalid ZIP no longer stops the rest of an upload.',
+    changes: [
+      'Recipe saves, updates and removals use the latest library in this browser. Other open tabs refresh their saved recipe list automatically.',
+      'Add ZIPs and Add theme ZIPs keep importing valid packages after an invalid file. Imported packages appear in their list, and errors name the files that failed.',
+    ],
+  },
   {
     version: '0.10.4',
     date: 'November 18, 2026',
@@ -2010,8 +2020,14 @@ export default function App() {
   }, [recipe])
 
   useEffect(() => {
-    localStorage.setItem(SAVED_RECIPES_KEY, serializeSavedRecipes(savedRecipes))
-  }, [savedRecipes])
+    function refreshSavedRecipes(event) {
+      if (event.storageArea === localStorage && (event.key === SAVED_RECIPES_KEY || event.key === null)) {
+        setSavedRecipes(parseSavedRecipes(localStorage.getItem(SAVED_RECIPES_KEY)))
+      }
+    }
+    window.addEventListener('storage', refreshSavedRecipes)
+    return () => window.removeEventListener('storage', refreshSavedRecipes)
+  }, [])
 
   useEffect(() => {
     localStorage.setItem(SPINUP_HISTORY_KEY, serializeSpinupHistory(spinupHistory))
@@ -2043,21 +2059,22 @@ export default function App() {
     setRecipe((current) => ({ ...current, ...patch }))
   }
 
-  function saveRecipeToLibrary(candidate, replaceId = '') {
+  async function saveRecipeToLibrary(candidate, replaceId = '') {
     const safeRecipe = validateRecipe(candidate)
     const id = normalizePluginId(safeRecipe.name) || 'recipe'
-    setSavedRecipes((current) => replaceId
+    const records = await updateSavedRecipes(localStorage, (current) => replaceId
       ? replaceSavedRecipe(current, replaceId, safeRecipe)
       : upsertSavedRecipe(current, safeRecipe))
+    setSavedRecipes(records)
     setActiveSavedId(id)
     setEditingSavedId('')
     setSelectionMode('recipes')
   }
 
-  function handleSaveRecipe() {
+  async function handleSaveRecipe() {
     try {
       setError('')
-      saveRecipeToLibrary(recipe, editingSavedId)
+      await saveRecipeToLibrary(recipe, editingSavedId)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Review the recipe settings before saving.')
     }
@@ -2116,29 +2133,37 @@ export default function App() {
 
   async function handleZipImport(event) {
     setError('')
+    const files = Array.from(event.target.files)
+    const failures = []
     try {
       setActiveSavedId('')
-      for (const file of event.target.files) {
-        await assertZipFile(file)
-        const id = normalizePluginId(file.name)
-        if (!id) throw new Error(`Could not create an ID for ${file.name}.`)
-        const existing = await getPlugin(id)
-        await savePlugin({
-          id,
-          label: existing?.label || pluginLabelFromFilename(file.name),
-          filename: file.name,
-          size: file.size,
-          file,
-          versionHint: extractVersionHint(file.name),
-          savedAt: Date.now(),
-        })
-        setPluginRecency((current) => markPluginSelected(current, id))
-        setRecipe((current) => validateRecipe({ ...current, plugins: [...current.plugins, id] }))
+      for (const file of files) {
+        try {
+          await assertZipFile(file)
+          const id = normalizePluginId(file.name)
+          if (!id) throw new Error(`Could not create an ID for ${file.name}.`)
+          const existing = await getPlugin(id)
+          await savePlugin({
+            id,
+            label: existing?.label || pluginLabelFromFilename(file.name),
+            filename: file.name,
+            size: file.size,
+            file,
+            versionHint: extractVersionHint(file.name),
+            savedAt: Date.now(),
+          })
+          setPluginRecency((current) => markPluginSelected(current, id))
+          setRecipe((current) => validateRecipe({ ...current, plugins: [...current.plugins, id] }))
+        } catch (caught) {
+          const message = caught instanceof Error ? caught.message : String(caught)
+          failures.push(message.includes(file.name) ? message : `${file.name}: ${message}`)
+        }
       }
       setPlugins(await listPlugins())
     } catch (caught) {
-      setError(caught.message)
+      failures.push(caught.message)
     } finally {
+      setError(failures.join(' '))
       event.target.value = ''
     }
   }
@@ -2171,29 +2196,37 @@ export default function App() {
 
   async function handleThemeZipImport(event) {
     setError('')
+    const files = Array.from(event.target.files)
+    const failures = []
     try {
       setActiveSavedId('')
-      for (const file of event.target.files) {
-        await assertZipFile(file)
-        const id = normalizePluginId(file.name)
-        if (!id) throw new Error(`Could not create a theme ID for ${file.name}.`)
-        const existing = await getTheme(id)
-        await saveTheme({
-          id,
-          label: existing?.label || pluginLabelFromFilename(file.name),
-          filename: file.name,
-          size: file.size,
-          file,
-          versionHint: extractVersionHint(file.name),
-          savedAt: Date.now(),
-        })
-        setThemeRecency((current) => markPluginSelected(current, id))
-        setRecipe((current) => validateRecipe({ ...current, theme: id, repositoryTheme: '' }))
+      for (const file of files) {
+        try {
+          await assertZipFile(file)
+          const id = normalizePluginId(file.name)
+          if (!id) throw new Error(`Could not create a theme ID for ${file.name}.`)
+          const existing = await getTheme(id)
+          await saveTheme({
+            id,
+            label: existing?.label || pluginLabelFromFilename(file.name),
+            filename: file.name,
+            size: file.size,
+            file,
+            versionHint: extractVersionHint(file.name),
+            savedAt: Date.now(),
+          })
+          setThemeRecency((current) => markPluginSelected(current, id))
+          setRecipe((current) => validateRecipe({ ...current, theme: id, repositoryTheme: '' }))
+        } catch (caught) {
+          const message = caught instanceof Error ? caught.message : String(caught)
+          failures.push(message.includes(file.name) ? message : `${file.name}: ${message}`)
+        }
       }
       setThemes(await listThemes())
     } catch (caught) {
-      setError(caught.message)
+      failures.push(caught.message)
     } finally {
+      setError(failures.join(' '))
       event.target.value = ''
     }
   }
@@ -2231,7 +2264,7 @@ export default function App() {
       const warning = externalSetupMessage(imported)
       if (warning && !window.confirm(`${warning}\n\nImport this recipe?`)) return
       setRecipe(imported)
-      saveRecipeToLibrary(imported)
+      await saveRecipeToLibrary(imported)
     } catch (caught) {
       setError(caught.message)
     } finally {
@@ -2290,10 +2323,15 @@ export default function App() {
     setActiveSpinupId(record.id)
   }
 
-  function removeSavedRecipe(id) {
-    setSavedRecipes((current) => current.filter((record) => record.id !== id))
-    if (activeSavedId === id) setActiveSavedId('')
-    if (editingSavedId === id) setEditingSavedId('')
+  async function removeSavedRecipe(id) {
+    try {
+      const records = await updateSavedRecipes(localStorage, (current) => current.filter((record) => record.id !== id))
+      setSavedRecipes(records)
+      if (activeSavedId === id) setActiveSavedId('')
+      if (editingSavedId === id) setEditingSavedId('')
+    } catch (caught) {
+      setError(caught.message)
+    }
   }
 
   function removeSpinup(id) {

@@ -49,3 +49,13 @@ export function serializeSavedRecipes(records) {
     recipe: validateRecipe(record.recipe),
   })))
 }
+
+export async function updateSavedRecipes(storage, update, locks = globalThis.navigator?.locks) {
+  const write = () => {
+    const records = update(parseSavedRecipes(storage.getItem(SAVED_RECIPES_KEY)))
+    storage.setItem(SAVED_RECIPES_KEY, serializeSavedRecipes(records))
+    return records
+  }
+  // Serialize cooperating tabs where Web Locks are available; always read at write time.
+  return locks ? locks.request(SAVED_RECIPES_KEY, write) : write()
+}
