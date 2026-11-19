@@ -92,6 +92,8 @@ Example: `Acme-Pro_v2.4.0-beta.7.zip` becomes `acme-pro`. This is why Replace ZI
 
 Parsers treat malformed records as absent and drop individually invalid saved recipes/history entries.
 
+Saved-recipe saves, imports, rename-updates and removals read the latest array immediately before writing, rather than persisting a tab's cached array from an effect. Web Locks serialize these read/modify/write operations across cooperating tabs where supported; browsers without Web Locks still read fresh storage, but simultaneous writes are not atomic. Storage events refresh the displayed library without writing it back. The record schema and normalized-name replacement rule are unchanged.
+
 ## Package vault IndexedDB
 
 - Database: `private-playground-launcher`.
@@ -100,6 +102,8 @@ Parsers treat malformed records as absent and drop individually invalid saved re
 - Record: `{ id, label, filename, size, file, versionHint, savedAt }`.
 
 Page-wide drops classify archives from WordPress headers before saving into `plugins` or `themes`; filenames still determine stable IDs. There is no schema change or batch-count cap. Invalid/ambiguous archives fail individually. Multiple themes are stored, but only the last successful theme is selected and `repositoryTheme` is cleared. Browser quota failures are reported per file.
+
+The plugin and theme file pickers validate and save each file independently, continue after failures, and refresh their rows once the batch ends. Valid plugins are selected; the last valid theme is selected and clears the directory theme. Errors name failed files; successful rows show what imported. The input resets so the same batch can be retried.
 
 `file` is the uploaded browser `File`/Blob. This database is not encrypted because plugin/theme ZIPs must be supplied directly to Playground. It is origin- and browser-profile-local.
 
