@@ -129,6 +129,16 @@ const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-stora
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
   {
+    version: '0.10.5',
+    date: 'November 19, 2026',
+    title: 'Safer recipe saves and ZIP imports',
+    summary: 'Saving in another tab keeps your recipes, and one invalid ZIP no longer stops the rest of an upload.',
+    changes: [
+      'Recipe saves, updates and removals use the latest library in this browser. Other open tabs refresh their saved recipe list automatically.',
+      'Add ZIPs keeps importing valid plugins and themes after an invalid file. Imported packages appear in their list, and errors name the files that failed.',
+    ],
+  },
+  {
     version: '0.10.4',
     date: 'November 18, 2026',
     title: 'Easier to tap theme buttons and Add key',

@@ -31,7 +31,7 @@ There is no application server or shared data store.
 | `src/lib/vault-session.js` | The unlocked vault key for the page session, its listeners, and a launch's wait for an unlock, skip or close. | App, LicenseManager, Add key. |
 | `src/lib/license-fill.js` | The PHP that hands saved keys to Freemius-based plugins (keys only in the request body), its request body, result parsing and labels, and the fill run (vault key and key reader passed in). | App launch. |
 | `src/lib/checks.js` | Which checks a recipe contains, adding one, where its results open, and the checks must-use plugin. | App. |
-| `src/lib/saved-recipes.js` | Parse, validate, upsert, rename-replace, and serialize saved recipes. | App. |
+| `src/lib/saved-recipes.js` | Parse, validate, upsert, rename-replace, serialize and reconcile saved recipe writes against current storage (Web Locks where supported). | App. |
 | `src/lib/spinup-history.js` | Safe history normalization, cap, and persisted-environment deduplication. | App. |
 | `src/lib/plugin-preferences.js` | Local-package search and recently-selected ordering. | App for plugins and themes. |
 | `src/lib/playground-persistence.js` | Unload warning rule, one-time default migration, site ID, history persistence label. | App and history. |
@@ -44,7 +44,7 @@ All `*.test.js` and `*.test.mjs` files are direct Node tests for their sibling m
 
 ## State ownership
 
-`App` owns the active recipe and orchestration state. Derived views use `useMemo`; persistent data uses narrow library functions. There is no state context or reducer.
+`App` owns the active recipe and orchestration state. Derived views use `useMemo`; persistent data uses narrow library functions. There is no state context or reducer. Saved recipes are persisted only by explicit mutations that read current storage (under a Web Lock where available); storage events refresh other tabs without echo writes.
 
 Directory-plugin display metadata is cached in an in-memory `Map` as featured and search results arrive. Selected directory rows survive an empty or changed search, and the launch summary resolves selected plugin names from this cache or local vault metadata. Public slugs/IDs are display fallbacks when metadata is unavailable. Featured cards avoid duplicate rows at empty search. This cache is not persisted and does not alter recipes, Blueprint setup, or OPFS site identity. See [the selected-plugin regression record](changes/2026-10-17-selected-directory-plugins.md).
 

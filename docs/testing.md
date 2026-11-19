@@ -26,7 +26,7 @@ For a deployment preparation, also run `npm run deploy:check`. Per the Release s
 
 ## Current automated suite
 
-The suite uses Node's built-in test runner and contains 187 tests in 28 files in the current working tree. `npm test` names its files (`src/**/*.test.js`, `scripts/*.test.mjs`), so a locally prepared `playground-host/dist` adds none.
+The suite uses Node's built-in test runner and contains 192 tests in 29 files in the current working tree. `npm test` names its files (`src/**/*.test.js`, `scripts/*.test.mjs`), so a locally prepared `playground-host/dist` adds none.
 
 Use the shared [Agent Kit](agents/agent-scripts.md): `scripts/agents/kit doctor`, `scripts/agents/kit unit` (the same files as `npm test`), and `scripts/agents/kit build`. The unit tests are Node tests only; browser specs and `kit shots` are not integrated. Real browser checks below use T3 separately and must not be inferred from the Node results.
 
@@ -46,6 +46,7 @@ Use the shared [Agent Kit](agents/agent-scripts.md): `scripts/agents/kit doctor`
 | `checks-php.test.js` | The checks must-use plugin in real PHP 8.3: each `techies-check` value prints only its own script, and nothing prints without one. |
 | `license-fill-php.test.js` | The fill code in real PHP 8.3 against stub WordPress and Freemius: each key reaches only its folder's Freemius instance (no prefix mix-ups), active licences are left alone, refusals and exceptions are reported with the key replaced by `[key]`, non-Freemius plugins are reported. |
 | `vault-session.test.js` | The in-memory session key, lock, listeners, a launch's wait for an unlock, skip or close (and that it stops listening), a late unlock after its prompt closed being dropped. |
+| `launcher-actions.test.js` | Executes actual App event handlers with in-memory state/storage: stale-tab saves, renames and deletions, mixed invalid/valid plugin and theme picker batches, selection and retry. It does not render JSX or emulate storage events. |
 | `saved-recipes.test.js` | Upsert, rename-replace, safe round trip, invalid-record dropping. |
 | `spinup-history.test.js` | Safe metadata, order/cap, invalid-record dropping, theme metadata, saved-environment deduplication. |
 | `plugin-preferences.test.js` | Recency ordering, multi-field search, valid timestamp persistence and deletion. |
@@ -76,7 +77,7 @@ Use synthetic ZIPs/test packages and non-production vendor licenses.
 | Local plugin | Upload valid and invalid ZIP files, select, replace with versioned filename, refresh. | Invalid signature rejected; valid File persists; internal ID stays stable across replacement but is not repeated on the card; metadata starts on a dash-free second line; selected card uses the featured-plugin teal surface/ring and check-circle while replace and delete stay operable. |
 | Directory plugin | Search with 0, 1, and 2+ characters and select a result. | Empty query orders featured plugins before uploads; 1 character orders uploads before the hint; 2+ characters orders uploaded matches before debounced official results; selected slug persists in recipe and uses the same teal surface/ring and check-circle in featured and search views. |
 | Theme exclusivity | Alternate default, local, and directory themes. | Exactly one source is selected; opposing theme field is cleared. |
-| Recipe | Save, rename-update, export, import, remove a required ZIP, launch. | No duplicate old name; JSON is normalized/secret-free; missing ZIP blocks launch with ID. |
+| Recipe | Save distinct recipes in two already open tabs; rename and delete while the other tab saves; refresh both. Also save, rename-update, export, import, remove a required ZIP, launch. | Both tab saves survive; deletion stays deleted; no duplicate old name; JSON is normalized/secret-free; missing ZIP blocks launch with ID. |
 | Latest WordPress | Launch `latest` with network available, then simulate version API failure. | Exact version is verified when available; launch fails closed if latest cannot be confirmed. |
 | Temporary site | Launch, change WordPress, attempt refresh and close. | Browser unload warning and in-app discard confirmation appear. |
 | Saved site | Launch new browser-saved site, change content, close, relaunch same identity. | Content resumes; one-time imports/Multisite are not repeated. |
