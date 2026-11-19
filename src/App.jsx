@@ -135,7 +135,7 @@ const CHANGELOG_ENTRIES = [
     summary: 'Saving in another tab keeps your recipes, and one invalid ZIP no longer stops the rest of an upload.',
     changes: [
       'Recipe saves, updates and removals use the latest library in this browser. Other open tabs refresh their saved recipe list automatically.',
-      'Add ZIPs keeps importing valid plugins and themes after an invalid file. Imported packages appear in their list, and errors name the files that failed.',
+      'Add ZIPs and Add theme ZIPs keep importing valid packages after an invalid file. Imported packages appear in their list, and errors name the files that failed.',
     ],
   },
   {
@@ -2155,7 +2155,8 @@ export default function App() {
           setPluginRecency((current) => markPluginSelected(current, id))
           setRecipe((current) => validateRecipe({ ...current, plugins: [...current.plugins, id] }))
         } catch (caught) {
-          failures.push(caught.message)
+          const message = caught instanceof Error ? caught.message : String(caught)
+          failures.push(message.includes(file.name) ? message : `${file.name}: ${message}`)
         }
       }
       setPlugins(await listPlugins())
@@ -2217,7 +2218,8 @@ export default function App() {
           setThemeRecency((current) => markPluginSelected(current, id))
           setRecipe((current) => validateRecipe({ ...current, theme: id, repositoryTheme: '' }))
         } catch (caught) {
-          failures.push(caught.message)
+          const message = caught instanceof Error ? caught.message : String(caught)
+          failures.push(message.includes(file.name) ? message : `${file.name}: ${message}`)
         }
       }
       setThemes(await listThemes())

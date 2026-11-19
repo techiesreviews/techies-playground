@@ -45,6 +45,14 @@ Environment: Linux, Node v24.22.2; owned branch from origin/dev 7dac676; T3 brow
 | Local plugin and theme pickers: invalid.zip then corresponding valid sweep ZIP | Continue and show valid package despite error | Error retained for invalid.zip; vault contained sweep-test-plugin and sweep-test-theme; tabs showed 1 selected each; input values reset | Browser readback in task transcript |
 | `git diff --check` | No whitespace errors | Passed | Command transcript |
 
+Review R1-1 found that browser storage errors lacked a filename. Added a quota rejection in the middle of both picker regressions: `kit unit src/launcher-actions.test.js` then failed 3/5 with the missing `storage-failed.zip` assertion (`.scratch/pg374/review-red.log`). Both catches now prefix unnamed failures. R1-4's requested failure coverage is included. The changelog also names both picker buttons exactly.
+
+Declined: R1-2 (validation gap) — no extra helper-only tests in this scoped fix. Existing orchestration regressions exercise current storage reads; the real two-tab browser check exercises Web Locks. The unsupported-browser atomicity limit remains explicit.
+
+Declined: R1-3 (validation gap) — avoid extracting a four-line storage listener solely for tests. Cross-tab list refresh was observed in the real browser; no automated event coverage is claimed.
+
+Declined: optional nits about alert layout, stale editing labels and handler extraction — these widen the named bug fixes into UI or test architecture changes. The persistence-effect harness intentionally lets the tests replay the original bug. The record already includes each finding's symptom, so its provenance path is supplemental.
+
 The Node regressions execute actual App handler code with in-memory state/storage and real validation, without rendering JSX. Their ZIP fixtures intentionally exercise the existing signature-only picker contract. They do not prove ZIP installation or WordPress startup. Real browser checks use the sweep's valid archives and the actual IndexedDB vault. The shared draft is still shared between tabs; that behavior is outside these findings.
 
 ## Result
