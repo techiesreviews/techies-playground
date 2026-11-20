@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { ChartBarIcon, CheckCircleIcon, ChevronRightIcon, ExclamationTriangleIcon, XCircleIcon, XMarkIcon } from '@heroicons/react/16/solid'
-import { CHECKS, checksVerdict } from './lib/checks'
+import { CHECKS, checksVerdict, formatSeconds } from './lib/checks'
 import { BAR_BUTTON_CLASS, BarTapTarget, Spinner, clockTime } from './UpdatesControl'
 
 export const CHECKS_PANEL_ID = 'checks-panel'
@@ -19,11 +19,12 @@ const toolName = (id) => CHECKS.find((check) => check.id === id)?.name || id
 export function ChecksButton({ siteReady, run, gate, open, onToggle, buttonRef }) {
   const verdict = run.state === 'done' ? checksVerdict(run.report) : null
   const [statusColor, StatusIcon] = verdict ? BAR_STATUS[verdict.status] : []
+  const waitsForLicenses = run.state === 'idle' && siteReady && !gate.ready
   const waitingNote = run.state === 'running'
     ? 'running…'
     : run.state === 'error'
       ? 'could not run'
-      : run.state === 'idle' && siteReady && !gate.ready ? 'activate licenses first' : ''
+      : waitsForLicenses ? 'activate licenses first' : ''
   return (
     <button
       ref={buttonRef}
@@ -38,6 +39,7 @@ export function ChecksButton({ siteReady, run, gate, open, onToggle, buttonRef }
       <BarTapTarget />
       {run.state === 'running' ? <Spinner className="text-neutral-300" /> : <ChartBarIcon className="size-4 shrink-0 fill-neutral-300" />}
       <span className="max-sm:sr-only">Checks</span>
+      {waitsForLicenses && <ExclamationTriangleIcon className="size-3.5 shrink-0 fill-amber-300" aria-hidden="true" />}
       {waitingNote && <span className="font-normal text-neutral-300 max-[1040px]:sr-only">· {waitingNote}</span>}
       {verdict && (
         <span className={`inline-flex items-center gap-1 ${statusColor}`}>
@@ -162,7 +164,7 @@ export function ChecksPanel({ checks, run, gate, onRun, onClose, onOpenCheck }) 
         <div>
           <p className="text-base/6 font-semibold">{verdict.headline}</p>
           <p className="text-sm/5 text-neutral-600 tabular-nums">
-            <b className="font-semibold text-neutral-950">{report.passed}</b> passed · <b className={`font-semibold ${report.warnings ? 'text-amber-700' : 'text-neutral-950'}`}>{report.warnings}</b> {report.warnings === 1 ? 'warning' : 'warnings'} · <b className={`font-semibold ${report.failed ? 'text-red-700' : 'text-neutral-950'}`}>{report.failed}</b> failed · took {Math.max(1, Math.round(run.took))} s
+            <b className="font-semibold text-neutral-950">{report.passed}</b> passed · <b className={`font-semibold ${report.warnings ? 'text-amber-700' : 'text-neutral-950'}`}>{report.warnings}</b> {report.warnings === 1 ? 'warning' : 'warnings'} · <b className={`font-semibold ${report.failed ? 'text-red-700' : 'text-neutral-950'}`}>{report.failed}</b> failed · took {formatSeconds(run.took)}
           </p>
         </div>
       </>
@@ -221,7 +223,7 @@ export function ChecksPanel({ checks, run, gate, onRun, onClose, onOpenCheck }) 
         </button>
       </div>
       <div className="min-h-0 flex-1 overflow-auto overscroll-contain px-4 pt-3.5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
-        <div aria-live="polite" className={`flex items-start gap-2.5 rounded-[0.625rem] p-3 ${VERDICT_BOX[running || !verdict ? (run.state === 'error' ? 'fail' : 'wait') : verdict.status]}`}>
+        <div className={`flex items-start gap-2.5 rounded-[0.625rem] p-3 ${VERDICT_BOX[running || !verdict ? (run.state === 'error' ? 'fail' : 'wait') : verdict.status]}`}>
           {verdictBody}
         </div>
         <div className="mt-3 grid grid-cols-4 gap-2 max-[399px]:grid-cols-2">

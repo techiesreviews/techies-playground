@@ -131,7 +131,8 @@ function techies_measure_record( $type, $message, $file, $line ) {
 	if ( count( $GLOBALS['techies_measure']['errors'] ) < 10 ) {
 		$GLOBALS['techies_measure']['errors'][] = array(
 			'kind'    => $kind,
-			'message' => substr( (string) $message, 0, 200 ),
+			// An address in a message keeps its host and path; its query can hold a license key.
+			'message' => substr( preg_replace( '#(https?://[^\\s?\\'"]+)\\?[^\\s\\'")]*#', '$1?…', (string) $message ), 0, 200 ),
 			'file'    => str_replace( ABSPATH, '', (string) $file ),
 			'line'    => (int) $line,
 		);
@@ -196,7 +197,7 @@ function techies_measure_report() {
 	usort( $plugins, function ( $a, $b ) { return $b['time'] <=> $a['time']; } );
 	$title = is_admin() ? ( isset( $GLOBALS['title'] ) ? $GLOBALS['title'] : '' ) : wp_get_document_title();
 	$report = array(
-		'title'       => wp_strip_all_tags( (string) $title ),
+		'title'       => html_entity_decode( wp_strip_all_tags( (string) $title ), ENT_QUOTES, 'UTF-8' ),
 		'time'        => timer_float(),
 		'memory'      => memory_get_peak_usage(),
 		'memoryLimit' => wp_convert_hr_to_bytes( ini_get( 'memory_limit' ) ),
@@ -383,16 +384,19 @@ export function evaluateChecks(measurement, checkIds) {
   }
 
   const count = (status) => checks.filter((check) => check.status === status).length
+  // The tiles use Query Monitor's limits; without it they show the numbers uncoloured.
+  const judged = checkIds.includes('query-monitor')
+  const tileStatus = (status) => (judged ? status : 'pass')
   return {
     checks,
     passed: count('pass'),
     warnings: count('warn'),
     failed: count('fail'),
     tiles: [
-      { id: 'page-time', label: 'Page time', value: formatSeconds(m.time), status: timeStatus },
-      { id: 'memory', label: 'Memory', value: formatMegabytes(m.memory), status: memoryStatus },
-      { id: 'queries', label: 'Queries', value: String(m.queries), status: m.queries > limits.queriesWarn ? 'warn' : 'pass' },
-      { id: 'php-errors', label: 'PHP errors', value: String(errorTotal), status: errorStatus },
+      { id: 'page-time', label: 'Page time', value: formatSeconds(m.time), status: tileStatus(timeStatus) },
+      { id: 'memory', label: 'Memory', value: formatMegabytes(m.memory), status: tileStatus(memoryStatus) },
+      { id: 'queries', label: 'Queries', value: String(m.queries), status: tileStatus(m.queries > limits.queriesWarn ? 'warn' : 'pass') },
+      { id: 'php-errors', label: 'PHP errors', value: String(errorTotal), status: tileStatus(errorStatus) },
     ],
   }
 }

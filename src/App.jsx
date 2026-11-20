@@ -1854,6 +1854,8 @@ export default function App() {
   const checksButtonRef = useRef(null)
   const updatesButtonRef = useRef(null)
   const launchedRecipeRef = useRef(null)
+  // The client a check run is measuring now, so a second run never starts on top of it.
+  const checksRunClientRef = useRef(null)
   const launchAbortRef = useRef(null)
   const savedKeyPackages = useMemo(() => packagesWithSavedKeys(licenseRecords || []), [licenseRecords])
   const keyCountsFor = (candidate) => ({
@@ -2281,7 +2283,8 @@ export default function App() {
   // run that finishes after the Playground closed or relaunched is dropped.
   async function runChecks(client = clientRef.current) {
     const checkIds = checksInSetup(launchedRecipeRef.current || recipe).map((check) => check.id)
-    if (!client || !checkIds.length) return
+    if (!client || !checkIds.length || checksRunClientRef.current === client) return
+    checksRunClientRef.current = client
     const started = performance.now()
     setChecksRun((current) => ({ ...current, state: 'running' }))
     try {
@@ -2303,6 +2306,8 @@ export default function App() {
     } catch (caught) {
       if (client !== clientRef.current) return
       setChecksRun({ state: 'error', message: caught instanceof Error ? caught.message : 'The checks could not measure this page.' })
+    } finally {
+      if (checksRunClientRef.current === client) checksRunClientRef.current = null
     }
   }
 
