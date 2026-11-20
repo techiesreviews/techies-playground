@@ -60,3 +60,52 @@ test('the host job refuses to deploy, and checks it does not serve, the public P
   assert.ok(pages !== -1 && pages < host.indexOf('cloudflare/wrangler-action'), 'only the launcher pages are deployed')
   assert.match(host, /index_status="\$\(curl [^\n]*"\$PLAYGROUND_ORIGIN\/index\.html"\)"\n\s*test "\$index_status" = 404/, 'the deployed host answers 404 for index.html')
 })
+
+const patchPath = 'playground-host/playground-core.patch'
+
+test('the Playground build applies our core patch and keys its cache on the patch hash', async () => {
+  const jobs = readJobs(await readFile(workflowPath, 'utf8'))
+  const settings = jobs.settings ?? ''
+  const build = jobs['playground-build'] ?? ''
+  const host = jobs['playground-host'] ?? ''
+
+  assert.ok(settings.includes(`            ${patchPath}\n`), 'the settings job checks out the patch')
+  assert.ok(settings.includes(`sha256sum ${patchPath}`), 'the settings job hashes the patch')
+  assert.ok(settings.includes('playground_patch_sha256: ${{ steps.patch.outputs.sha256 }}\n'), 'the settings job outputs the hash')
+
+  const key = 'key: playground-website-${{ needs.settings.outputs.playground_version }}-cors-proxy-v2-patch-${{ needs.settings.outputs.playground_patch_sha256 }}\n'
+  assert.ok(build.includes(key), 'the build cache key names the patch hash')
+  assert.ok(host.includes(key), 'the host job restores the same key')
+
+  // The build job has no token and no checkout of our repository; it downloads the patch
+  // by commit, checks it against the hash, and applies it before upstream installs anything.
+  assert.match(build, /^ {4}permissions: \{\}$/m)
+  assert.doesNotMatch(build, /actions\/checkout/)
+  const steps = [
+    'git clone --branch "v${PLAYGROUND_VERSION}"',
+    `https://raw.githubusercontent.com/\${GITHUB_REPOSITORY}/\${GITHUB_SHA}/${patchPath}`,
+    'sha256sum --check --strict',
+    'git apply ',
+    'npm ci --no-audit --no-fund',
+  ].map((text) => [text, build.indexOf(text)])
+  for (const [text, index] of steps) assert.ok(index !== -1, `the build runs: ${text}`)
+  for (let i = 1; i < steps.length; i++) {
+    assert.ok(steps[i - 1][1] < steps[i][1], `${steps[i - 1][0]} runs before ${steps[i][0]}`)
+  }
+  assert.ok(build.includes('PATCH_SHA256: ${{ needs.settings.outputs.playground_patch_sha256 }}\n'), 'the build gets the expected hash')
+})
+
+test('the Playground core patch keeps request bodies when the browser cannot stream them', async () => {
+  const patch = await readFile(new URL(`../${patchPath}`, import.meta.url), 'utf8')
+  const files = [...patch.matchAll(/^diff --git a\/(\S+)/gm)].map((match) => match[1])
+  for (const file of [
+    'packages/php-wasm/web-service-worker/src/lib/utils.ts',
+    'packages/php-wasm/web-service-worker/src/lib/fetch-with-cors-proxy.ts',
+    'packages/php-wasm/web/src/lib/tcp-over-fetch-websocket.ts',
+  ]) {
+    assert.ok(files.includes(file), `the patch changes ${file}`)
+  }
+  assert.ok(patch.includes('+\t\t\t\tclonedRequest.body instanceof ReadableStream'), 'the proxy retry reads the body when the clone has no stream')
+  assert.ok(patch.includes('+\t\tif (!(request.body instanceof ReadableStream)) {'), 'the stream probe fails when Request.body is missing')
+  assert.ok(patch.includes('bodyToBuffer'), 'the TCP fetch buffers the body instead of streaming it')
+})

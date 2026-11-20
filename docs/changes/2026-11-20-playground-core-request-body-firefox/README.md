@@ -1,0 +1,4 @@
+Evidence helpers for [2026-11-20-playground-core-request-body-firefox.md](../2026-11-20-playground-core-request-body-firefox.md), not part of the test suite.
+
+- `proxy-retry-body.mjs`: bundles the request code of a WordPress Playground source checkout with esbuild and runs it in Playwright Firefox and Chromium against a local echo CORS proxy. It sends a POST to a host that is not Freemius and cannot be reached directly, through `fetchWithCorsProxy` (a Request, and a URL with init) and through `RawBytesFetch` with `Expect: 100-continue`, and prints whether the proxy received the body. Run it once on a clean `v3.1.64` checkout and once with `playground-host/playground-core.patch` applied. The checkout only needs `packages/php-wasm/web-service-worker` and `packages/php-wasm/web`.
+- `upstream-issue.md`: the ready-to-paste report for WordPress Playground.
