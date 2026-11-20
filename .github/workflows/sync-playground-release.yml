@@ -159,6 +159,13 @@ jobs:
           git add package.json package-lock.json src/App.jsx
           git commit -m "$title"
 
+          # A fetched branch counts as the bot's only when the bot both wrote and committed
+          # its newest commit: amending or rebasing the bot's commit keeps the bot as author
+          # but makes the person who did it the committer.
+          tip_is_bot() {
+            [ "$(git log -1 --format='%ae %ce' FETCH_HEAD)" = "${bot_email} ${bot_email}" ]
+          }
+
           # Someone may have added a fix to the update branch (after a preview problem, for
           # example); the daily run then leaves the branch and its pull request text alone.
           # git ls-remote exits 2 when the branch does not exist; any other failure stops
@@ -166,10 +173,9 @@ jobs:
           left_alone=""
           if git ls-remote --exit-code --heads origin "refs/heads/${branch}" > /dev/null; then
             git fetch --no-tags origin "refs/heads/${branch}"
-            tip_author="$(git log -1 --format=%ae FETCH_HEAD)"
-            if [ "$tip_author" != "$bot_email" ]; then
+            if ! tip_is_bot; then
               left_alone="yes"
-              echo "::notice::${branch} has a commit by ${tip_author}; the branch and its pull request text are left as they are."
+              echo "::notice::${branch} has a commit written or changed by $(git log -1 --format='%ae / %ce' FETCH_HEAD); the branch and its pull request text are left as they are."
             fi
           else
             status=$?
@@ -217,12 +223,13 @@ jobs:
           fi
 
           # One update pull request at a time: an older Playground update still open is
-          # replaced. Its branch is deleted only when nobody else has pushed to it.
-          gh pr list --base dev --state open --json number,headRefName \
-            --jq ".[] | select(.headRefName | startswith(\"automation/playground-\")) | select(.headRefName != \"${branch}\") | \"\(.number) \(.headRefName)\"" |
+          # replaced. Its branch is deleted only when nobody else has pushed to it. Pull
+          # requests from forks are never the bot's and are left alone.
+          gh pr list --base dev --state open --json number,headRefName,isCrossRepository \
+            --jq ".[] | select(.isCrossRepository | not) | select(.headRefName | startswith(\"automation/playground-\")) | select(.headRefName != \"${branch}\") | \"\(.number) \(.headRefName)\"" |
             while read -r number old_branch; do
               git fetch --no-tags origin "refs/heads/${old_branch}"
-              if [ "$(git log -1 --format=%ae FETCH_HEAD)" = "$bot_email" ]; then
+              if tip_is_bot; then
                 gh pr close "$number" --delete-branch --comment "Replaced by the update to Playground ${PLAYGROUND_VERSION}."
               else
                 gh pr close "$number" --comment "Replaced by the update to Playground ${PLAYGROUND_VERSION}. The branch is kept because it has commits by someone else."

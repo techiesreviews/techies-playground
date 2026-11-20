@@ -53,6 +53,7 @@ test('the Playground sync runs the new packages without a token that can write',
   // cannot reach the runner's action files (and through them the cache or the artifact),
   // its tokens, .git, the Docker socket or the patch.
   const names = Object.keys(steps)
+  assert.ok(steps['Save the update as a patch'], 'the update is saved as a patch')
   assert.ok(names.indexOf('Save the update as a patch') < names.indexOf(verifyName))
   assert.ok(names.indexOf(verifyName) < names.indexOf('Upload the update'))
   for (const [name, step] of Object.entries(steps)) {
@@ -87,14 +88,19 @@ test('the Playground sync keeps one update pull request into dev and never goes 
   assert.match(open, /gh pr create \\\n\s+--base dev \\/)
   // An older update that is still open is replaced, so only one update PR is ever open.
   assert.match(open, /startswith\(\\"automation\/playground-\\"\)/)
-  // The replaced branch is deleted only when the bot made its newest commit.
-  assert.match(open, /= "\$bot_email" \]; then\n\s+gh pr close "\$number" --delete-branch /)
+  // A branch is the bot's only when the bot both wrote and committed its newest commit, so
+  // an amended or rebased bot commit counts as someone else's.
+  assert.match(open, /tip_is_bot\(\) \{\n\s+\[ "\$\(git log -1 --format='%ae %ce' FETCH_HEAD\)" = "\$\{bot_email\} \$\{bot_email\}" \]\n\s+\}\n/)
+  // The replaced branch is deleted only when the bot made its newest commit, and pull
+  // requests from forks are left alone.
+  assert.match(open, /select\(\.isCrossRepository \| not\)/)
+  assert.match(open, /if tip_is_bot; then\n\s+gh pr close "\$number" --delete-branch /)
   assert.match(open, /else\n\s+gh pr close "\$number" --comment "[^"]*The branch is kept/)
   // A closed update is not opened again.
   assert.match(open, /--state closed[^\n]*\n\s+if \[ -n "\$closed_pr" \]; then\n[^\n]*\n\s+exit 0\n/)
   // A fix someone added to the branch is kept, along with the pull request text, and a
   // failure to read the branch stops the job instead of pushing over it.
-  assert.match(open, /if git ls-remote --exit-code --heads origin "refs\/heads\/\$\{branch\}" > \/dev\/null; then\n\s+git fetch --no-tags origin "refs\/heads\/\$\{branch\}"\n\s+tip_author="\$\(git log -1 --format=%ae FETCH_HEAD\)"\n\s+if \[ "\$tip_author" != "\$bot_email" \]; then\n\s+left_alone="yes"\n/)
+  assert.match(open, /if git ls-remote --exit-code --heads origin "refs\/heads\/\$\{branch\}" > \/dev\/null; then\n\s+git fetch --no-tags origin "refs\/heads\/\$\{branch\}"\n\s+if ! tip_is_bot; then\n\s+left_alone="yes"\n/)
   assert.match(open, /if \[ "\$status" -ne 2 \]; then\n[^\n]*\n\s+exit 1\n/)
   assert.match(open, /if \[ -z "\$left_alone" \]; then\n\s+git push --force origin "\$branch"\n/)
   assert.match(open, /elif \[ -z "\$left_alone" \]; then\n\s+gh pr edit /)
