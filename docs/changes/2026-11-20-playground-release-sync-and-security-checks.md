@@ -52,6 +52,7 @@ A scheduled job can move the whole Playground version at once and prove it boots
 | Local, live host scripts | Rewrote the five hosted files that name `playground.wordpress.net/wp-cli.phar` | One link each, none left, valid JS | 1 link replaced in each of 5 files, none left, `node --check` passes | Script output |
 | Local | `npm run build`, with and without `VITE_PLAYGROUND_ORIGIN` | The bundle names its own host's `wp-cli.phar` | `https://wp.techies.tools/wp-cli.phar`, or the preview host when set | `grep` of `dist` |
 | Local | `bash -n` on each workflow `run:` script; PR body rendered; `jq` close filter | Valid shell; readable body; only older Playground PRs closed | As expected | Command output |
+| Local browser, launcher on `127.0.0.1:4173` pointed at a stand-in host on `127.0.0.1:8787` that serves `wp.techies.tools` with the host build's rewrite applied | Launch WordPress with "Load WP-CLI" on | The browser runs the rewritten client and asks the host for `wp-cli.phar` | The browser loaded and ran the rewritten client, service worker and blueprints worker (one link rewritten in each). The boot then stopped before the WP-CLI step with "Failed to download WordPress 7.1.5 (HTTP 403)": the live host's CORS proxy refuses requests that arrive through a stand-in. The real check moves to `preview-wp.techies.tools` after the merge into `dev` (see follow-ups) | Stand-in log and page screenshot |
 | Local, PAT | Dependabot alerts API | Readable | 403 (the local token has no Dependabot scope); CI uses the workflow token or `DEPENDABOT_ALERTS_TOKEN` | API answer |
 
 ## Result
@@ -73,5 +74,6 @@ Kept. It closes the gap that let 3.1.65 go unnoticed and keeps Lex's rule: a pas
 
 - The security checks are not yet a step of the `test` job in `deploy-site.yml`, because open PRs #43 and #44 change that file; add them there once those land.
 - Whether the workflow token may read Dependabot alerts is unverified. If the first run fails with the clear message, add the repository secret `DEPENDABOT_ALERTS_TOKEN` (fine-grained, "Dependabot alerts: read").
+- After the merge into `dev`, launch a site with "Load WP-CLI" on through `preview-play.techies.tools` and confirm in the browser's network panel that `wp-cli.phar` comes from `preview-wp.techies.tools`, not `playground.wordpress.net`. This belongs to the preview check that already comes before any release to `main`.
 - The first update PR (3.1.65) opens on the first scheduled run after this change is released to `main`.
 - A WordPress sync PR and a Playground sync PR open at the same time both bump the app version and changelog, so the second to merge needs a small rebase.
