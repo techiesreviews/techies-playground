@@ -248,6 +248,11 @@ async function rangeAnswer(upstream, range, headers) {
     return answer(416, 'Range not satisfiable', { 'Content-Range': `bytes */${size}` })
   }
   const length = slice.end - slice.start + 1
+  // The 100 MB limit applies to the slice, as it did to the target's own 206.
+  if (length >= MAX_RESPONSE_SIZE) {
+    await upstream.body.cancel().catch(() => {})
+    return answer(413, 'Response too large')
+  }
   headers.set('Content-Range', `bytes ${slice.start}-${slice.end}/${size}`)
   headers.set('Content-Length', String(length))
   if (file) return new Response(file.subarray(slice.start, slice.end + 1), { status: 206, headers })
@@ -356,8 +361,8 @@ export async function handleCorsProxy(request, { fetch: fetchImpl = fetch, limit
   }
   headers.set('X-Playground-Cors-Proxy', 'true')
   headers.set('Cache-Control', 'no-store')
-  // A range answer sets its own limits: it streams only up to the end of the range, or
-  // reads at most MAX_DECODED_RANGE_SOURCE.
+  // A range answer sets its own limits: a slice under 100 MB, read either from a stream
+  // that stops at the end of the range or from at most MAX_DECODED_RANGE_SOURCE in memory.
   if (range && upstream.status === 200 && upstream.body) return rangeAnswer(upstream, range, headers)
   const length = Number(upstream.headers.get('Content-Length'))
   if (request.method !== 'HEAD' && length >= MAX_RESPONSE_SIZE) return answer(413, 'Response too large')
