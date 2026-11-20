@@ -254,6 +254,11 @@ test('a range of an uncompressed file of 100 MB or more is still answered, readi
   assert.equal(response.headers.get('Content-Range'), `bytes 0-99/${size}`)
   assert.deepEqual(new Uint8Array(await response.arrayBuffer()), chunk.subarray(0, 100))
   assert.ok(chunksRead <= 3, `read ${chunksRead} MB`)
+
+  chunksRead = 0
+  const open = await handleCorsProxy(proxied('https://example.com/big.zip', { headers: { Range: 'bytes=0-' } }), { fetch: upstream.fetch })
+  assert.equal(open.status, 413)
+  assert.ok(chunksRead <= 3, `read ${chunksRead} MB for a slice of 100 MB or more`)
 })
 
 test('a range with If-Range gets the whole file, and the target never sees the range', async () => {
