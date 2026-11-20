@@ -17,9 +17,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Installs and runs the new release's packages (the boot test also runs their install
-  # scripts), so this job gets a read-only token and keeps no git credentials. It hands
-  # its changes to the next job as a patch.
+  # Checks the new release's packages, so this job gets a read-only token and keeps no git
+  # credentials. On the runner itself it runs only this repository's scripts and the
+  # packages already locked on dev (the sync installs the new ones without their install
+  # scripts). Everything that runs new package code runs in a throwaway container that
+  # sees the working tree but not the runner, its action files, its tokens or .git, so
+  # that code cannot reach the Actions cache, the artifact or the patch. The job hands
+  # its changes to the next job as a patch saved before any new package code runs.
   prepare:
     name: Check Playground releases and prepare an update
     if: github.repository == 'techiesreviews/techies-playground'
@@ -45,11 +49,11 @@ jobs:
         id: base
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
+      # No npm cache here, because cache entries are shared with other runs.
       - name: Set up Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24
-          cache: npm
 
       - name: Install locked dependencies
         run: npm ci
@@ -58,16 +62,11 @@ jobs:
         id: sync
         run: node scripts/sync-playground-release.mjs
 
-      # The boot test installs @wp-playground/cli at the new version and starts WordPress
-      # once with the launcher's default setup and WP-CLI.
-      - name: Verify the generated update
+      - name: Save the update as a patch
         if: steps.sync.outputs.changed == 'true'
         run: |
-          npm test
-          npm run build
-          npm audit --audit-level=high
-          node scripts/playground-boot-test.mjs
           git diff --check
+          git diff --binary -- package.json package-lock.json src/App.jsx > "$RUNNER_TEMP/playground-update.patch"
 
       - name: Check Playground security advisories
         if: steps.sync.outputs.changed == 'true'
@@ -75,9 +74,21 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/check-playground-advisories.mjs
 
-      - name: Save the update as a patch
+      # Runs the new release's code: the unit tests and the launcher build load it, and the
+      # boot test installs @wp-playground/cli at the new version (with install scripts) and
+      # starts WordPress once with the launcher's default setup and WP-CLI.
+      - name: Verify the generated update in a throwaway container
         if: steps.sync.outputs.changed == 'true'
-        run: git diff --binary -- package.json package-lock.json src/App.jsx > "$RUNNER_TEMP/playground-update.patch"
+        run: |
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            --env HOME=/tmp/home \
+            --env CI=true \
+            --volume "$PWD:/work" \
+            --mount type=tmpfs,destination=/work/.git \
+            --workdir /work \
+            node:24-bookworm@sha256:9d266751ca3d7fdbe651c878ffd5ad0a42fed49a18c283509267c97f025b7496 \
+            bash -ec 'npm test; npm run build; npm audit --audit-level=high; node scripts/playground-boot-test.mjs'
 
       - name: Upload the update
         if: steps.sync.outputs.changed == 'true'
@@ -149,17 +160,35 @@ jobs:
           git commit -m "$title"
 
           # Someone may have added a fix to the update branch (after a preview problem, for
-          # example); the daily run then leaves the branch alone.
-          if tip_author="$(gh api "repos/${GITHUB_REPOSITORY}/commits/refs/heads/${branch}" --jq .commit.author.email 2>/dev/null)" &&
-            [ "$tip_author" != "$bot_email" ]; then
-            echo "::notice::${branch} has a commit by ${tip_author}; the branch is left as it is."
+          # example); the daily run then leaves the branch and its pull request text alone.
+          # git ls-remote exits 2 when the branch does not exist; any other failure stops
+          # the job rather than risk overwriting someone's fix.
+          left_alone=""
+          if git ls-remote --exit-code --heads origin "refs/heads/${branch}" > /dev/null; then
+            git fetch --no-tags origin "refs/heads/${branch}"
+            tip_author="$(git log -1 --format=%ae FETCH_HEAD)"
+            if [ "$tip_author" != "$bot_email" ]; then
+              left_alone="yes"
+              echo "::notice::${branch} has a commit by ${tip_author}; the branch and its pull request text are left as they are."
+            fi
           else
+            status=$?
+            if [ "$status" -ne 2 ]; then
+              echo "::error::Could not read ${branch} on GitHub (git ls-remote exit ${status})."
+              exit 1
+            fi
+          fi
+          if [ -z "$left_alone" ]; then
             git push --force origin "$branch"
           fi
 
           dropped=""
           if [ -n "$DROPPED_OVERRIDES" ]; then
             dropped="- Dropped package overrides that this release no longer needs: ${DROPPED_OVERRIDES}."
+          fi
+          unchecked=""
+          if [ -n "$left_alone" ]; then
+            unchecked="- The branch has commits this run did not push or check; review them before merging."
           fi
           body="$(cat <<EOF
           Next step: merge into dev, check the previews (preview-play.techies.tools and preview-wp.techies.tools), then ask Lex before releasing to main. Going live needs Lex's approval every time; this update never goes live on its own.
@@ -170,6 +199,7 @@ jobs:
           - App version ${APP_VERSION}, with a changelog entry.
           - Checked before this pull request opened: unit tests, the launcher build, npm audit (high and above), Playground security advisories, and one boot of Playground ${PLAYGROUND_VERSION} with the launcher's default setup and WP-CLI.
           ${dropped}
+          ${unchecked}
 
           Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
           EOF
@@ -182,13 +212,19 @@ jobs:
               --head "$branch" \
               --title "$title" \
               --body "$body"
-          else
+          elif [ -z "$left_alone" ]; then
             gh pr edit "$existing_pr" --body "$body"
           fi
 
-          # One update pull request at a time: an older Playground update still open is replaced.
+          # One update pull request at a time: an older Playground update still open is
+          # replaced. Its branch is deleted only when nobody else has pushed to it.
           gh pr list --base dev --state open --json number,headRefName \
-            --jq ".[] | select(.headRefName | startswith(\"automation/playground-\")) | select(.headRefName != \"${branch}\") | .number" |
-            while read -r number; do
-              gh pr close "$number" --delete-branch --comment "Replaced by the update to Playground ${PLAYGROUND_VERSION}."
+            --jq ".[] | select(.headRefName | startswith(\"automation/playground-\")) | select(.headRefName != \"${branch}\") | \"\(.number) \(.headRefName)\"" |
+            while read -r number old_branch; do
+              git fetch --no-tags origin "refs/heads/${old_branch}"
+              if [ "$(git log -1 --format=%ae FETCH_HEAD)" = "$bot_email" ]; then
+                gh pr close "$number" --delete-branch --comment "Replaced by the update to Playground ${PLAYGROUND_VERSION}."
+              else
+                gh pr close "$number" --comment "Replaced by the update to Playground ${PLAYGROUND_VERSION}. The branch is kept because it has commits by someone else."
+              fi
             done
