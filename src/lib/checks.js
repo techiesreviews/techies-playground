@@ -155,11 +155,20 @@ function techies_measure_plugin_loaded( $file ) {
 	$GLOBALS['techies_measure']['mark'] = $now;
 }
 
+// Counts every call. The list keeps the first 20 calls and up to 20 more failed ones, so a
+// failure late in the page still names its host.
 function techies_measure_http( $response, $context, $class, $args, $url ) {
-	if ( count( $GLOBALS['techies_measure']['http'] ) < 20 ) {
+	$code   = is_wp_error( $response ) ? 0 : (int) wp_remote_retrieve_response_code( $response );
+	$failed = 0 === $code || $code >= 400;
+	$GLOBALS['techies_measure']['calls']++;
+	if ( $failed ) {
+		$GLOBALS['techies_measure']['failed_calls']++;
+	}
+	$listed = count( $GLOBALS['techies_measure']['http'] );
+	if ( $listed < 20 || ( $failed && $listed < 40 ) ) {
 		$GLOBALS['techies_measure']['http'][] = array(
 			'host' => (string) wp_parse_url( $url, PHP_URL_HOST ),
-			'code' => is_wp_error( $response ) ? 0 : (int) wp_remote_retrieve_response_code( $response ),
+			'code' => $code,
 		);
 	}
 }
@@ -207,6 +216,8 @@ function techies_measure_report() {
 		'duplicates'  => $duplicates,
 		'errorCounts' => $GLOBALS['techies_measure']['counts'],
 		'errors'      => $GLOBALS['techies_measure']['errors'],
+		'calls'       => $GLOBALS['techies_measure']['calls'],
+		'failedCalls' => $GLOBALS['techies_measure']['failed_calls'],
 		'http'        => $GLOBALS['techies_measure']['http'],
 		'plugins'     => array_slice( $plugins, 0, 5 ),
 	);
@@ -223,8 +234,10 @@ if ( isset( $_GET['techies-measure'] ) ) {
 		'errors'  => array(),
 		'counts'  => array( 'error' => 0, 'warning' => 0, 'notice' => 0, 'deprecated' => 0 ),
 		'plugins' => array(),
-		'http'    => array(),
-		'mark'    => microtime( true ),
+		'http'         => array(),
+		'calls'        => 0,
+		'failed_calls' => 0,
+		'mark'         => microtime( true ),
 	);
 	$GLOBALS['techies_measure_previous_handler'] = set_error_handler( 'techies_measure_error' );
 	add_action( 'muplugins_loaded', function () {
@@ -272,6 +285,8 @@ export function parseMeasurement(responseText) {
     duplicates: number(raw.duplicates),
     errorCounts: { error: number(counts.error), warning: number(counts.warning), notice: number(counts.notice), deprecated: number(counts.deprecated) },
     errors: list(raw.errors).map((entry) => ({ kind: String(entry.kind || 'error'), message: String(entry.message || ''), file: String(entry.file || ''), line: number(entry.line) })),
+    calls: number(raw.calls),
+    failedCalls: number(raw.failedCalls),
     http: list(raw.http).map((entry) => ({ host: String(entry.host || ''), code: number(entry.code) })),
     plugins: list(raw.plugins).map((entry) => ({ name: String(entry.name || ''), time: number(entry.time) })),
   }
@@ -344,8 +359,11 @@ export function evaluateChecks(measurement, checkIds) {
   const timeStatus = m.time > limits.pageTimeFailSeconds ? 'fail' : m.time > limits.pageTimeWarnSeconds ? 'warn' : 'pass'
 
   if (checkIds.includes('query-monitor')) {
-    const failedCalls = m.http.filter((call) => call.code === 0 || call.code >= 400)
-    const failedHosts = [...new Set(failedCalls.map((call) => call.host).filter(Boolean))]
+    const listedFailures = m.http.filter((call) => call.code === 0 || call.code >= 400)
+    const failedHosts = [...new Set(listedFailures.map((call) => call.host).filter(Boolean))]
+    // The counts cover every call; the list is capped, so it gives only the host names.
+    const callCount = Math.max(m.calls || 0, m.http.length)
+    const failedCount = Math.max(m.failedCalls || 0, listedFailures.length)
     checks.push(
       {
         id: 'php-errors', tool: 'query-monitor', name: 'PHP errors', status: errorStatus,
@@ -358,12 +376,12 @@ export function evaluateChecks(measurement, checkIds) {
         details: m.slowQueries ? `${plural(m.slowQueries, 'database query', 'database queries')} took longer than ${limits.slowQuerySeconds} s.` : `No database query took longer than ${limits.slowQuerySeconds} s.`,
       },
       {
-        id: 'outside-calls', tool: 'query-monitor', name: 'Calls to other sites', status: failedCalls.length ? 'warn' : 'pass', value: `${failedCalls.length} failed`,
-        details: !m.http.length
+        id: 'outside-calls', tool: 'query-monitor', name: 'Calls to other sites', status: failedCount ? 'warn' : 'pass', value: `${failedCount} failed`,
+        details: !callCount
           ? 'This page made no call to another site.'
-          : failedCalls.length
-            ? `${failedCalls.length} of ${plural(m.http.length, 'call')} to other sites failed${failedHosts.length ? `: ${failedHosts.join(', ')}` : ''}. Blocked networking makes every call fail.`
-            : `${plural(m.http.length, 'call')} to other sites, all answered.`,
+          : failedCount
+            ? `${failedCount} of ${plural(callCount, 'call')} to other sites failed${failedHosts.length ? `: ${failedHosts.join(', ')}` : ''}. Blocked networking makes every call fail.`
+            : `${plural(callCount, 'call')} to other sites, all answered.`,
       },
       {
         id: 'duplicate-queries', tool: 'query-monitor', name: 'Duplicate queries', status: m.duplicates > limits.duplicatesWarn ? 'warn' : 'pass', value: String(m.duplicates),

@@ -65,7 +65,7 @@ export function UpdatesControl({ updates, open, onOpenChange, buttonRef }) {
         <div
           role="dialog"
           aria-label="Updated at start"
-          className="license-popover-enter absolute top-full right-0 z-60 mt-2 w-[min(21rem,calc(100vw-2.5rem))] rounded-[min(2vw,var(--radius-xl))] bg-white px-3.5 pt-3 pb-3.5 text-base/7 text-neutral-950 shadow-2xl ring-1 ring-neutral-950/10 max-sm:fixed max-sm:top-10 max-sm:right-2 sm:text-sm/6"
+          className="license-popover-enter absolute top-full right-0 z-60 mt-2 max-h-[calc(100dvh-4rem)] w-[min(21rem,calc(100vw-2.5rem))] overflow-y-auto overscroll-contain rounded-[min(2vw,var(--radius-xl))] bg-white px-3.5 pt-3 pb-3.5 text-base/7 text-neutral-950 shadow-2xl ring-1 ring-neutral-950/10 max-sm:fixed max-sm:top-10 max-sm:right-2 sm:text-sm/6"
         >
           <h3 className="flex justify-between gap-3 font-semibold">
             {result ? 'Updated at start' : 'Updates at start'}

@@ -54,7 +54,7 @@ They are wider than a hosting check would use, because Playground runs PHP in th
 
 | Environment | Procedure/command | Expected | Actual | Evidence |
 | --- | --- | --- | --- | --- |
-| Node 24, PHP 8.3 wasm | `npm test` | All pass | 254 of 254 pass, 34 files | New tests in `plugin-updates.test.js`, `plugin-updates-php.test.js`, `checks.test.js`, `checks-php.test.js`; each failed before its change (tests first) |
+| Node 24, PHP 8.3 wasm | `npm test` | All pass | 255 of 255 pass, 34 files | New tests in `plugin-updates.test.js`, `plugin-updates-php.test.js`, `checks.test.js`, `checks-php.test.js`; each failed before its change (tests first) |
 | Node | `checks.test.js` page-time limit at 1.5 s and 3.5 s on the sketch's example limits (2 s / 5 s) | Fails before the change | `not ok 11 … expected: 'warn' actual: 'pass'`, then passes after the change | Commit history of this branch |
 | PHP 8.3 wasm | `plugin-updates-php.test.js` against stub WordPress | An offered plugin is updated, reported old → new, and switched back on | Pass | The test file |
 | Chromium (T3 preview), local build with `VITE_PLAYGROUND_ORIGIN=https://preview-wp.techies.tools`, desktop and 375 px | Launch with Query Monitor and Code Profiler, networking on. Open Updates, then Checks; press Run again, Open in Code Profiler, Escape twice; repeat at phone width | Updates names the result; checks run by themselves; panel opaque with verdict and four tiles; Run again remeasures; Code Profiler's page opens; Escape closes the Updates note first, then the panel; tiles 2 by 2 on a phone | As expected. Updates said "No plugin or theme had an update" and listed the current versions (Code Profiler 1.9.6, Query Monitor 4.1.1, Twenty Twenty-Five 1.5). All checks passed with the numbers above | Manual run, 2026-11-20 |
@@ -77,5 +77,5 @@ Kept. It removes the manual steps from every launch, fixes the switched-off plug
 ## Follow-ups and open questions
 
 - "Slowest plugin" measures load time only, not a full profile; Code Profiler stays the place for that.
-- The gate counts only plugins with a saved key. A plugin whose licence Lex activates by hand inside WordPress after Start does not start the checks by itself; Run checks does.
+- The gate counts only plugins with a saved key. A premium plugin without one does not hold the checks back, because there is no reliable way to tell from outside WordPress that a plugin needs a licence (Freemius code ships in free plugins too). A plugin whose licence Lex activates by hand inside WordPress after Start does not start the checks by itself; Run checks does.
 - The dashboard and front-page runs were not clicked through in the browser, because clicks inside the WordPress frame do not reach it from the test browser.
