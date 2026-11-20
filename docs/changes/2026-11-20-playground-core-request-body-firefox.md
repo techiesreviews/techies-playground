@@ -71,12 +71,11 @@ Kept. It fixes the body loss for every plugin in our build and costs one verifie
 ## Documentation impact
 
 - New: this record, its [evidence folder](2026-11-20-playground-core-request-body-firefox/) and the patch file with its own header.
-- `docs/testing.md` (the `deploy-workflow.test.mjs` row) and `docs/architecture.md` (the Freemius paragraph, which describes the unpatched retry) still need one line each; both files are being changed in another open PR, so they are left for after it lands.
-- No changelog entry or version bump in this change, because `src/App.jsx`, `package.json` and `package-lock.json` are being changed in that other open PR. Users will notice the fix in Firefox (plugin licence activations and form posts that go through the proxy work again), so the next `CHANGELOG_ENTRIES` item and patch version must include it.
+- `docs/testing.md` (the `deploy-workflow.test.mjs` row names the patch checks) and `docs/architecture.md` (the Freemius paragraph says our build now fixes the retry).
+- Users will notice the fix in Firefox (plugin licence activations and form posts that go through the proxy work again), so it has its own `CHANGELOG_ENTRIES` item and the patch version 0.10.5. The other open PR that also bumps the version (#42) moves to the next patch version when it lands.
 
 ## Follow-ups and open questions
 
 - Lex: send the upstream report (draft in [upstream-issue.md](2026-11-20-playground-core-request-body-firefox/upstream-issue.md)).
-- After the other open PR lands: one line each in `docs/testing.md` (the two new `deploy-workflow.test.mjs` tests) and `docs/architecture.md` (the Freemius paragraph: the retry now keeps the body in Firefox), plus the changelog item and patch bump above.
 - Fleet lead, after this lands: check the first `playground-build` run on `dev`, then in T3 on the preview, in Firefox with Chromium as a control, launch a non-Freemius plugin whose licence activation or form POST goes to a host that blocks CORS. Record as a new evidence row the plugin, the WordPress and PHP versions, the packages, the persistence mode, what the plugin showed, the `/cors-proxy.php?` request with its non-empty body, and any console or network errors.
 - When the pinned Playground release contains the fix, remove the patch and its workflow steps; the build fails if the patch stops applying.
