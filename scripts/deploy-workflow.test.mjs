@@ -38,6 +38,42 @@ test('every job that deploys to Cloudflare needs the test job', async () => {
   }
 })
 
+test('every job that deploys to Cloudflare needs the security job', async () => {
+  const jobs = readJobs(await readFile(workflowPath, 'utf8'))
+  const deployJobs = Object.keys(jobs).filter((name) => jobs[name].includes('cloudflare/wrangler-action'))
+  for (const name of deployJobs) {
+    assert.ok(readNeeds(jobs[name]).includes('security'), `${name} must list security in needs`)
+  }
+})
+
+test('the security job audits the npm dependencies and checks the Playground advisories', async () => {
+  const security = readJobs(await readFile(workflowPath, 'utf8')).security ?? ''
+  assert.match(security, /run: npm audit --audit-level=high\n/)
+  assert.match(security, /run: node scripts\/check-playground-advisories\.mjs\n/)
+  // Both steps run even when the other fails, so one run reports every problem.
+  assert.match(security, /- name: Check Playground security advisories\n\s+if: success\(\) \|\| failure\(\)\n/)
+  assert.doesNotMatch(security, /wrangler-action|secrets\./)
+})
+
+test('the Playground build reaches the host job as an artifact of the same run, never through the cache', async () => {
+  const source = await readFile(workflowPath, 'utf8')
+  const jobs = readJobs(source)
+  const build = jobs['playground-build'] ?? ''
+  const host = jobs['playground-host'] ?? ''
+  assert.doesNotMatch(source, /actions\/cache/, 'no job reads or writes the Actions cache')
+
+  const upload = /uses: actions\/upload-artifact@[0-9a-f]{40} # v\S+\n\s+with:\n\s+name: (\S+)\n\s+path: \.playground-build\/wasm-wordpress-net\n/.exec(build)
+  assert.ok(upload, 'the build job uploads the Playground build')
+  assert.match(build, /if-no-files-found: error\n/, 'an empty build fails the upload')
+  assert.match(build, /include-hidden-files: true\n/, 'the upload keeps dotfiles from the build')
+  assert.ok(build.indexOf('npm run build:website') < build.indexOf('actions/upload-artifact'), 'the build runs before the upload')
+
+  const download = /uses: actions\/download-artifact@[0-9a-f]{40} # v\S+\n\s+with:\n\s+name: (\S+)\n\s+path: \.playground-build\/wasm-wordpress-net\n/.exec(host)
+  assert.ok(download, 'the host job downloads the Playground build')
+  assert.equal(download[1], upload[1], 'the host job downloads the artifact the build job uploaded')
+  assert.ok(host.indexOf('actions/download-artifact') < host.indexOf('prepare-playground-host.mjs'), 'the download comes before the host folder is prepared')
+})
+
 test('the test job installs the locked dependencies and runs the tests', async () => {
   const jobs = readJobs(await readFile(workflowPath, 'utf8'))
   assert.match(jobs.test ?? '', /run: npm ci\n/)
@@ -63,19 +99,14 @@ test('the host job refuses to deploy, and checks it does not serve, the public P
 
 const patchPath = 'playground-host/playground-core.patch'
 
-test('the Playground build applies our core patch and keys its cache on the patch hash', async () => {
+test('the Playground build applies our core patch after checking its hash', async () => {
   const jobs = readJobs(await readFile(workflowPath, 'utf8'))
   const settings = jobs.settings ?? ''
   const build = jobs['playground-build'] ?? ''
-  const host = jobs['playground-host'] ?? ''
 
   assert.match(settings, /sparse-checkout: \|\n(?: +\S+\n)* +playground-host\/playground-core\.patch\n/, 'the settings job checks out the patch')
   assert.ok(settings.includes(`sha256sum ${patchPath}`), 'the settings job hashes the patch')
   assert.ok(settings.includes('playground_patch_sha256: ${{ steps.patch.outputs.sha256 }}\n'), 'the settings job outputs the hash')
-
-  const key = 'key: playground-website-${{ needs.settings.outputs.playground_version }}-cors-proxy-v2-patch-${{ needs.settings.outputs.playground_patch_sha256 }}\n'
-  assert.ok(build.includes(key), 'the build cache key names the patch hash')
-  assert.ok(host.includes(key), 'the host job restores the same key')
 
   // The build job has no token and no checkout of our repository; it downloads the patch
   // by commit, checks it against the hash, and applies it before upstream installs anything.
