@@ -35,3 +35,28 @@ test('the note names the first change and counts the rest', () => {
   assert.equal(updatedNote({ updated: [{ name: 'WP 2FA', from: '3.1', to: '3.2' }] }), 'WP 2FA 3.1 → 3.2')
   assert.equal(updatedNote({ updated: [{ name: 'WP 2FA', from: '3.1', to: '3.2' }, { name: 'B', from: '1', to: '2' }, { name: 'C', from: '1', to: '2' }] }), 'WP 2FA 3.1 → 3.2 +2')
 })
+
+test('the bar control names each state of the updates at start', async () => {
+  const { updatesLabel } = await import('./plugin-updates.js')
+  assert.deepEqual(updatesLabel({ state: 'idle' }), { label: 'Updates', note: '', count: '', ready: false })
+  assert.deepEqual(updatesLabel({ state: 'running' }), { label: 'Updating…', note: '', count: '', ready: false })
+  assert.deepEqual(updatesLabel({ state: 'skipped' }), { label: 'Updates', note: 'networking blocked', count: '', ready: true })
+  assert.deepEqual(updatesLabel({ state: 'error', message: 'Boom' }), { label: 'Updates', note: 'failed', count: '', ready: true })
+  const updated = { updated: [{ name: 'WP 2FA', from: '3.1', to: '3.2' }, { name: 'B', from: '1', to: '2' }], failed: [], current: [] }
+  assert.deepEqual(updatesLabel({ state: 'done', result: updated }), { label: 'Updated', note: 'WP 2FA 3.1 → 3.2 +1', count: '2', ready: true })
+  assert.deepEqual(updatesLabel({ state: 'done', result: { updated: [], failed: [{ name: 'X', message: 'No' }], current: [] } }), { label: 'Update failed', note: 'X', count: '1', ready: true })
+  assert.deepEqual(updatesLabel({ state: 'done', result: { updated: [], failed: [], current: [] } }), { label: 'Up to date', note: '', count: '', ready: true })
+})
+
+test('screen readers hear what the updates at start changed', async () => {
+  const { updatesAnnouncement } = await import('./plugin-updates.js')
+  assert.equal(updatesAnnouncement({ state: 'idle' }), '')
+  assert.equal(updatesAnnouncement({ state: 'running' }), 'Updating plugins and themes.')
+  assert.equal(updatesAnnouncement({ state: 'skipped' }), 'Plugins were not updated: this setup blocks networking.')
+  assert.equal(updatesAnnouncement({ state: 'error', message: 'Timed out.' }), 'Plugins were not updated. Timed out.')
+  assert.equal(updatesAnnouncement({ state: 'done', result: { updated: [], failed: [], current: [] } }), 'Every plugin and theme was up to date.')
+  assert.equal(
+    updatesAnnouncement({ state: 'done', result: { updated: [{ name: 'WP 2FA', from: '3.1', to: '3.2' }], failed: [{ name: 'Example Pro', message: 'No package.' }], current: [] } }),
+    'Updated at start: WP 2FA 3.1 to 3.2. Not updated: Example Pro.',
+  )
+})

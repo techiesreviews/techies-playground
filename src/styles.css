@@ -55,6 +55,21 @@
   }
 }
 
+@keyframes checks-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(0.75rem);
+  }
+}
+
+@utility checks-panel-enter {
+  animation: checks-panel-in 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
 @utility license-popover-exit {
   transform-origin: top right;
   animation: license-popover-out 160ms ease-in both;
