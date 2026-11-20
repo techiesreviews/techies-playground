@@ -138,8 +138,12 @@ jobs:
           branch="automation/playground-${PLAYGROUND_VERSION}"
           title="Update WordPress Playground to ${PLAYGROUND_VERSION}"
 
+          # gh pr list --head matches the branch name on forks too, so every lookup below
+          # keeps only pull requests from this repository.
+          own_pr='[.[] | select(.isCrossRepository | not)][0].number // empty'
+
           # A closed update is a decision: it is not opened again for the same release.
-          closed_pr="$(gh pr list --head "$branch" --base dev --state closed --json number --jq '.[0].number')"
+          closed_pr="$(gh pr list --head "$branch" --base dev --state closed --json number,isCrossRepository --jq "$own_pr")"
           if [ -n "$closed_pr" ]; then
             echo "::notice::The update to Playground ${PLAYGROUND_VERSION} (#${closed_pr}) was closed; it is not opened again."
             exit 0
@@ -211,7 +215,7 @@ jobs:
           EOF
           )"
 
-          existing_pr="$(gh pr list --head "$branch" --base dev --state open --json number --jq '.[0].number')"
+          existing_pr="$(gh pr list --head "$branch" --base dev --state open --json number,isCrossRepository --jq "$own_pr")"
           if [ -z "$existing_pr" ]; then
             gh pr create \
               --base dev \
