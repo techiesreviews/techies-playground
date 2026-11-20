@@ -1,6 +1,6 @@
 # Upstream report for WordPress Playground (ready to paste)
 
-For Lex: open https://github.com/WordPress/wordpress-playground/issues/new, choose a bug report (or a blank issue), and paste the title and the text below the line. Nothing has been posted yet. If you would also like a pull request upstream, say so: it needs a fork of their repository, and the same diff is ready in `playground-host/playground-core.patch`.
+For Lex: open https://github.com/WordPress/wordpress-playground/issues/new, paste the title and the text below the line. Nothing is posted yet. Want a pull request too? Say so.
 
 **Title:** Firefox: POST body is lost when a request is retried through the CORS proxy (fetchWithCorsProxy, parseHttpRequest)
 
@@ -8,9 +8,9 @@ For Lex: open https://github.com/WordPress/wordpress-playground/issues/new, choo
 
 ### What happens
 
-In Firefox, a POST (or PUT) whose direct `fetch()` is blocked by CORS is retried through the configured CORS proxy without its body. The proxy, and the target server behind it, receive an empty body. This breaks plugin licence activations, form posts and API calls whenever the target does not allow CORS. Chromium is not affected, and Safari takes the buffered path, so it is not affected either.
+In Firefox, a POST (or PUT) whose direct `fetch()` is blocked by CORS is retried through the configured CORS proxy without its body. The proxy, and the target server behind it, receive an empty body. This breaks plugin licence activations, form posts and API calls whenever the target does not allow CORS. Chromium is not affected. Safari already fails the stream probe, so its service-worker retry is buffered and keeps the body.
 
-Seen with Playground 3.1.64 (the code is the same on `trunk` as of 2026-11-20).
+Seen with Playground 3.1.64. Checked against `trunk` at 5e4e5d6 (2026-11-19): the three files involved are unchanged and the fix below applies as is.
 
 ### Why
 
@@ -43,4 +43,6 @@ The direct fetch fails, the retry goes to the proxy, and the proxy receives an e
 - `fetchWithCorsProxy()`: use `clonedRequest.body` only when it is a `ReadableStream`; otherwise read `await clonedRequest.arrayBuffer()` (already the Safari path).
 - `parseHttpRequest()`: when streamed uploads are unsupported, build the request without the stream and return the stream separately; `fetchRawResponseBytes()` reads it in full before the fetch. It cannot be buffered inside `parseHttpRequest()`, because with `Expect: 100-continue` curl sends the body only after the "100 Continue" answer, which comes after `parseHttpRequest()` returns.
 
-We apply exactly this change to 3.1.64 in our own build, with spec tests for each part (the 4 new tests fail before the change; all 71 tests in the 3 spec files pass after it), and checked it in Firefox and Chromium against a local proxy: before, Firefox lost the body in all three cases (Request object, URL with init, the TCP bridge with `Expect: 100-continue`); after, every case kept it. The diff is here: https://github.com/techiesreviews/techies-playground/blob/dev/playground-host/playground-core.patch. Happy to open a pull request with it.
+This also changes the TCP bridge in Safari, which then buffers the body instead of streaming it; we have not run that path in Safari.
+
+We apply exactly this change to 3.1.64 in our own build, with spec tests for each part (the 5 new tests fail before the change; all 72 tests in the 3 spec files pass after it), and checked it in Firefox and Chromium against a local proxy: before, Firefox lost the body in all four cases (Request object, URL with init, the TCP bridge with `Expect: 100-continue` and a Content-Length body, and with a chunked body); after, every case kept it. The diff is here: https://github.com/techiesreviews/techies-playground/blob/dev/playground-host/playground-core.patch. Happy to open a pull request with it.
