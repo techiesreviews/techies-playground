@@ -210,29 +210,17 @@ function byteSlice(body, start, length) {
   }, { highWaterMark: 0 })
 }
 
-// The bytes of the file itself, read whole. On Cloudflare a compressed answer reaches the
-// Worker already decoded (the proxied HEAD of such a file has no Content-Length); local
-// workerd hands over the gzip stream with Content-Encoding: gzip, so a body that still
-// starts like a gzip stream is decoded here.
-async function wholeFile(upstream) {
-  const read = (stream) => new Response(capped(stream, MAX_DECODED_RANGE_SOURCE)).arrayBuffer().then((buffer) => new Uint8Array(buffer))
-  const raw = await read(upstream.body)
-  const encoding = (upstream.headers.get('Content-Encoding') || '').trim().toLowerCase()
-  if ((encoding !== 'gzip' && encoding !== 'x-gzip') || raw[0] !== 0x1f || raw[1] !== 0x8b) return raw
-  try {
-    return await read(new Blob([raw]).stream().pipeThrough(new DecompressionStream('gzip')))
-  } catch (error) {
-    if (error.message === 'Response too large') throw error
-    return raw
-  }
-}
+// The bytes of the file itself, read whole. The Workers runtime decodes a compressed
+// answer as it is read, though it keeps the Content-Encoding and the compressed
+// Content-Length headers.
+const wholeFile = (body) => new Response(capped(body, MAX_DECODED_RANGE_SOURCE)).arrayBuffer().then((buffer) => new Uint8Array(buffer))
 
 // Cloudflare replaces the Worker's Accept-Encoding: identity, so a target that compresses
 // answers a range with a slice of the compressed stream, which cannot be decompressed on
 // its own and carries the compressed offsets and size. The proxy therefore fetches the
 // whole file and cuts the range itself. An uncompressed file of declared size is cut
-// while it streams, and reading stops at the end of the range; anything else is read
-// whole, up to MAX_DECODED_RANGE_SOURCE.
+// while it streams, and reading stops at the end of the range; anything else (compressed,
+// or without a declared size) is read whole, up to MAX_DECODED_RANGE_SOURCE.
 async function rangeAnswer(upstream, range, headers) {
   for (const name of ['Content-Length', 'Content-Encoding', 'Content-Range']) headers.delete(name)
   headers.set('Accept-Ranges', 'bytes')
@@ -247,10 +235,10 @@ async function rangeAnswer(upstream, range, headers) {
     size = Number(declared)
   } else {
     try {
-      file = await wholeFile(upstream)
+      file = await wholeFile(upstream.body)
     } catch (error) {
       if (error.message === 'Response too large') return answer(413, 'Response too large')
-      return answer(502, 'Bad gateway: the target could not be reached.')
+      return answer(502, 'Bad gateway: the target\'s answer could not be read.')
     }
     size = file.byteLength
   }
@@ -358,9 +346,6 @@ export async function handleCorsProxy(request, { fetch: fetchImpl = fetch, limit
     return answer(502, 'Bad gateway: the target could not be reached.')
   }
 
-  const length = Number(upstream.headers.get('Content-Length'))
-  if (request.method !== 'HEAD' && length >= MAX_RESPONSE_SIZE) return answer(413, 'Response too large')
-
   const headers = new Headers()
   for (const [name, value] of upstream.headers) {
     if (!DROPPED_RESPONSE_HEADERS.has(name.toLowerCase())) headers.append(name, value)
@@ -371,7 +356,11 @@ export async function handleCorsProxy(request, { fetch: fetchImpl = fetch, limit
   }
   headers.set('X-Playground-Cors-Proxy', 'true')
   headers.set('Cache-Control', 'no-store')
+  // A range answer sets its own limits: it streams only up to the end of the range, or
+  // reads at most MAX_DECODED_RANGE_SOURCE.
   if (range && upstream.status === 200 && upstream.body) return rangeAnswer(upstream, range, headers)
+  const length = Number(upstream.headers.get('Content-Length'))
+  if (request.method !== 'HEAD' && length >= MAX_RESPONSE_SIZE) return answer(413, 'Response too large')
   const declaredSize = upstream.headers.has('Content-Length')
   const body = request.method === 'HEAD' || !upstream.body ? null : declaredSize ? upstream.body : capped(upstream.body)
   return new Response(body, {
