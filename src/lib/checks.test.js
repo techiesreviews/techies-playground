@@ -92,6 +92,8 @@ test('checks start by themselves only when every needed license is active', asyn
   assert.deepEqual(checksGate(['wp-2fa', 'example-pro'], fill), { ready: true, active: 2, total: 2 })
   assert.deepEqual(checksGate(['wp-2fa', 'other'], fill), { ready: false, active: 1, total: 2 })
   assert.deepEqual(checksGate(['wp-2fa', 'missing'], fill), { ready: false, active: 1, total: 2 })
+  // A licence WordPress reports as active counts too, even when no key was filled in.
+  assert.deepEqual(checksGate(['wp-2fa', 'missing'], fill, ['missing']), { ready: true, active: 2, total: 2 })
 })
 
 test('a clean page passes every check, and only the checks in the setup show', async () => {

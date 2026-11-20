@@ -105,10 +105,11 @@ import {
 import {
   fillResultRecordId,
   fillSavedLicenseKeys,
-  findUnlicensedPremium,
+  readFreemiusLicenses,
   licenseFillLabel,
   licenseFillSummary,
   licensesNeeded,
+  activeInSite,
   packagesWithSavedKeys,
   pluginFolderFromAssetPath,
 } from './lib/license-fill'
@@ -1850,6 +1851,7 @@ export default function App() {
   const [launchedChecks, setLaunchedChecks] = useState([])
   // The launched plugins whose saved keys the license step fills: checks wait for these.
   const [licensedPackageIds, setLicensedPackageIds] = useState([])
+  const [siteLicensedIds, setSiteLicensedIds] = useState([])
   const [pluginUpdates, setPluginUpdates] = useState({ state: 'idle' })
   const [checksRun, setChecksRun] = useState({ state: 'idle' })
   const [showUpdates, setShowUpdates] = useState(false)
@@ -1868,7 +1870,7 @@ export default function App() {
   })
   const activeChecks = useMemo(() => checksInSetup(recipe), [recipe])
   const fillResults = useMemo(() => new Map(licenseFill.map((result) => [result.vaultId, result])), [licenseFill])
-  const checksLicenseGate = useMemo(() => checksGate(licensedPackageIds, licenseFill), [licensedPackageIds, licenseFill])
+  const checksLicenseGate = useMemo(() => checksGate(licensedPackageIds, licenseFill, siteLicensedIds), [licensedPackageIds, licenseFill, siteLicensedIds])
 
   const selectedCount = recipe.plugins.length + recipe.repositoryPlugins.length
   const selectedPackageCount = selectedCount + (recipe.theme || recipe.repositoryTheme ? 1 : 0)
@@ -2408,6 +2410,7 @@ export default function App() {
     setLaunchedChecks([])
     setLicenseFill([])
     setLicensedPackageIds([])
+    setSiteLicensedIds([])
     setPluginUpdates({ state: 'idle' })
     setChecksRun({ state: 'idle' })
     stopPreviewSessionRef.current?.()
@@ -2475,6 +2478,7 @@ export default function App() {
     // checks wait for them.
     const neededLicenseIds = keyPackageIds
     setLicensedPackageIds(neededLicenseIds)
+    setSiteLicensedIds([])
     if (keyPackageIds.length && !isVaultSessionUnlocked()) {
       setStatus({ running: true, step: 0, message: 'Unlock the license vault to fill in saved keys.' })
       // 'unlocked' from the prompt or an unlock in the Licenses manager, 'skip' to start
@@ -2648,13 +2652,17 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
         setLicenseFill(licenseResults)
       }
 
-      // A premium plugin without a saved key needs its licence before the checks too.
+      // A premium plugin without a saved key needs its licence before the checks too, and a
+      // licence already active in the site counts without a fill.
       let checksLicenseIds = neededLicenseIds
+      let siteActiveIds = []
       if (checksInSetup(launchedRecipe).length) {
-        const premiumFolders = await findUnlicensedPremium({ client, signal: launchAbort.signal })
+        const licenses = await readFreemiusLicenses({ client, signal: launchAbort.signal })
         if (launchId !== launchIdRef.current) return
-        checksLicenseIds = licensesNeeded(neededLicenseIds, premiumFolders, pluginFolders)
+        checksLicenseIds = licensesNeeded(neededLicenseIds, licenses, pluginFolders)
+        siteActiveIds = activeInSite(licenses, pluginFolders)
         setLicensedPackageIds(checksLicenseIds)
+        setSiteLicensedIds(siteActiveIds)
       }
 
       // After the licenses, so premium plugins can reach their own update servers. A failed
@@ -2681,7 +2689,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
         ? { ...launchedRecipe, wordpress: launchedWordPressVersion }
         : launchedRecipe
       setSpinupHistory((current) => appendSpinup(current, { recipe: historyRecipe, plugins: installedPlugins, theme: installedTheme }))
-      if (checksInSetup(launchedRecipe).length && checksGate(checksLicenseIds, licenseResults).ready) runChecks(client)
+      if (checksInSetup(launchedRecipe).length && checksGate(checksLicenseIds, licenseResults, siteActiveIds).ready) runChecks(client)
     } catch (caught) {
       if (launchId !== launchIdRef.current) return
       stopPreviewSessionRef.current?.()
