@@ -58,10 +58,11 @@ They are wider than a hosting check would use, because Playground runs PHP in th
 | Node | `checks.test.js` page-time limit at 1.5 s and 3.5 s on the sketch's example limits (2 s / 5 s) | Fails before the change | `not ok 11 … expected: 'warn' actual: 'pass'`, then passes after the change | Commit history of this branch |
 | PHP 8.3 wasm | `plugin-updates-php.test.js` against stub WordPress | An offered plugin is updated, reported old → new, and switched back on | Pass | The test file |
 | Chromium (T3 preview), local build with `VITE_PLAYGROUND_ORIGIN=https://preview-wp.techies.tools`, desktop and 375 px | Launch with Query Monitor and Code Profiler, networking on. Open Updates, then Checks; press Run again, Open in Code Profiler, Escape twice; repeat at phone width | Updates names the result; checks run by themselves; panel opaque with verdict and four tiles; Run again remeasures; Code Profiler's page opens; Escape closes the Updates note first, then the panel; tiles 2 by 2 on a phone | As expected. Updates said "No plugin or theme had an update" and listed the current versions (Code Profiler 1.9.6, Query Monitor 4.1.1, Twenty Twenty-Five 1.5). All checks passed with the numbers above | Manual run, 2026-11-20 |
+| Chromium (T3 preview), same local build, 1280 px, private window | Upload Hello Dolly 1.6 (an outdated copy from WordPress.org) with Query Monitor and Code Profiler, networking on, then Launch 3 plugins. Open WordPress's Plugins page | Hello Dolly is updated at start, the bar names the change, the updated plugin stays active, checks run by themselves | As expected. The bar said "Updated: Hello Dolly 1.6 → 1.7.2" and "Checks 8 passed"; the Plugins page showed the uploaded Hello Dolly at 1.7.2 and still active | Manual run, 2026-11-21 |
 
 ## Result
 
-The three steps are now automatic. The browser run had nothing to update, so the update path itself was proven only in PHP 8.3 against stub WordPress, not against a real outdated plugin in the browser. The licence gate was proven in unit tests, not in a browser run with a refused key.
+The three steps are now automatic. The update path was proven in the browser with a real outdated plugin (Hello Dolly 1.6 to 1.7.2, still active afterwards) and in PHP 8.3 against stub WordPress. The licence gate was proven in unit tests, not in a browser run with a refused key.
 
 ## Disposition and rationale
 
