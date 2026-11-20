@@ -102,9 +102,9 @@ An uploaded ZIP is a snapshot; the launcher cannot discover a protected vendor d
 Use either of these safe paths:
 
 1. Choose **Replace ZIP** beside a vault plugin. Version suffixes such as `1.0.0-beta.7` are removed from new vault IDs, so importing a newer package replaces the old package without breaking recipes.
-2. Launch WordPress, activate the license in the plugin, then choose **Update all** in the Playground header. This asks WordPress and each vendor updater for available releases and installs every available plugin update in one run.
+2. Save the plugin's license key in the launcher and keep networking on. At start, the launcher fills in the key, then asks WordPress and each vendor updater for available releases and installs every available plugin and theme update. **Updates** in the Playground bar lists what changed, old version to new.
 
-The second path works only when the premium plugin registers updates through WordPress and the license permits downloads. It never exposes the license to the launcher.
+The second path works only when the premium plugin registers updates through WordPress and the license permits downloads. The key goes only into the one request that fills it in; it is not saved in the site setup, the history or the page.
 
 The plugin chooser searches names, vault IDs, filenames, and versions. Newly imported or selected plugins move to the top; this recency order is retained in the current browser profile.
 

@@ -1,0 +1,78 @@
+# Plugins update at start, checks run by themselves, and our own Checks panel
+
+- Date: 2026-11-20
+- Owner: fleet builder (Claude Opus 5.5)
+- Status: complete
+- Disposition: kept
+- Related version: 0.11.0
+- Related commit/issue: TOOLS-259
+
+## Context
+
+After a one-click Start (0.10.x), a test site still needed three manual steps before it was useful for checking a plugin: press **Update all** in the bar, open the **Checks** menu, and read Query Monitor or Code Profiler inside WordPress. Update all also left every plugin it updated switched off, because WordPress's upgrader turns an active plugin off before it replaces the files and Update all did not turn it back on.
+
+## Hypothesis and success criteria
+
+A test site should be ready to judge at a glance once Start finishes:
+
+1. Plugins and themes update by themselves while the site starts, and the bar lists what changed (old version to new).
+2. Checks run by themselves when the site is ready, but only when every licence the setup needs is active; otherwise the bar asks to activate them first and offers Run checks.
+3. A Checks panel next to WordPress shows a one-page summary (verdict, four tiles, one row per check), and each tool's own page is one press away.
+
+## Options considered
+
+- **Keep Update all and the Checks menu.** No work, but every launch keeps the manual steps and the switched-off plugins.
+- **Show Query Monitor's own panel automatically.** No new UI, but it covers WordPress and shows no verdict, and Code Profiler has no comparable summary.
+- **Own summary panel built from one measured page load (chosen).** One extra request per run, our own limits, and the tools stay available for detail.
+
+## Implementation or prototype
+
+- `src/lib/plugin-updates.js`: the update PHP (`PLUGIN_UPDATES_CODE`), run once per launch through `client.run` after the licence fill, only when networking is on. It updates every plugin and theme WordPress offers an update for and turns updated plugins that were active back on. Its answer (`PLAYGROUND_UPDATES:` JSON) is described in [data contracts](../data-contracts.md#plugin-updates-at-start).
+- `src/UpdatesControl.jsx`: the bar's Updates button (Updating…, Updated with a count, Up to date, Update failed, or Updates with "networking blocked" or "failed") and its note.
+- `src/lib/checks.js`: a second must-use plugin, `techies-measure.php`, which records one page load's numbers when the page is loaded with `techies-measure=1` (see [data contracts](../data-contracts.md#checks-measurement)); `CHECK_LIMITS`; `checksGate`; `evaluateChecks`; verdict and announcements.
+- `src/ChecksPanel.jsx`: the bar's Checks button and the panel, built from the approved sketch (TOOLS-259), using the existing bar button, popover and theme tokens. No toasts; state shows on the button and in the panel.
+- `src/App.jsx`: launch step 3 "Updating plugins", the automatic run after launch when the gate is ready, Run checks / Run again, and Open in the tool (which closes the panel first on phones). The old Update all action and Checks menu were removed.
+
+### Limits
+
+The sketch's numbers were examples only. These are the real ones (`CHECK_LIMITS`):
+
+| Check | Amber (warn) | Red (fail) |
+| --- | --- | --- |
+| PHP errors | any notice or deprecation | any error or warning |
+| Slow queries | any query over 0.05 s | — |
+| Calls to other sites | any call that failed or answered 400 or higher | — |
+| Duplicate queries | more than 10 | — |
+| Query count | more than 100 | — |
+| Memory | above 75% of the PHP limit | above 90% |
+| Page time | above 1 s | above 3 s |
+| Slowest plugin | a plugin that took more than 0.5 s to load | — |
+
+They are wider than a hosting check would use, because Playground runs PHP in the browser. A fresh site with Query Monitor and Code Profiler built its admin pages in 0.19 to 0.26 s, used 41 MB of 256 MB (16%), ran 32 queries, logged 0 PHP errors, and its slowest plugin loaded in 0.00 to 0.01 s. So 1 s is roughly four times a normal page and deserves a look, and 3 s is clearly wrong.
+
+## Tests and evidence
+
+| Environment | Procedure/command | Expected | Actual | Evidence |
+| --- | --- | --- | --- | --- |
+| Node 24, PHP 8.3 wasm | `npm test` | All pass | 252 of 252 pass, 34 files | New tests in `plugin-updates.test.js`, `plugin-updates-php.test.js`, `checks.test.js`, `checks-php.test.js`; each failed before its change (tests first) |
+| Node | `checks.test.js` page-time limit at 1.5 s and 3.5 s on the sketch's example limits (2 s / 5 s) | Fails before the change | `not ok 11 … expected: 'warn' actual: 'pass'`, then passes after the change | Commit history of this branch |
+| PHP 8.3 wasm | `plugin-updates-php.test.js` against stub WordPress | An offered plugin is updated, reported old → new, and switched back on | Pass | The test file |
+| Chromium (T3 preview), local build with `VITE_PLAYGROUND_ORIGIN=https://preview-wp.techies.tools`, desktop and 375 px | Launch with Query Monitor and Code Profiler, networking on. Open Updates, then Checks; press Run again, Open in Code Profiler, Escape twice; repeat at phone width | Updates names the result; checks run by themselves; panel opaque with verdict and four tiles; Run again remeasures; Code Profiler's page opens; Escape closes menu before panel; tiles 2 by 2 on a phone | As expected. Updates said "No plugin or theme had an update" and listed the current versions (Code Profiler 1.9.6, Query Monitor 4.1.1, Twenty Twenty-Five 1.5). All checks passed with the numbers above | Manual run, 2026-11-20 |
+
+## Result
+
+The three steps are now automatic. The browser run had nothing to update, so the update path itself was proven only in PHP 8.3 against stub WordPress, not against a real outdated plugin in the browser. The licence gate was proven in unit tests, not in a browser run with a refused key.
+
+## Disposition and rationale
+
+Kept. It removes the manual steps from every launch, fixes the switched-off plugins after updating, and keeps each tool's own page for detail.
+
+## Documentation impact
+
+[rebuild-spec.md](../rebuild-spec.md), [architecture.md](../architecture.md), [data-contracts.md](../data-contracts.md), [testing.md](../testing.md), README, `CHANGELOG_ENTRIES` in `src/App.jsx`, version 0.11.0 in `package.json` and `package-lock.json`.
+
+## Follow-ups and open questions
+
+- "Slowest plugin" measures load time only, not a full profile; Code Profiler stays the place for that.
+- The gate counts only plugins with a saved key. A plugin whose licence Lex activates by hand inside WordPress after Start does not start the checks by itself; Run checks does.
+- The dashboard and front-page runs were not clicked through in the browser, because clicks inside the WordPress frame do not reach it from the test browser.

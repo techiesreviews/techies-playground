@@ -145,6 +145,18 @@ const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-stora
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
   {
+    version: '0.11.0',
+    date: 'November 20, 2026',
+    title: 'Plugins update at start, and checks run by themselves',
+    summary: 'A test site now updates its plugins and themes while it starts, runs its checks once it is ready, and shows the results in a Checks panel next to WordPress.',
+    changes: [
+      'While a test site starts, every plugin and theme with a newer version is updated. The Updates button on the bar then shows what changed, from the old to the new version, and opens a note with every change, anything that could not update, and what was already current. A plugin that was switched on stays switched on after its update. A setup that blocks networking skips this step and says so on the button.',
+      'When the setup includes Query Monitor or Code Profiler, the checks run by themselves once the site is ready. If a plugin in the setup still needs its license, the Checks button says to activate licenses first instead, and Run checks in the panel runs them when you are ready.',
+      'The Checks button opens a Checks panel next to WordPress: one verdict, four numbers for the page (time, memory, database queries and PHP errors), and each check as a row that opens to show what it measured. Failed checks and warnings come first; passed checks fold into one line. Each row opens the page of Query Monitor or Code Profiler that has the full detail, and Run again measures the page WordPress shows now.',
+      'The Update all plugins action and the old Checks menu are gone; the update at start and the Checks panel replace them.',
+    ],
+  },
+  {
     version: '0.10.5',
     date: 'November 20, 2026',
     title: 'Plugin requests keep their details in Firefox',

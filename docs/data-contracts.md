@@ -145,6 +145,24 @@ OPFS contains the WordPress filesystem and SQLite-backed site state. It is disti
 
 `theme` may be `null`. No `file`, ciphertext, plaintext secret, WordPress database, or arbitrary runtime output belongs here.
 
+## Plugin updates at start
+
+`PLUGIN_UPDATES_CODE` (`src/lib/plugin-updates.js`) runs once per launch through `client.run` and prints one line that starts with `PLAYGROUND_UPDATES:` followed by JSON:
+
+```json
+{
+  "updated": [{ "name": "Plugin or theme name", "from": "1.0.0", "to": "1.1.0" }],
+  "failed": [{ "name": "Plugin or theme name", "message": "WordPress's last message, at most 200 characters" }],
+  "current": [{ "name": "Plugin or theme name", "version": "1.1.0" }]
+}
+```
+
+The launcher keeps the parsed result only in memory (`pluginUpdates` state: `idle`, `running`, `skipped` when networking is off, `done` with the result, `error` with a message). It is not saved to localStorage, the spin-up record or the recipe.
+
+## Checks measurement
+
+When a page is loaded with `techies-measure=1`, the measure must-use plugin (`techies-measure.php`) appends one HTML comment `<!-- TECHIES_MEASURE:<base64 JSON> -->` with these fields: `title`, `time` (seconds), `memory` and `memoryLimit` (bytes), `queries`, `queryTime`, `slowQueries`, `duplicates`, `errorCounts` (`error`, `warning`, `notice`, `deprecated`), `errors` (`kind`, `message`, `file`, `line`), `http` (`host`, `code`), and `plugins` (the five slowest, `name` and `time`). It records no query text, no request bodies or headers, no full outbound URLs (only the host) and no licence keys. `parseMeasurement` reads only these fields and treats anything else as missing. The result lives only in memory (`checksRun` state) and is replaced by the next run; a run that finishes after the site closed or relaunched is dropped.
+
 ## Security boundary
 
 The system protects secrets at rest from casual inspection and keeps them out of normal development artifacts. It does not protect an unlocked key from malicious code already executing in the page, an infected browser, clipboard readers, or a malicious WordPress package after the user pastes a license.
