@@ -111,7 +111,7 @@ test('the Playground sync keeps one update pull request into dev and never goes 
   // A fix pushed between that check and the push makes the push fail: it replaces only
   // the commit it checked, or creates the branch only if it still does not exist.
   assert.match(open, /\n\s+checked_tip=""\n/)
-  assert.match(open, /if \[ -z "\$left_alone" \]; then\n\s+git push --force-with-lease="refs\/heads\/\$\{branch\}:\$\{checked_tip\}" origin "\$branch"\n/)
+  assert.match(open, /if \[ -z "\$left_alone" \]; then\n\s+if ! git push --force-with-lease="refs\/heads\/\$\{branch\}:\$\{checked_tip\}" origin "\$branch"; then\n\s+echo "::error::[^"]*nothing was pushed[^"]*"\n\s+exit 1\n/)
   assert.doesNotMatch(open, /git push --force /)
   assert.match(open, /elif \[ -z "\$left_alone" \]; then\n\s+gh pr edit /)
   assert.doesNotMatch(open, /2>\/dev\/null/)

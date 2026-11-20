@@ -193,7 +193,10 @@ jobs:
             fi
           fi
           if [ -z "$left_alone" ]; then
-            git push --force-with-lease="refs/heads/${branch}:${checked_tip}" origin "$branch"
+            if ! git push --force-with-lease="refs/heads/${branch}:${checked_tip}" origin "$branch"; then
+              echo "::error::${branch} changed on GitHub while this run was checking it, or the push failed; nothing was pushed. Run the workflow again."
+              exit 1
+            fi
           fi
 
           dropped=""
