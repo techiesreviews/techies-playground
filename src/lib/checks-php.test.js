@@ -56,8 +56,9 @@ function wp_parse_url( $url, $part ) { return parse_url( $url, $part ); }
 function is_wp_error( $thing ) { return false; }
 function wp_remote_retrieve_response_code( $response ) { return $response['code']; }
 function get_plugins() { return array( 'wp-2fa/wp-2fa.php' => array( 'Name' => 'WP 2FA' ) ); }
-function is_admin() { return true; }
-function wp_get_document_title() { return 'Front'; }
+function is_admin() { return ! getenv( 'FRONT' ); }
+// WordPress returns the document title already escaped and texturized.
+function wp_get_document_title() { return 'Site &#8211; Tagline &amp; more'; }
 function wp_strip_all_tags( $text ) { return trim( strip_tags( $text ) ); }
 function timer_float() { return 0.5; }
 function wp_convert_hr_to_bytes( $value ) { return 268435456; }
@@ -72,6 +73,7 @@ do_action( 'plugin_loaded', '/wordpress/wp-content/plugins/wp-2fa/wp-2fa.php' );
 do_action( 'plugin_loaded', '/wordpress/wp-content/plugins/other/other.php' );
 trigger_error( 'Something odd in /wordpress/wp-content/plugins/wp-2fa/x.php', E_USER_WARNING );
 trigger_error( 'Old function', E_USER_DEPRECATED );
+trigger_error( 'file_get_contents(https://api.vendor.com/v1/check?license_key=SECRET-KEY-123&site=a): Failed to open stream', E_USER_WARNING );
 @trigger_error( 'Silenced', E_USER_NOTICE );
 $wpdb = new stdClass();
 $wpdb->num_queries = 3;
@@ -83,11 +85,11 @@ echo "\\nHOOKS:" . implode( ',', array_keys( $GLOBALS['actions'] ) );
 echo "\\nPREVIOUS:" . json_encode( $GLOBALS['previous'] );
 `
 
-async function measure(on) {
+async function measure(on, { front = false } = {}) {
   const php = new PHP(await loadPHPRuntime(await getPHPLoaderModule()))
   php.writeFile('/measure.php', MEASURE_PLUGIN)
   php.writeFile('/harness.php', MEASURE_HARNESS)
-  const response = await php.run({ scriptPath: '/harness.php', env: { MEASURE: on ? '1' : '' } })
+  const response = await php.run({ scriptPath: '/harness.php', env: { MEASURE: on ? '1' : '', FRONT: front ? '1' : '' } })
   assert.equal(response.errors, '', response.errors)
   return response.text
 }
@@ -101,16 +103,26 @@ test('the measure plugin reports counts and times, never a query or an address w
   assert.deepEqual([report.queries, report.slowQueries, report.duplicates], [3, 1, 1])
   assert.ok(Math.abs(report.queryTime - 0.211) < 1e-9)
   // The @-silenced notice is skipped; the warning and the deprecation are counted.
-  assert.deepEqual(report.errorCounts, { error: 0, warning: 1, notice: 0, deprecated: 1 })
+  assert.deepEqual(report.errorCounts, { error: 0, warning: 2, notice: 0, deprecated: 1 })
+  // An address in an error message keeps its host and path; its query, which can hold a
+  // license key, is cut.
   assert.deepEqual(report.errors.map((error) => [error.kind, error.message, error.file]), [
     ['warning', 'Something odd in /wordpress/wp-content/plugins/wp-2fa/x.php', '/harness.php'],
     ['deprecated', 'Old function', '/harness.php'],
+    ['warning', 'file_get_contents(https://api.vendor.com/v1/check?…): Failed to open stream', '/harness.php'],
   ])
   assert.deepEqual(report.http, [{ host: 'api.freemius.com', code: 403 }])
   assert.deepEqual(report.plugins.map((plugin) => plugin.name).sort(), ['WP 2FA', 'other/other.php'])
   // The handler that was there before still sees every error, the silenced one too.
-  assert.deepEqual(JSON.parse(text.split('\nPREVIOUS:')[1]), ['Something odd in /wordpress/wp-content/plugins/wp-2fa/x.php', 'Old function', 'Silenced'])
-  assert.doesNotMatch(text, /SECRET-KEY-123/)
+  const previous = JSON.parse(text.split('\nPREVIOUS:')[1])
+  assert.deepEqual(previous.filter((message) => !message.includes('vendor.com')), ['Something odd in /wordpress/wp-content/plugins/wp-2fa/x.php', 'Old function', 'Silenced'])
+  // The page and its report never carry the key (only the earlier handler sees the message unchanged).
+  assert.doesNotMatch(text.split('\nHOOKS:')[0], /SECRET-KEY-123/)
+})
+
+test('the measure plugin sends a front-end page title as plain text', async () => {
+  const report = parseMeasurement(await measure(true, { front: true }))
+  assert.equal(report.title, 'Site – Tagline & more')
 })
 
 test('the measure plugin does nothing on a normal page', async () => {

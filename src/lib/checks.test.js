@@ -139,6 +139,11 @@ test('errors and warnings fail, notices warn, and each limit turns a check amber
   assert.equal(failing.checks[0].value, '1 warning, 2 notices')
   assert.match(failing.checks[2].details, /^2 of 2 calls to other sites failed: api\.wordpress\.org\./)
   assert.equal(failing.tiles.find((tile) => tile.id === 'php-errors').status, 'fail')
+  // Without Query Monitor its limits judge nothing, so the tiles show the numbers uncoloured
+  // and never contradict a passing verdict.
+  const profilerOnly = evaluateChecks({ ...MEASURED, ...counts({ warning: 1 }), time: 4 }, ['code-profiler'])
+  assert.deepEqual(profilerOnly.tiles.map((tile) => tile.status), ['pass', 'pass', 'pass', 'pass'])
+  assert.equal(profilerOnly.failed, 0)
 })
 
 test('the verdict leads with failures, then warnings, else all passed', async () => {
