@@ -222,7 +222,8 @@ const wholeFile = (body) => new Response(capped(body, MAX_DECODED_RANGE_SOURCE))
 // while it streams, and reading stops at the end of the range; anything else (compressed,
 // or without a declared size) is read whole, up to MAX_DECODED_RANGE_SOURCE.
 async function rangeAnswer(upstream, range, headers) {
-  for (const name of ['Content-Length', 'Content-Encoding', 'Content-Range']) headers.delete(name)
+  // The target's checksums describe the whole answer, not the slice (RFC 9530).
+  for (const name of ['Content-Length', 'Content-Encoding', 'Content-Range', 'Content-Digest', 'Content-MD5']) headers.delete(name)
   headers.set('Accept-Ranges', 'bytes')
   // Cloudflare would otherwise compress the slice on its way to the browser.
   headers.set('Cache-Control', 'no-store, no-transform')

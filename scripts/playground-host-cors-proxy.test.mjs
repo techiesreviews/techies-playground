@@ -238,6 +238,19 @@ test('a range of an uncompressed file is sliced from the start of the file and s
   assert.ok(chunksRead <= 4, `read ${chunksRead} of 10 chunks`)
 })
 
+test('a range answer drops the checksums of the whole file, with or without a declared size', async () => {
+  const checksums = { 'Content-Digest': 'sha-256=:wholefile=:', 'Content-MD5': 'wholefile==' }
+  for (const declared of [{ 'Content-Length': '26' }, {}]) {
+    const upstream = recorder(() => new Response('abcdefghijklmnopqrstuvwxyz', { headers: { 'Content-Type': 'text/plain', ...checksums, ...declared } }))
+    const response = await handleCorsProxy(proxied('https://example.com/file.txt', { headers: { Range: 'bytes=2-4' } }), { fetch: upstream.fetch })
+    const label = declared['Content-Length'] ? 'streamed' : 'read whole'
+    assert.equal(response.status, 206, label)
+    assert.equal(await response.text(), 'cde', label)
+    assert.equal(response.headers.get('Content-Digest'), null, label)
+    assert.equal(response.headers.get('Content-MD5'), null, label)
+  }
+})
+
 test('a small range of an uncompressed file over 100 MB is answered, and a slice of 100 MB or more gets 413', async () => {
   const size = 150 * 1024 * 1024
   const chunk = new Uint8Array(1024 * 1024).fill(7)
