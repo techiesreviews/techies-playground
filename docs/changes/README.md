@@ -113,3 +113,4 @@ Prefer, in order:
 - [2026-08-28-release-0.6.0-deployment-blocked.md](2026-08-28-release-0.6.0-deployment-blocked.md) — deployment investigation showing the missing Cloudflare API token and unchanged live bundle.
 - [2026-08-28-release-0.6.0-deployed.md](2026-08-28-release-0.6.0-deployed.md) — successful pipeline rerun and live 0.6.0 bundle verification.
 - [2026-11-07-ci-node-24.md](2026-11-07-ci-node-24.md) — CI moved from Node 22 to Node 24; supersedes the 2026-08-28 Node 24.15.0 inconclusive result.
+- [2026-11-20-playground-release-sync-and-security-checks.md](2026-11-20-playground-release-sync-and-security-checks.md) — a daily job opens one verified PR into `dev` per Playground release (all Playground pins, client and host together, with a boot test); daily security checks run npm audit, Playground advisories and Dependabot alerts; WP-CLI comes from our own Playground host.
