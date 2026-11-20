@@ -29,6 +29,7 @@
     "wrangler": "^4.155.0"
   },
   "overrides": {
-    "sharp": "0.35.5"
+    "sharp": "0.35.5",
+    "isomorphic-git": "1.38.6"
   }
 }
