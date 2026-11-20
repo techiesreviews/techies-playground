@@ -10,25 +10,40 @@ on:
     - cron: '47 6 * * *'
   workflow_dispatch:
 
-permissions:
-  contents: write
-  pull-requests: write
+permissions: {}
 
 concurrency:
   group: sync-playground-release
   cancel-in-progress: false
 
 jobs:
-  sync:
+  # Installs and runs the new release's packages (the boot test also runs their install
+  # scripts), so this job gets a read-only token and keeps no git credentials. It hands
+  # its changes to the next job as a patch.
+  prepare:
     name: Check Playground releases and prepare an update
     if: github.repository == 'techiesreviews/techies-playground'
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    permissions:
+      contents: read
+    outputs:
+      base: ${{ steps.base.outputs.sha }}
+      changed: ${{ steps.sync.outputs.changed }}
+      app_version: ${{ steps.sync.outputs.app_version }}
+      playground_version: ${{ steps.sync.outputs.playground_version }}
+      previous_version: ${{ steps.sync.outputs.previous_version }}
+      dropped_overrides: ${{ steps.sync.outputs.dropped_overrides }}
     steps:
       - name: Check out dev
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: dev
+          persist-credentials: false
+
+      - name: Note the dev commit
+        id: base
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Set up Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -47,47 +62,114 @@ jobs:
       # once with the launcher's default setup and WP-CLI.
       - name: Verify the generated update
         if: steps.sync.outputs.changed == 'true'
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
           npm test
           npm run build
           npm audit --audit-level=high
-          node scripts/check-playground-advisories.mjs
           node scripts/playground-boot-test.mjs
           git diff --check
 
-      - name: Open or refresh the update pull request
+      - name: Check Playground security advisories
         if: steps.sync.outputs.changed == 'true'
         env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/check-playground-advisories.mjs
+
+      - name: Save the update as a patch
+        if: steps.sync.outputs.changed == 'true'
+        run: git diff --binary -- package.json package-lock.json src/App.jsx > "$RUNNER_TEMP/playground-update.patch"
+
+      - name: Upload the update
+        if: steps.sync.outputs.changed == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playground-update
+          path: ${{ runner.temp }}/playground-update.patch
+          if-no-files-found: error
+          retention-days: 3
+
+  # Writes to the repository, so it runs no package code: it applies the checked patch,
+  # pushes the update branch and opens or refreshes the pull request.
+  pull-request:
+    name: Open or refresh the update pull request
+    needs: prepare
+    if: needs.prepare.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Check out the checked dev commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.prepare.outputs.base }}
+
+      - name: Download the update
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: playground-update
+          path: ${{ runner.temp }}/update
+
+      - name: Open or refresh the update pull request
+        env:
           GH_TOKEN: ${{ github.token }}
-          APP_VERSION: ${{ steps.sync.outputs.app_version }}
-          PLAYGROUND_VERSION: ${{ steps.sync.outputs.playground_version }}
-          PREVIOUS_VERSION: ${{ steps.sync.outputs.previous_version }}
-          DROPPED_OVERRIDES: ${{ steps.sync.outputs.dropped_overrides }}
+          APP_VERSION: ${{ needs.prepare.outputs.app_version }}
+          PLAYGROUND_VERSION: ${{ needs.prepare.outputs.playground_version }}
+          PREVIOUS_VERSION: ${{ needs.prepare.outputs.previous_version }}
+          DROPPED_OVERRIDES: ${{ needs.prepare.outputs.dropped_overrides }}
         run: |
+          bot_email="41898282+github-actions[bot]@users.noreply.github.com"
+          if ! [[ "$PLAYGROUND_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && "$APP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::The prepare job named no exact Playground or app version."
+            exit 1
+          fi
           branch="automation/playground-${PLAYGROUND_VERSION}"
           title="Update WordPress Playground to ${PLAYGROUND_VERSION}"
+
+          # A closed update is a decision: it is not opened again for the same release.
+          closed_pr="$(gh pr list --head "$branch" --base dev --state closed --json number --jq '.[0].number')"
+          if [ -n "$closed_pr" ]; then
+            echo "::notice::The update to Playground ${PLAYGROUND_VERSION} (#${closed_pr}) was closed; it is not opened again."
+            exit 0
+          fi
+
+          git apply "$RUNNER_TEMP/update/playground-update.patch"
+          unexpected="$(git status --porcelain | grep -v -E '^ M (package\.json|package-lock\.json|src/App\.jsx)$' || true)"
+          if [ -n "$unexpected" ]; then
+            echo "$unexpected"
+            echo "::error::The update changes files other than package.json, package-lock.json and src/App.jsx."
+            exit 1
+          fi
+
           git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.email "$bot_email"
           git switch -C "$branch"
           git add package.json package-lock.json src/App.jsx
           git commit -m "$title"
-          git push --force origin "$branch"
+
+          # Someone may have added a fix to the update branch (after a preview problem, for
+          # example); the daily run then leaves the branch alone.
+          if tip_author="$(gh api "repos/${GITHUB_REPOSITORY}/commits/refs/heads/${branch}" --jq .commit.author.email 2>/dev/null)" &&
+            [ "$tip_author" != "$bot_email" ]; then
+            echo "::notice::${branch} has a commit by ${tip_author}; the branch is left as it is."
+          else
+            git push --force origin "$branch"
+          fi
 
           dropped=""
           if [ -n "$DROPPED_OVERRIDES" ]; then
             dropped="- Dropped package overrides that this release no longer needs: ${DROPPED_OVERRIDES}."
           fi
           body="$(cat <<EOF
-          Automated update to the official WordPress Playground release ${PLAYGROUND_VERSION} (from ${PREVIOUS_VERSION}).
+          Next step: merge into dev, check the previews (preview-play.techies.tools and preview-wp.techies.tools), then ask Lex before releasing to main. Going live needs Lex's approval every time; this update never goes live on its own.
+
+          Automated update to the official WordPress Playground release ${PLAYGROUND_VERSION} (from ${PREVIOUS_VERSION}):
 
           - One version moves together: the launcher's Playground packages, the Playground client and the self-hosted Playground (deploy-site.yml builds it from tag v${PLAYGROUND_VERSION}).
           - App version ${APP_VERSION}, with a changelog entry.
           - Checked before this pull request opened: unit tests, the launcher build, npm audit (high and above), Playground security advisories, and one boot of Playground ${PLAYGROUND_VERSION} with the launcher's default setup and WP-CLI.
           ${dropped}
-
-          Going live: merging into dev updates the previews (preview-play.techies.tools and preview-wp.techies.tools) only. Releasing to main needs Lex's approval every time; this update never goes live on its own.
 
           Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
           EOF

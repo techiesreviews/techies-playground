@@ -363,6 +363,17 @@ test('refuses a host build that points WP-CLI at a file it does not have', async
   )
 })
 
+test('refuses a script too large to rewrite that still downloads WP-CLI from playground.wordpress.net', async (t) => {
+  const { root, source, out } = await fixture()
+  t.after(() => rm(root, { recursive: true, force: true }))
+  await writeFile(path.join(source, 'sw.js'), `const r={url:"https://playground.wordpress.net/wp-cli.phar"};${' '.repeat(200)}`)
+  await writeFile(path.join(source, 'wp-cli.phar'), 'phar')
+  await assert.rejects(
+    preparePlaygroundHost({ source, out, launcherOrigins: ['https://play.techies.tools'], phpVersions: offered, fileSizeLimit: 100, partSize: 100 }),
+    /sw\.js is larger than the per-file limit and downloads WP-CLI/,
+  )
+})
+
 test('refuses a host folder with more files than Cloudflare allows', async (t) => {
   const { root, source, out } = await fixture()
   t.after(() => rm(root, { recursive: true, force: true }))
