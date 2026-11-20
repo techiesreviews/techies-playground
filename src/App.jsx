@@ -129,6 +129,15 @@ const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-stora
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
   {
+    version: '0.10.5',
+    date: 'November 20, 2026',
+    title: 'Plugin requests keep their details in Firefox',
+    summary: 'In Firefox, a plugin\'s license activation or form post that WordPress sends to another site now arrives with its details, as it already did in Chrome.',
+    changes: [
+      'In Firefox, when a plugin inside WordPress sends a request with details, such as a license key or a form, to a site that browsers block, the request now arrives with those details instead of empty. This covers every plugin, not only Freemius-based ones.',
+    ],
+  },
+  {
     version: '0.10.4',
     date: 'November 18, 2026',
     title: 'Easier to tap theme buttons and Add key',
