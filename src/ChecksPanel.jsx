@@ -183,7 +183,7 @@ export function ChecksPanel({ checks, run, gate, onRun, onClose, onOpenCheck }) 
         <ExclamationTriangleIcon className="mt-0.5 size-5 shrink-0 fill-amber-600" aria-hidden="true" />
         <div>
           <p className="text-base/6 font-semibold">{gate.ready ? 'Not run yet' : 'Activate licenses first'}</p>
-          <p className="text-sm/5 text-neutral-600 tabular-nums">{gate.ready ? 'Measures the page open in WordPress.' : `${gate.active} of ${gate.total} active. Checks start by themselves when every license is active.`}</p>
+          <p className="text-sm/5 text-neutral-600 tabular-nums">{gate.ready ? 'Measures the page open in WordPress.' : `${gate.active} of ${gate.total} active. Activate them in WordPress, then run the checks.`}</p>
         </div>
       </>
     )
@@ -224,7 +224,7 @@ export function ChecksPanel({ checks, run, gate, onRun, onClose, onOpenCheck }) 
         <div aria-live="polite" className={`flex items-start gap-2.5 rounded-[0.625rem] p-3 ${VERDICT_BOX[running || !verdict ? (run.state === 'error' ? 'fail' : 'wait') : verdict.status]}`}>
           {verdictBody}
         </div>
-        <div className="mt-3 grid grid-cols-4 gap-2 max-[350px]:grid-cols-2">
+        <div className="mt-3 grid grid-cols-4 gap-2 max-[399px]:grid-cols-2">
           {(report ? report.tiles : TILE_LABELS.map((label) => ({ id: label, label, value: '–', status: 'wait' }))).map((tile) => (
             <div key={tile.id} className={`min-w-0 rounded-lg px-2.5 py-2 ring-1 ${tileClass(tile.status)}`}>
               <p className="truncate text-xs/5 text-neutral-500">{tile.label}</p>

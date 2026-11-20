@@ -1,7 +1,8 @@
 // Checks are free WordPress plugins that measure a setup. A check counts as part of a
 // setup when its plugin is in the recipe, from WordPress.org or as an uploaded ZIP (free
-// or paid), and its results are read inside WordPress. Code Profiler profiles by sending
-// a request to the site itself, which works inside browser Playground.
+// or paid). The launcher's Checks panel shows a summary of one page; each check opens its
+// plugin's own page for the full detail. Code Profiler profiles by sending a request to the
+// site itself, which works inside browser Playground.
 export const CHECKS = Object.freeze([
   Object.freeze({
     id: 'query-monitor',
@@ -54,14 +55,14 @@ export function checkResultsPath(check, recipe, currentPath) {
 // Query Monitor opens its panel only from its admin-bar link, and it reopens the last
 // panel on every page (so the link is clicked only when no panel is remembered; clicking
 // would close it). This must-use plugin clicks that link on a page the launcher's
-// Checks menu opened for Query Monitor, and starts Query Monitor closed on the Code
+// Checks panel opened for Query Monitor, and starts Query Monitor closed on the Code
 // Profiler page so its panel does not cover the profiler.
 export const CHECKS_PLUGIN_PATH = '/wordpress/wp-content/mu-plugins/techies-checks.php'
 
 export const CHECKS_PLUGIN = `<?php
 /**
  * Plugin Name: Techies Playground: open a check
- * Description: Opens the Query Monitor panel on a page the launcher's Checks menu opened (techies-check=query-monitor) and keeps it closed on the Code Profiler page (techies-check=code-profiler).
+ * Description: Opens the Query Monitor panel on a page the launcher's Checks panel opened (techies-check=query-monitor) and keeps it closed on the Code Profiler page (techies-check=code-profiler).
  */
 
 function techies_playground_close_query_monitor() {
@@ -84,15 +85,16 @@ add_action( 'wp_print_footer_scripts', 'techies_playground_open_check' );
 
 // Pass and fail limits for the Checks panel. Pages in browser Playground run on PHP built
 // for WebAssembly, which is several times slower than a normal server, so the page time
-// limits are wider than a hosting check would use.
+// limits are wider than a hosting check would use. A fresh site with Query Monitor and
+// Code Profiler built its admin pages in 0.2 to 0.3 s in a desktop browser.
 export const CHECK_LIMITS = Object.freeze({
   slowQuerySeconds: 0.05,
   queriesWarn: 100,
   duplicatesWarn: 10,
   memoryWarnShare: 0.75,
   memoryFailShare: 0.9,
-  pageTimeWarnSeconds: 2,
-  pageTimeFailSeconds: 5,
+  pageTimeWarnSeconds: 1,
+  pageTimeFailSeconds: 3,
   pluginLoadWarnSeconds: 0.5,
 })
 

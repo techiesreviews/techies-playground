@@ -19,7 +19,10 @@ There is no application server or shared data store.
 | `src/main.jsx` | Mount React in strict mode and load global CSS. | `index.html`. |
 | `src/Preview.jsx` | Render a second-tab view of the active runtime and monitor its owner through BroadcastChannel. | `src/main.jsx` for `#preview=` URLs. |
 | `src/lib/playground-preview.js` | Validate preview URLs, answer session probes, and generate the WordPress mu-plugin that redirects new-tab actions. | App, Preview, regression tests. |
-| `src/App.jsx` | Entire UI, application state, effects, launch lifecycle, inline WordPress update PHP. | `src/main.jsx`; calls every `src/lib` module and Playground packages. |
+| `src/App.jsx` | Most of the UI, application state, effects and the launch lifecycle. | `src/main.jsx`; calls every `src/lib` module and Playground packages. |
+| `src/ChecksPanel.jsx` | The bar's Checks button and the Checks panel (verdict, tiles, check rows, Open in tool). Presentational: App passes the run, the licence gate and the callbacks. | App. |
+| `src/UpdatesControl.jsx` | The bar's Updates button and its note of what the update at start changed, plus the shared bar button class, tap target, spinner and clock time. | App, ChecksPanel. |
+| `src/lib/plugin-updates.js` | The PHP that updates every plugin and theme at start (and switches updated plugins back on), its result parsing, and the bar's label and announcement. | App launch, UpdatesControl, regression tests (which run the parser on real output shapes). |
 | `src/lib/recipe.js` | Recipe defaults, validation, stable package IDs, labels/version hints, Blueprint generation, recipe download. | App, saved recipes, history, persistence tests. |
 | `src/lib/freemius-plugin.js` | The PHP source of the Freemius must-use plugin that every Blueprint writes (see Freemius licence calls below). | `recipe.js`, regression tests (which run it in PHP 8.3). |
 | `src/lib/wordpress-versions.js` | Runtime WordPress.org version fetch, supported-version normalization, fallback and saved-version preservation. | App; release automation has parallel server-side logic. |
@@ -30,12 +33,12 @@ There is no application server or shared data store.
 | `src/lib/license-vault.js` | IndexedDB encrypted license CRUD, PBKDF2 derivation, AES-GCM, clipboard copy, decrypting the newest key per package for the automatic fill. | `LicenseManager`, Add key and launch in App. |
 | `src/lib/vault-session.js` | The unlocked vault key for the page session, its listeners, and a launch's wait for an unlock, skip or close. | App, LicenseManager, Add key. |
 | `src/lib/license-fill.js` | The PHP that hands saved keys to Freemius-based plugins (keys only in the request body), its request body, result parsing and labels, and the fill run (vault key and key reader passed in). | App launch. |
-| `src/lib/checks.js` | Which checks a recipe contains, adding one, where its results open, and the checks must-use plugin. | App. |
+| `src/lib/checks.js` | Which checks a recipe contains, adding one, where its results open, the checks and measure must-use plugins, reading one page's numbers, `CHECK_LIMITS`, the licence gate, and turning numbers into checks, verdict and announcement. | App, ChecksPanel, regression tests (which run the measure plugin in PHP 8.3). |
 | `src/lib/saved-recipes.js` | Parse, validate, upsert, rename-replace, and serialize saved recipes. | App. |
 | `src/lib/spinup-history.js` | Safe history normalization, cap, and persisted-environment deduplication. | App. |
 | `src/lib/plugin-preferences.js` | Local-package search and recently-selected ordering. | App for plugins and themes. |
 | `src/lib/playground-persistence.js` | Unload warning rule, one-time default migration, site ID, history persistence label. | App and history. |
-| `src/styles.css` | Tailwind import/theme, body defaults, selection color, license-popover positioning/animation, reduced motion. | `src/main.jsx`. |
+| `src/styles.css` | Tailwind import/theme, body defaults, selection color, license-popover positioning/animation, Checks panel slide-in, reduced motion. | `src/main.jsx`. |
 | `worker.js` | Serve `dist` through asset binding and add security headers. | Cloudflare Workers. |
 | `scripts/sync-wordpress-release.mjs` | Detect a new WordPress release branch and prepare fallback/version/changelog edits. | npm script and scheduled workflow. |
 | `scripts/configure-cloudflare-deploy.ps1` | Securely configure GitHub deployment secret/variables and trigger workflow. | One-time maintainer action. |
@@ -71,9 +74,14 @@ Recipe + local package IDs
        -> establish/resume OPFS mount
        -> install local plugin ZIPs
        -> install and verify local theme
+       -> fill saved licence keys
+       -> update plugins and themes (networking allowed only)
        -> navigate to landing page
   -> append safe spin-up metadata
+  -> run the checks once when checks are in the setup and every needed licence is active
 ```
+
+The checks and the updates write only to their own state (`checksRun`, `pluginUpdates`); a result that arrives after the site closed or relaunched is dropped (`launchIdRef` for the updates, the client in `clientRef` for a check run). `licensedPackageIds` keeps which plugins needed a licence at launch, so the gate stays closed after Start without keys.
 
 Directory packages are included as Blueprint resource steps. Local packages cannot be embedded in a serializable recipe, so they are installed after the client is ready using their IndexedDB `File` objects.
 

@@ -130,6 +130,9 @@ test('errors and warnings fail, notices warn, and each limit turns a check amber
   assert.equal(status({ memory: 240 * 1048576 }, 'memory'), 'fail')
   assert.equal(status({ time: CHECK_LIMITS.pageTimeWarnSeconds + 0.1 }, 'page-time'), 'warn')
   assert.equal(status({ time: CHECK_LIMITS.pageTimeFailSeconds + 0.1 }, 'page-time'), 'fail')
+  // A fresh site builds its pages in 0.2 to 0.3 s in the browser, so 1.5 s already deserves a look.
+  assert.equal(status({ time: 1.5 }, 'page-time'), 'warn')
+  assert.equal(status({ time: 3.5 }, 'page-time'), 'fail')
   assert.equal(status({ plugins: [{ name: 'Heavy', time: 0.6 }] }, 'slowest-plugin'), 'warn')
   const failing = evaluateChecks({ ...MEASURED, ...counts({ warning: 1, notice: 2 }), http: [{ host: 'api.wordpress.org', code: 0 }, { host: 'api.wordpress.org', code: 0 }] }, ['query-monitor'])
   assert.deepEqual([failing.passed, failing.warnings, failing.failed], [5, 1, 1])

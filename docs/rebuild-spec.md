@@ -93,7 +93,7 @@ History is newest first and capped at 30. Temporary launches may repeat. Only th
 
 ### 3.3 Checks
 
-Lists Query Monitor and Code Profiler (`src/lib/checks.js`). A check is in the setup when its plugin is in the recipe: the WordPress.org slug (`query-monitor`, `code-profiler`) or an uploaded ZIP whose ID is `query-monitor`, `code-profiler` or `code-profiler-pro`. In-setup cards use the selected teal surface and a **Runs after start** pill; others show **Not in this setup** and an **Add <check>** button that adds the free WordPress.org plugin. Results are read inside WordPress; there is no results panel of our own.
+Lists Query Monitor and Code Profiler (`src/lib/checks.js`). A check is in the setup when its plugin is in the recipe: the WordPress.org slug (`query-monitor`, `code-profiler`) or an uploaded ZIP whose ID is `query-monitor`, `code-profiler` or `code-profiler-pro`. In-setup cards use the selected teal surface and a **Runs after start** pill; others show **Not in this setup** and an **Add <check>** button that adds the free WordPress.org plugin. Results appear in the launcher's own Checks panel (section 6), and each check opens its plugin's page inside WordPress for the full detail.
 
 ### 3.4 Name and save
 
@@ -109,11 +109,12 @@ Import validates JSON, loads it, and saves it to the library. Missing local pack
 
 The desktop summary is sticky and shows recipe name, WordPress/PHP, package counts and selected plugin names, **Licenses** (`N of M keys saved`, only when uploaded plugins are selected), **Checks** (names joined with +, or None), storage mode, and networking state. Local plugin names come from the vault; directory names come from session metadata, with IDs or public slugs as fallbacks. Long names wrap within the summary. It repeats the launch action and three product assurances: browser-local execution, secret-free recipes, and the official Playground runtime.
 
-During launch it shows three ordered stages:
+During launch it shows four ordered stages:
 
 1. Preparing WordPress.
 2. Installing selected packages.
-3. Ready for license activation.
+3. Activating licenses.
+4. Updating plugins (skipped at once when the setup blocks networking).
 
 Errors appear in a red alert surface and do not erase the current setup.
 
@@ -132,9 +133,11 @@ Launch must perform this sequence:
 9. Wait for readiness, execute PHP to read `$wp_version`, and require a usable version marker. For `latest`, require exact equality with the API result.
 10. A Blueprint step writes the Freemius must-use plugin (`src/lib/freemius-plugin.js`) before any package installs, on every launch. Blueprint steps install and activate WordPress.org packages. Install each local plugin ZIP with overwrite and activation enabled.
 11. Install a selected local theme ZIP with overwrite and activation, then execute PHP and verify `get_option('stylesheet')` equals the local theme ID.
-11a. When checks are in the setup, write the checks must-use plugin. When uploaded plugins have saved keys, decrypt the newest key per plugin and run `LICENSE_FILL_CODE` once with the keys as the POST body, keyed by installed plugin folder; each Freemius-based plugin activates its key through its own SDK (`activate_migrated_license`), an already active licence is left alone, other plugins report that the key must be entered in WordPress. A failed fill never fails the launch.
+11a. When checks are in the setup, write the checks must-use plugin and the measure must-use plugin (`MEASURE_PLUGIN`). When uploaded plugins have saved keys, decrypt the newest key per plugin and run `LICENSE_FILL_CODE` once with the keys as the POST body, keyed by installed plugin folder; each Freemius-based plugin activates its key through its own SDK (`activate_migrated_license`), an already active licence is left alone, other plugins report that the key must be entered in WordPress. A failed fill never fails the launch.
+11b. When networking is allowed, run `PLUGIN_UPDATES_CODE` (`src/lib/plugin-updates.js`) after the licence fill, so premium plugins can reach their own update servers. It refreshes the plugin and theme update data, updates every plugin and theme WordPress offers an update for with the core upgraders, switches an updated plugin back on when it was on before (the upgrader turns it off), and returns each change as old → new version, each failure with WordPress's message, and the active plugins and theme that were already current. A failed update never fails the launch. When networking is blocked the step is skipped.
 12. Navigate to the recipe landing page.
 13. Record the successful spin-up. A `latest` recipe is recorded with the exact launched WordPress version for reproducibility.
+14. When checks are in the setup and every licence the setup needs is active (`checksGate`: each launched uploaded plugin that had a saved key when the launch started reports `active` or `activated`; Start without keys counts those plugins as not active), run the checks once on the landing page.
 
 Any exception invalidates the active client, blanks the iframe and replaces it with a new element, closes the full-screen shell, and surfaces a readable error. A launch closed or replaced while the Playground client loads never starts Playground.
 
@@ -142,13 +145,30 @@ Any exception invalidates the active client, blanks the iframe and replaces it w
 
 The runtime occupies the full viewport. Its dark WordPress-like top bar contains the recipe name and:
 
-- Licenses, followed after a fill by `· N of M active` (also announced politely to screen readers). Below the `sm` breakpoint the Licenses, Checks, Export snapshot and Update all buttons show only their icons (their names stay for screen readers) and the fill shows as `N/M`, so Close stays on screen on a phone.
-- Checks, only when a check is in the launched setup; disabled until setup finishes. It opens a menu (Escape, Tab (focus goes back to Checks, then on), a click outside it, including inside WordPress, close it, arrow keys, Home and End move, choosing an item returns focus to Checks; below `sm` the menu is anchored to the viewport with 8 px margins) with one item per check: Query Monitor reloads the current WordPress page with `techies-check=query-monitor`, where the checks must-use plugin clicks Query Monitor's admin-bar link to open its panel unless Query Monitor already remembers an open panel (its link is a toggle); Code Profiler opens `admin.php?page=code-profiler` (`code-profiler-pro` when only the Pro ZIP is in the setup) with `techies-check=code-profiler`, where the must-use plugin clears Query Monitor's remembered panel so it does not cover the profiler.
+- Licenses, followed after a fill by `· N of M active` (also announced politely to screen readers). Below the `sm` breakpoint the Licenses, Checks, Export snapshot and Updates buttons show only their icons (their names stay for screen readers) and the fill shows as `N/M`, so Close stays on screen on a phone.
+- Checks (`src/ChecksPanel.jsx`), only when a check is in the launched setup; disabled until setup finishes. It shows a spinner and `running…` while the checks run, `could not run` after an error, `activate licenses first` while the licence gate is closed and no run has finished, and after a run the verdict's short form in its colour (teal `N passed`, amber `N warnings`, red `N failed`; only the icon and number below `sm`). It toggles the Checks panel (`aria-expanded`, `aria-controls`).
 - Export snapshot.
-- Update all.
+- Updates (`src/UpdatesControl.jsx`): `Updating…` with a spinner while step 11b runs; then `Updated: <first change> +N` (the count alone up to 1040 px wide), `Update failed: <names>`, `Up to date`, `Updates · networking blocked` or `Updates · failed`. Disabled until there is something to show. It opens an anchored note (`role=dialog`, **Updated at start** and the time): every change as old → new version, each failure with its message, or `No plugin or theme had an update.`, then `Already current:` with names and versions. Escape (focus back to Updates), a click outside, or a click inside WordPress (the window loses focus) closes it; below `sm` it is anchored to the viewport.
 - Close.
 
-Snapshot and update actions remain disabled until package setup completes.
+A polite live region on the bar announces the updates (`updatesAnnouncement`) and the checks (`checksAnnouncement`) as they start and finish. The snapshot action remains disabled until package setup completes.
+
+The **Checks panel** is a complementary region over the right edge of the WordPress frame (`min(25rem, 100%)` wide, full width on a phone), focused when it opens. Its header shows **Checks**, the measured page's title and time, **Run checks** / **Run again** / **Running…** (`aria-disabled` while running) and a close button. A live verdict box follows: `All N checks passed` / `N checks need a look` / `N checks failed` with `passed · warnings · failed · took N s`, an error with its message, or, before any run, **Activate licenses first** with `N of M active. Activate them in WordPress, then run the checks.` while the gate is closed (the gate is not re-read after launch, so a licence activated later inside WordPress does not start the checks), else **Not run yet**. Four tiles show page time, memory, database queries and PHP errors (`–` until a run finishes; two columns below 400 px). Failed and Warnings groups list their checks first; passed checks fold into a **Passed N** line. Each check is a row (status icon, name, value, chevron) that opens to its details, PHP error lines (`Warning: message`, `file, line N`) and **Open in Query Monitor** / **Open in Code Profiler**. Open in reloads the frame at `checkResultsPath`: Query Monitor's current page with `techies-check=query-monitor`, where the checks must-use plugin clicks Query Monitor's admin-bar link to open its panel unless Query Monitor already remembers an open panel (its link is a toggle); Code Profiler's `admin.php?page=code-profiler` (`code-profiler-pro` when only the Pro ZIP is in the setup) with `techies-check=code-profiler`, where the must-use plugin clears Query Monitor's remembered panel so it does not cover the profiler. Below 640 px the panel closes first so the page is visible. Escape closes the Updates note first, then the panel (focus back to Checks); it does nothing while the Licenses manager is open.
+
+A run loads the frame's current page once more with `techies-measure=1` through the Playground client (it shares the frame's login). The measure must-use plugin counts that request's queries, slow queries and duplicates, PHP errors (respecting `@`), calls to other sites (host and status only), memory against the limit, page time and each plugin's load time, and appends them as one base64 JSON comment. It never returns SQL, full call addresses or more than 200 characters of an error message. `evaluateChecks` turns the numbers into checks against `CHECK_LIMITS`:
+
+| Check | Tool | Warn | Fail |
+| --- | --- | --- | --- |
+| PHP errors | Query Monitor | any notice or deprecation | any error or warning |
+| Slow queries | Query Monitor | any query over 0.05 s | – |
+| Calls to other sites | Query Monitor | any call that failed or answered 400+ | – |
+| Duplicate queries | Query Monitor | more than 10 | – |
+| Database queries | Query Monitor | more than 100 | – |
+| Memory | Query Monitor | over 75% of the limit | over 90% |
+| Page time | Query Monitor | over 1 s | over 3 s |
+| Slowest plugin | Code Profiler | one plugin loading in over 0.5 s | – |
+
+A run that finishes after the site closed or relaunched is dropped.
 
 Internal Ctrl/Cmd-click, middle-click, Shift-click, `_blank` links and direct script-opened scoped URLs open a separate preview tab on the launcher origin. This tab embeds the existing running site and preserves the full path, query and fragment, including preview parameters. It displays a compact reminder to keep the original Playground tab open (4 px vertical padding, 29 px tall when the text fits on one line). Closing the original session replaces the preview with an unavailable message; preview links do not recreate a site or transfer a site to another browser. Native context-menu links and scripts that navigate an initially empty popup remain limitations.
 
@@ -156,7 +176,7 @@ Closing a running temporary environment first asks **Discard this temporary site
 
 Export snapshot downloads `<normalized-recipe-name>-wp-content.zip` using Playground's `zipWpContent` helper.
 
-Update all executes WordPress PHP that refreshes plugin and theme update transients, invokes core upgraders for every available update, reports updated and failed package names, cleans caches, and returns to `/wp-admin/plugins.php`. Vendor updates work only when the plugin supplies an updater and any required license is active inside WordPress.
+Updates at start (step 11b) reach a premium plugin only when it supplies its own updater and its licence is active inside WordPress.
 
 ## 7. Encrypted license manager
 
@@ -201,7 +221,7 @@ A rebuild is not equivalent until it passes the automated contracts and manually
 - History retention/deduplication and snapshot export.
 - Temporary close/unload warnings.
 - License vault create, lock, unlock, copy, delete, reset, and incorrect-password handling without secret leakage.
-- One-click Start of a saved recipe, Add key from Choose plugins, one unlock per session, automatic fill into a Freemius plugin, and the Checks menu opening Query Monitor and Code Profiler results.
+- One-click Start of a saved recipe, Add key from Choose plugins, one unlock per session, automatic fill into a Freemius plugin, plugins updated at start with the old → new note, checks that run by themselves only when the licences are active, and the Checks panel opening Query Monitor and Code Profiler results.
 - Responsive and keyboard-accessible UI at 320 px, tablet, and desktop widths.
 
 ## Recipe URL security (0.7.1)
