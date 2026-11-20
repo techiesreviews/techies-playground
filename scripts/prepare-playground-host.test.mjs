@@ -8,9 +8,11 @@ import {
   isKept,
   isLauncherFrame,
   parseArguments,
+  pointWpCliAtHost,
   preparePlaygroundHost,
   removeCachedWebsitePages,
   withLauncherGuard,
+  wpCliFromHostPlugin,
 } from './prepare-playground-host.mjs'
 
 const offered = new Set(['7.4', '8.0', '8.1', '8.2', '8.3', '8.4', '8.5'])
@@ -213,6 +215,32 @@ test('headers allow framing only by the launcher and cache hashed assets for a y
   assert.match(headers, /\n\/wp-6\.9\/\*\n {2}Cache-Control: public, max-age=3600\n/)
   assert.match(headers, /\n\/wp-7\.1\/\*\n {2}Cache-Control: public, max-age=3600\n/)
   assert.doesNotMatch(headers, /Cross-Origin-(Opener|Embedder)-Policy/)
+  // WP-CLI comes from the host, and the launcher's page may be the one that downloads it.
+  assert.match(headers, /\n\/wp-cli\.phar\n {2}Access-Control-Allow-Origin: \*\n/)
+})
+
+test('WP-CLI downloads from the Playground host instead of playground.wordpress.net', () => {
+  const upstream = 'const r = {\n  url: "https://playground.wordpress.net/wp-cli.phar"\n}, e = \'https://playground.wordpress.net/wp-cli.phar\';'
+  // The client runs in the launcher's page, so it finds the host from its own file's URL.
+  assert.deepEqual(pointWpCliAtHost(upstream, { module: true }), {
+    source: 'const r = {\n  url: new URL("/wp-cli.phar", import.meta.url).href\n}, e = new URL("/wp-cli.phar", import.meta.url).href;',
+    count: 2,
+  })
+  // Everything else runs on the host's own origin (its frame, workers and service worker),
+  // and some of those files are not modules.
+  assert.equal(pointWpCliAtHost(upstream).source.match(/new URL\("\/wp-cli\.phar", self\.location\.href\)\.href/g).length, 2)
+  // Other playground.wordpress.net mentions, such as the allowed origins, stay.
+  const other = 'const Ul = "https://playground.wordpress.net"; // playground.wordpress.net supports compression'
+  assert.deepEqual(pointWpCliAtHost(other), { source: other, count: 0 })
+})
+
+test('the launcher bundle names the Playground host copy of WP-CLI too', () => {
+  const plugin = wpCliFromHostPlugin('https://preview-wp.techies.tools')
+  assert.deepEqual(
+    plugin.transform('const e = { url: "https://playground.wordpress.net/wp-cli.phar" };', 'node_modules/@wp-playground/blueprints/index.js'),
+    { code: 'const e = { url: "https://preview-wp.techies.tools/wp-cli.phar" };', map: null },
+  )
+  assert.equal(plugin.transform('const a = 1', 'src/App.jsx'), null)
 })
 
 test('rejects launcher origins that are not plain HTTPS origins, except local development', () => {
@@ -306,6 +334,33 @@ test('prepares a trimmed host folder and splits files above the per-file limit',
   assert.match(headers, /\n\/wp-beta\/\*\n/)
   assert.equal(result.fileCount, 11)
   assert.deepEqual(result.split, ['/wp-7.1/wordpress-static.zip'])
+})
+
+test('points every Playground script at the host copy of WP-CLI', async (t) => {
+  const { root, source, out } = await fixture()
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const link = '{url:"https://playground.wordpress.net/wp-cli.phar"}'
+  await mkdir(path.join(source, 'client'), { recursive: true })
+  await writeFile(path.join(source, 'client/index-A.js'), `export const r=${link}`)
+  await writeFile(path.join(source, 'sw.js'), `const r=${link}`)
+  await writeFile(path.join(source, 'wp-cli.phar'), 'phar')
+
+  const result = await preparePlaygroundHost({ source, out, launcherOrigins: ['https://play.techies.tools'], phpVersions: offered })
+
+  assert.equal(await readFile(path.join(out, 'client/index-A.js'), 'utf8'), 'export const r={url:new URL("/wp-cli.phar", import.meta.url).href}')
+  assert.equal(await readFile(path.join(out, 'sw.js'), 'utf8'), 'const r={url:new URL("/wp-cli.phar", self.location.href).href}')
+  assert.equal(await readFile(path.join(out, 'wp-cli.phar'), 'utf8'), 'phar')
+  assert.deepEqual(result.wpCliLinks, ['client/index-A.js', 'sw.js'])
+})
+
+test('refuses a host build that points WP-CLI at a file it does not have', async (t) => {
+  const { root, source, out } = await fixture()
+  t.after(() => rm(root, { recursive: true, force: true }))
+  await writeFile(path.join(source, 'sw.js'), 'const r={url:"https://playground.wordpress.net/wp-cli.phar"}')
+  await assert.rejects(
+    preparePlaygroundHost({ source, out, launcherOrigins: ['https://play.techies.tools'], phpVersions: offered }),
+    /wp-cli\.phar/,
+  )
 })
 
 test('refuses a host folder with more files than Cloudflare allows', async (t) => {
