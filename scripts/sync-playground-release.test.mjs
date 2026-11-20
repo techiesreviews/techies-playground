@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import {
   findMissingReleaseParts,
+  formatSyncOutputs,
   getNextPatchVersion,
   getPinnedPlaygroundVersion,
   preparePlaygroundSync,
@@ -43,6 +44,20 @@ test('reads the exact Playground release the launcher and host are built from', 
 test('bumps the app patch version', () => {
   assert.equal(getNextPatchVersion('0.10.4'), '0.10.5')
   assert.throws(() => getNextPatchVersion('0.10'), /Invalid application version/)
+})
+
+test('writes the workflow outputs for a new release and for no change', () => {
+  assert.equal(
+    formatSyncOutputs(
+      { changed: true, playgroundVersion: '3.1.65', appVersion: '0.10.5', droppedOverrides: ['isomorphic-git', 'sharp'] },
+      { previousVersion: '3.1.64', appVersion: '0.10.4' },
+    ),
+    'changed=true\nplayground_version=3.1.65\nprevious_version=3.1.64\napp_version=0.10.5\ndropped_overrides=isomorphic-git sharp\n',
+  )
+  assert.equal(
+    formatSyncOutputs({ changed: false, playgroundVersion: '3.1.64' }, { previousVersion: '3.1.64', appVersion: '0.10.4' }),
+    'changed=false\nplayground_version=3.1.64\nprevious_version=3.1.64\napp_version=0.10.4\ndropped_overrides=\n',
+  )
 })
 
 test('does nothing when the pinned release is the newest one', () => {
