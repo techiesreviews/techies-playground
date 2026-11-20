@@ -326,7 +326,7 @@ export function createRunGuard() {
   }
 }
 
-export const formatSeconds =(seconds) => `${seconds < 10 ? seconds.toFixed(2) : seconds.toFixed(1)} s`
+export const formatSeconds = (seconds) => `${seconds < 10 ? seconds.toFixed(2) : seconds.toFixed(1)} s`
 const formatMegabytes = (bytes) => `${Math.round(bytes / 1048576)} MB`
 const ERROR_KINDS = [['error', 'error'], ['warning', 'warning'], ['notice', 'notice'], ['deprecated', 'deprecation notice']]
 
