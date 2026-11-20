@@ -105,6 +105,55 @@ foreach ( is_array( $requested ) ? $requested : array() as $folder => $key ) {
 echo "\\n${LICENSE_FILL_MARKER}" . wp_json_encode( $results );
 `
 
+// Premium builds of Freemius plugins that cannot use their premium code yet: a licence the
+// setup needs, even when no key was saved for it. Free builds ship the Freemius SDK too, and
+// is_premium() is false there, so they never count.
+export const UNLICENSED_PREMIUM_MARKER = 'TECHIES_UNLICENSED_PREMIUM:'
+
+export const UNLICENSED_PREMIUM_CODE = `<?php
+define( 'WP_ADMIN', true );
+require '/wordpress/wp-load.php';
+wp_set_current_user( 1 );
+
+$folders = array();
+foreach ( class_exists( 'Freemius' ) ? Freemius::_get_all_instances() : array() as $fs ) {
+	if ( ! $fs->is_plugin() || ! method_exists( $fs, 'is_premium' ) || ! method_exists( $fs, 'can_use_premium_code' ) ) {
+		continue;
+	}
+	if ( $fs->is_premium() && ! $fs->can_use_premium_code() ) {
+		$folders[] = dirname( $fs->get_plugin_basename() );
+	}
+}
+
+echo "\\n${UNLICENSED_PREMIUM_MARKER}" . wp_json_encode( $folders );
+`
+
+export function parseUnlicensedPremium(text) {
+  const index = typeof text === 'string' ? text.lastIndexOf(UNLICENSED_PREMIUM_MARKER) : -1
+  if (index < 0) throw new Error('WordPress did not report the premium plugins.')
+  const parsed = JSON.parse(text.slice(index + UNLICENSED_PREMIUM_MARKER.length).split(/\r?\n/, 1)[0])
+  return (Array.isArray(parsed) ? parsed : []).filter((folder) => typeof folder === 'string' && FOLDER.test(folder) && !/^\.+$/.test(folder))
+}
+
+// A failed probe never fails the launch; the checks then wait only for the saved keys.
+export async function findUnlicensedPremium({ client, signal }) {
+  try {
+    const response = await untilAborted(client.run({ code: UNLICENSED_PREMIUM_CODE }), signal)
+    return parseUnlicensedPremium(response.text)
+  } catch (caught) {
+    if (caught?.name === 'AbortError') throw caught
+    return []
+  }
+}
+
+// The launched plugins whose licences the checks wait for: each one with a saved key, then
+// each premium plugin that cannot use its premium code, by its folder.
+export function licensesNeeded(savedKeyIds, premiumFolders, folders) {
+  const premium = new Set(premiumFolders)
+  const premiumIds = [...folders].filter(([id, folder]) => premium.has(folder) && !savedKeyIds.includes(id)).map(([id]) => id)
+  return [...savedKeyIds, ...premiumIds]
+}
+
 export function licenseFillLabel({ status, message }) {
   if (status === 'active') return { tone: 'ok', text: 'Already active in this site' }
   if (status === 'activated') return { tone: 'ok', text: 'Filled in and active' }

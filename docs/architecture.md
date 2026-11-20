@@ -32,7 +32,7 @@ There is no application server or shared data store.
 | `src/lib/vault.js` | IndexedDB plugin/theme ZIP CRUD and ZIP signature check. | App. |
 | `src/lib/license-vault.js` | IndexedDB encrypted license CRUD, PBKDF2 derivation, AES-GCM, clipboard copy, decrypting the newest key per package for the automatic fill. | `LicenseManager`, Add key and launch in App. |
 | `src/lib/vault-session.js` | The unlocked vault key for the page session, its listeners, and a launch's wait for an unlock, skip or close. | App, LicenseManager, Add key. |
-| `src/lib/license-fill.js` | The PHP that hands saved keys to Freemius-based plugins (keys only in the request body), its request body, result parsing and labels, and the fill run (vault key and key reader passed in). | App launch. |
+| `src/lib/license-fill.js` | The PHP that hands saved keys to Freemius-based plugins (keys only in the request body), its request body, result parsing and labels, and the fill run (vault key and key reader passed in); the probe for premium Freemius plugins without a licence and the list of licences the checks wait for. | App launch. |
 | `src/lib/checks.js` | Which checks a recipe contains, adding one, where its results open, the checks and measure must-use plugins, reading one page's numbers, `CHECK_LIMITS`, the licence gate, and turning numbers into checks, verdict and announcement. | App, ChecksPanel, regression tests (which run the measure plugin in PHP 8.3). |
 | `src/lib/saved-recipes.js` | Parse, validate, upsert, rename-replace, and serialize saved recipes. | App. |
 | `src/lib/spinup-history.js` | Safe history normalization, cap, and persisted-environment deduplication. | App. |
@@ -81,7 +81,7 @@ Recipe + local package IDs
   -> run the checks once when checks are in the setup and every needed licence is active
 ```
 
-The checks and the updates write only to their own state (`checksRun`, `pluginUpdates`); a result that arrives after the site closed or relaunched is dropped (`launchIdRef` for the updates, the client in `clientRef` for a check run). `licensedPackageIds` keeps which plugins needed a licence at launch, so the gate stays closed after Start without keys.
+The checks and the updates write only to their own state (`checksRun`, `pluginUpdates`); a result that arrives after the site closed or relaunched is dropped (`launchIdRef` for the updates, the client in `clientRef` for a check run). `licensedPackageIds` keeps which plugins needed a licence at launch (saved-key plugins, then premium Freemius plugins that cannot use their premium code), so the gate stays closed after Start without keys.
 
 Directory packages are included as Blueprint resource steps. Local packages cannot be embedded in a serializable recipe, so they are installed after the client is ready using their IndexedDB `File` objects.
 

@@ -105,8 +105,10 @@ import {
 import {
   fillResultRecordId,
   fillSavedLicenseKeys,
+  findUnlicensedPremium,
   licenseFillLabel,
   licenseFillSummary,
+  licensesNeeded,
   packagesWithSavedKeys,
   pluginFolderFromAssetPath,
 } from './lib/license-fill'
@@ -2646,6 +2648,15 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
         setLicenseFill(licenseResults)
       }
 
+      // A premium plugin without a saved key needs its licence before the checks too.
+      let checksLicenseIds = neededLicenseIds
+      if (checksInSetup(launchedRecipe).length) {
+        const premiumFolders = await findUnlicensedPremium({ client, signal: launchAbort.signal })
+        if (launchId !== launchIdRef.current) return
+        checksLicenseIds = licensesNeeded(neededLicenseIds, premiumFolders, pluginFolders)
+        setLicensedPackageIds(checksLicenseIds)
+      }
+
       // After the licenses, so premium plugins can reach their own update servers. A failed
       // update never fails the launch: the bar shows it instead.
       if (launchedRecipe.networking) {
@@ -2670,7 +2681,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
         ? { ...launchedRecipe, wordpress: launchedWordPressVersion }
         : launchedRecipe
       setSpinupHistory((current) => appendSpinup(current, { recipe: historyRecipe, plugins: installedPlugins, theme: installedTheme }))
-      if (checksInSetup(launchedRecipe).length && checksGate(neededLicenseIds, licenseResults).ready) runChecks(client)
+      if (checksInSetup(launchedRecipe).length && checksGate(checksLicenseIds, licenseResults).ready) runChecks(client)
     } catch (caught) {
       if (launchId !== launchIdRef.current) return
       stopPreviewSessionRef.current?.()

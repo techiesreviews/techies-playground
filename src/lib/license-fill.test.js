@@ -9,6 +9,7 @@ import {
   parseLicenseFillResult,
   pluginFolderFromAssetPath,
 } from './license-fill.js'
+import * as licenseFill from './license-fill.js'
 
 test('finds the plugin folder from the installed asset path', () => {
   assert.equal(pluginFolderFromAssetPath('/wordpress/wp-content/plugins/menu-image'), 'menu-image')
@@ -60,6 +61,34 @@ test('summarises how many keys went in', () => {
   assert.equal(licenseFillSummary([]), '')
   assert.equal(licenseFillSummary([{ status: 'activated' }, { status: 'active' }]), '2 of 2 active')
   assert.equal(licenseFillSummary([{ status: 'activated' }, { status: 'rejected' }, { status: 'not-freemius' }]), '1 of 3 active')
+})
+
+test('reads the premium plugin folders after the marker and keeps valid names only', () => {
+  const { parseUnlicensedPremium } = licenseFill
+  assert.deepEqual(parseUnlicensedPremium('notice\nTECHIES_UNLICENSED_PREMIUM:["wsal-premium","../x","",7]\n'), ['wsal-premium'])
+  assert.throws(() => parseUnlicensedPremium('no marker'), /did not report/)
+})
+
+test('the checks wait for saved-key plugins and for premium plugins without a licence', () => {
+  const { licensesNeeded } = licenseFill
+  const folders = new Map([['wsal', 'wsal-premium'], ['menu-image', 'menu-image'], ['free', 'free-plugin']])
+  assert.deepEqual(licensesNeeded(['menu-image'], ['wsal-premium'], folders), ['menu-image', 'wsal'])
+  assert.deepEqual(licensesNeeded(['wsal'], ['wsal-premium'], folders), ['wsal'])
+  assert.deepEqual(licensesNeeded([], [], folders), [])
+  assert.deepEqual(licensesNeeded([], ['not-launched'], folders), [])
+})
+
+test('finds the unlicensed premium plugins through one PHP run, and none when that run fails', async () => {
+  const { findUnlicensedPremium, UNLICENSED_PREMIUM_CODE } = licenseFill
+  const runs = []
+  const client = { async run(request) { runs.push(request); return { text: 'TECHIES_UNLICENSED_PREMIUM:["wsal-premium"]' } } }
+  const signal = new AbortController().signal
+  assert.deepEqual(await findUnlicensedPremium({ client, signal }), ['wsal-premium'])
+  assert.deepEqual(runs, [{ code: UNLICENSED_PREMIUM_CODE }])
+  assert.deepEqual(await findUnlicensedPremium({ client: { async run() { throw new Error('PHP crashed') } }, signal }), [])
+  const aborted = new AbortController()
+  aborted.abort()
+  await assert.rejects(findUnlicensedPremium({ client: { run: () => new Promise(() => {}) }, signal: aborted.signal }), { name: 'AbortError' })
 })
 
 test('names each fill result in plain words', () => {

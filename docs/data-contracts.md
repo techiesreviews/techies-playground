@@ -145,6 +145,10 @@ OPFS contains the WordPress filesystem and SQLite-backed site state. It is disti
 
 `theme` may be `null`. No `file`, ciphertext, plaintext secret, WordPress database, or arbitrary runtime output belongs here.
 
+## Premium plugins without a licence
+
+When checks are in the setup, `UNLICENSED_PREMIUM_CODE` (`src/lib/license-fill.js`) runs once per launch after the key fill and prints one line that starts with `TECHIES_UNLICENSED_PREMIUM:` followed by a JSON list of plugin folder names, for example `["wsal-premium"]`: each Freemius plugin whose premium build cannot use its premium code yet. It carries no key or licence data. The launcher keeps only names that are valid folder names; the list lives in memory for the launch (`licensedPackageIds`) and is not stored.
+
 ## Plugin updates at start
 
 `PLUGIN_UPDATES_CODE` (`src/lib/plugin-updates.js`) runs once per launch through `client.run` and prints one line that starts with `PLAYGROUND_UPDATES:` followed by JSON:
