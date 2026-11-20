@@ -88,7 +88,7 @@ jobs:
             --mount type=tmpfs,destination=/work/.git \
             --workdir /work \
             node:24-bookworm@sha256:9d266751ca3d7fdbe651c878ffd5ad0a42fed49a18c283509267c97f025b7496 \
-            bash -ec 'npm test; npm run build; npm audit --audit-level=high; node scripts/playground-boot-test.mjs'
+            bash -ec 'npm test; npm run build; npm audit --audit-level=high; node scripts/playground-boot-check.mjs'
 
       - name: Upload the update
         if: steps.sync.outputs.changed == 'true'
@@ -174,9 +174,13 @@ jobs:
           # example); the daily run then leaves the branch and its pull request text alone.
           # git ls-remote exits 2 when the branch does not exist; any other failure stops
           # the job rather than risk overwriting someone's fix.
+          # The push replaces only the commit checked here (or creates the branch only if it
+          # still does not exist), so a fix pushed meanwhile makes the push fail instead.
           left_alone=""
+          checked_tip=""
           if git ls-remote --exit-code --heads origin "refs/heads/${branch}" > /dev/null; then
             git fetch --no-tags origin "refs/heads/${branch}"
+            checked_tip="$(git rev-parse FETCH_HEAD)"
             if ! tip_is_bot; then
               left_alone="yes"
               echo "::notice::${branch} has a commit written or changed by $(git log -1 --format='%ae / %ce' FETCH_HEAD); the branch and its pull request text are left as they are."
@@ -189,7 +193,7 @@ jobs:
             fi
           fi
           if [ -z "$left_alone" ]; then
-            git push --force origin "$branch"
+            git push --force-with-lease="refs/heads/${branch}:${checked_tip}" origin "$branch"
           fi
 
           dropped=""

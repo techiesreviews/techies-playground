@@ -27,7 +27,7 @@ test('the Playground sync runs daily from dev and checks an update fully before 
     'npm test',
     'npm run build',
     'npm audit --audit-level=high',
-    'node scripts/playground-boot-test.mjs',
+    'node scripts/playground-boot-check.mjs',
   ])
   assert.match(steps['Save the update as a patch'] ?? '', /\n {10}git diff --check\n/)
   assert.match(steps['Check Playground security advisories'] ?? '', /run: node scripts\/check-playground-advisories\.mjs\n/)
@@ -57,7 +57,7 @@ test('the Playground sync runs the new packages without a token that can write',
   assert.ok(names.indexOf('Save the update as a patch') < names.indexOf(verifyName))
   assert.ok(names.indexOf(verifyName) < names.indexOf('Upload the update'))
   for (const [name, step] of Object.entries(steps)) {
-    if (name !== verifyName) assert.doesNotMatch(step, /npm (?:test|run build)|playground-boot-test/, `${name} runs no new package code`)
+    if (name !== verifyName) assert.doesNotMatch(step, /npm (?:test|run build)|playground-boot-check/, `${name} runs no new package code`)
   }
   const verify = steps[verifyName]
   assert.match(verify, /docker run --rm \\\n/)
@@ -106,9 +106,13 @@ test('the Playground sync keeps one update pull request into dev and never goes 
   assert.match(open, /--state closed[^\n]*\n\s+if \[ -n "\$closed_pr" \]; then\n[^\n]*\n\s+exit 0\n/)
   // A fix someone added to the branch is kept, along with the pull request text, and a
   // failure to read the branch stops the job instead of pushing over it.
-  assert.match(open, /if git ls-remote --exit-code --heads origin "refs\/heads\/\$\{branch\}" > \/dev\/null; then\n\s+git fetch --no-tags origin "refs\/heads\/\$\{branch\}"\n\s+if ! tip_is_bot; then\n\s+left_alone="yes"\n/)
+  assert.match(open, /if git ls-remote --exit-code --heads origin "refs\/heads\/\$\{branch\}" > \/dev\/null; then\n\s+git fetch --no-tags origin "refs\/heads\/\$\{branch\}"\n\s+checked_tip="\$\(git rev-parse FETCH_HEAD\)"\n\s+if ! tip_is_bot; then\n\s+left_alone="yes"\n/)
   assert.match(open, /if \[ "\$status" -ne 2 \]; then\n[^\n]*\n\s+exit 1\n/)
-  assert.match(open, /if \[ -z "\$left_alone" \]; then\n\s+git push --force origin "\$branch"\n/)
+  // A fix pushed between that check and the push makes the push fail: it replaces only
+  // the commit it checked, or creates the branch only if it still does not exist.
+  assert.match(open, /\n\s+checked_tip=""\n/)
+  assert.match(open, /if \[ -z "\$left_alone" \]; then\n\s+git push --force-with-lease="refs\/heads\/\$\{branch\}:\$\{checked_tip\}" origin "\$branch"\n/)
+  assert.doesNotMatch(open, /git push --force /)
   assert.match(open, /elif \[ -z "\$left_alone" \]; then\n\s+gh pr edit /)
   assert.doesNotMatch(open, /2>\/dev\/null/)
   // Only the three files the sync edits reach the branch.

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Fails when a published security advisory covers a WordPress Playground package the
-// launcher installs. The self-hosted Playground on wp.techies.tools is built from the
-// same release as those packages, so this covers the host too. It reads two sources:
+// launcher installs, or one the self-hosted Playground on wp.techies.tools ships: it is
+// built from the same release, at the pinned version (HOST_PACKAGES). It reads two sources:
 // GitHub's advisory database (reviewed and unreviewed npm advisories) and the advisories
 // WordPress/wordpress-playground publishes in its own repository.
 //
@@ -9,9 +9,12 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { compareVersions } from './sync-playground-release.mjs'
+import { compareVersions, getPinnedPlaygroundVersion } from './sync-playground-release.mjs'
 
 const PLAYGROUND_PACKAGE = /(?:^|\/)node_modules\/(@(?:wp-playground|php-wasm)\/[^/]+)$/
+// Packages the self-hosted Playground ships that the launcher's lockfile does not install
+// (the client loads from the host, which runs the remote page and PHP in the browser).
+export const HOST_PACKAGES = ['@php-wasm/web', '@wp-playground/client', '@wp-playground/remote']
 // An operator is optional (a bare version means "= version"); a pre-release or build
 // suffix on a bound counts as its release.
 const COMPARATOR = /^(<=|>=|<|>|=)?\s*v?(\d+(?:\.\d+)*)(?:[-+][0-9A-Za-z.-]+)?$/
@@ -48,7 +51,16 @@ export function listPlaygroundPackages(lockDocument) {
     const name = PLAYGROUND_PACKAGE.exec(location)?.[1]
     if (name && entry.version) found.set(`${name}@${entry.version}`, { name, version: entry.version })
   }
-  return [...found.values()].sort((left, right) => left.name.localeCompare(right.name) || compareVersions(left.version, right.version))
+  return sortPackages(found)
+}
+
+const sortPackages = (found) => [...found.values()].sort((left, right) => left.name.localeCompare(right.name) || compareVersions(left.version, right.version))
+
+// The installed packages plus HOST_PACKAGES at the version the host is built from.
+export function addHostPackages(installed, hostVersion) {
+  const found = new Map(installed.map((entry) => [`${entry.name}@${entry.version}`, entry]))
+  for (const name of HOST_PACKAGES) found.set(`${name}@${hostVersion}`, { name, version: hostVersion })
+  return sortPackages(found)
 }
 
 export function findAffectingAdvisories(advisories, installed) {
@@ -84,8 +96,10 @@ async function fetchAdvisories(url) {
 
 async function main() {
   const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-  const installed = listPlaygroundPackages(JSON.parse(await readFile(path.join(repositoryRoot, 'package-lock.json'), 'utf8')))
-  if (!installed.length) throw new Error('package-lock.json installs no Playground packages.')
+  const launcher = listPlaygroundPackages(JSON.parse(await readFile(path.join(repositoryRoot, 'package-lock.json'), 'utf8')))
+  if (!launcher.length) throw new Error('package-lock.json installs no Playground packages.')
+  const hostVersion = getPinnedPlaygroundVersion(JSON.parse(await readFile(path.join(repositoryRoot, 'package.json'), 'utf8')))
+  const installed = addHostPackages(launcher, hostVersion)
 
   const advisories = await fetchAdvisories(`https://api.github.com/repos/${UPSTREAM_REPOSITORY}/security-advisories?state=published&per_page=100`)
   for (let index = 0; index < installed.length; index += PACKAGES_PER_REQUEST) {
@@ -98,7 +112,7 @@ async function main() {
   const found = findAffectingAdvisories(advisories, installed)
   const versions = [...new Set(installed.map(({ version }) => version))].join(', ')
   if (!found.length) {
-    console.log(`No published advisory covers the ${installed.length} Playground packages installed (${versions}).`)
+    console.log(`No published advisory covers the ${installed.length} Playground packages installed or served by the Playground host (${versions}).`)
     return
   }
   for (const advisory of found) {
