@@ -18,6 +18,29 @@ test('reads GitHub version ranges', () => {
   assert.throws(() => isInRange('3.1.64', '~3.1'), /version range/)
 })
 
+test('reads hand-written repository advisory ranges', () => {
+  // A bare version means that version only, and * means every version.
+  assert.equal(isInRange('3.1.64', '3.1.64'), true)
+  assert.equal(isInRange('3.1.65', '3.1.64'), false)
+  assert.equal(isInRange('3.1.64', '*'), true)
+  // A pre-release bound counts as its release.
+  assert.equal(isInRange('3.1.64', '< 3.1.65-rc.1'), true)
+  assert.equal(isInRange('3.1.65', '< 3.1.65-rc.1'), false)
+  assert.equal(isInRange('3.1.65', '>= 3.1.65-beta.2, < 3.1.66'), true)
+})
+
+test('names the advisory whose range it cannot read', () => {
+  const advisory = {
+    ghsa_id: 'GHSA-zzzz-zzzz-zzzz',
+    html_url: 'https://github.com/advisories/GHSA-zzzz-zzzz-zzzz',
+    vulnerabilities: [{ package: { ecosystem: 'npm', name: '@wp-playground/blueprints' }, vulnerable_version_range: '^3.1.0' }],
+  }
+  assert.throws(
+    () => findAffectingAdvisories([advisory], [{ name: '@wp-playground/blueprints', version: '3.1.64' }]),
+    /GHSA-zzzz-zzzz-zzzz .*"\^3\.1\.0".*github\.com\/advisories/,
+  )
+})
+
 test('lists every Playground package the lockfile installs, once per version', () => {
   const lock = {
     packages: {

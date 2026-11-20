@@ -264,6 +264,9 @@ export async function preparePlaygroundHost({
       }
     }
     if (size > fileSizeLimit) {
+      if (/\.m?js$/.test(file) && (await readFile(from, 'utf8')).search(UPSTREAM_WP_CLI) !== -1) {
+        throw new Error(`${file} is larger than the per-file limit and downloads WP-CLI from playground.wordpress.net; the host build only points smaller scripts at /${WP_CLI_FILE}.`)
+      }
       const parts = await splitFile(from, to, size, partSize)
       manifest[`/${file}`] = { size, parts: parts.map((index) => `/${file}.part${index}`) }
       fileCount += parts.length

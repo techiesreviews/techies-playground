@@ -147,6 +147,18 @@ async function fetchJson(url) {
 
 const registryUrl = (name, version) => `https://registry.npmjs.org/${name.replace('/', '%2F')}/${version}`
 
+// The step outputs sync-playground-release.yml reads (steps.sync.outputs.<name>).
+export function formatSyncOutputs(result, { previousVersion, appVersion }) {
+  return [
+    `changed=${result.changed}`,
+    `playground_version=${result.playgroundVersion}`,
+    `previous_version=${previousVersion}`,
+    `app_version=${result.appVersion || appVersion}`,
+    `dropped_overrides=${(result.droppedOverrides || []).join(' ')}`,
+    '',
+  ].join('\n')
+}
+
 async function hasTag(tag) {
   try {
     await promisify(execFile)('git', ['ls-remote', '--exit-code', '--tags', `https://github.com/${UPSTREAM_REPOSITORY}.git`, `refs/tags/${tag}`], { timeout: 60_000 })
@@ -197,21 +209,12 @@ async function main() {
     await writeFile(filenames.app, result.appSource)
     await writeFile(filenames.package, `${JSON.stringify(result.packageDocument, null, 2)}\n`)
     // Refreshes package-lock.json (and node_modules, for the checks that follow) from the
-    // new pins. Install scripts stay off, as in the rest of the pipeline's npm ci runs.
+    // new pins, without running the install scripts of the newly published packages.
     await promisify(execFile)('npm', ['install', '--ignore-scripts', '--no-audit', '--no-fund'], { cwd: repositoryRoot, timeout: 600_000 })
   }
 
   const output = process.env.GITHUB_OUTPUT
-  if (output) {
-    await writeFile(output, [
-      `changed=${result.changed}`,
-      `playground_version=${result.playgroundVersion}`,
-      `previous_version=${pinned}`,
-      `app_version=${result.appVersion || packageDocument.version}`,
-      `dropped_overrides=${(result.droppedOverrides || []).join(' ')}`,
-      '',
-    ].join('\n'), { flag: 'a' })
-  }
+  if (output) await writeFile(output, formatSyncOutputs(result, { previousVersion: pinned, appVersion: packageDocument.version }), { flag: 'a' })
   console.log(result.changed
     ? `Prepared Playground ${result.playgroundVersion} (from ${pinned}) as app ${result.appVersion}.${result.droppedOverrides.length ? ` Dropped overrides: ${result.droppedOverrides.join(', ')}.` : ''}`
     : `Playground ${pinned} is the newest complete release.`)

@@ -12,22 +12,34 @@ import { fileURLToPath } from 'node:url'
 import { compareVersions } from './sync-playground-release.mjs'
 
 const PLAYGROUND_PACKAGE = /(?:^|\/)node_modules\/(@(?:wp-playground|php-wasm)\/[^/]+)$/
-const COMPARATOR = /^(<=|>=|<|>|=)\s*(\d+(?:\.\d+)*)$/
+// An operator is optional (a bare version means "= version"); a pre-release or build
+// suffix on a bound counts as its release.
+const COMPARATOR = /^(<=|>=|<|>|=)?\s*v?(\d+(?:\.\d+)*)(?:[-+][0-9A-Za-z.-]+)?$/
 const UPSTREAM_REPOSITORY = 'WordPress/wordpress-playground'
 // Keeps each advisory database request well under URL length limits.
 const PACKAGES_PER_REQUEST = 20
 
 const stableVersion = (version) => version.split(/[-+]/)[0]
 
-// GitHub writes ranges as comma-separated comparators, such as ">= 3.0.0, < 3.1.65".
+// GitHub writes ranges as comma-separated comparators, such as ">= 3.0.0, < 3.1.65";
+// repository advisories are written by hand and may also say "3.1.64" or "*".
 export function isInRange(version, range) {
   const current = stableVersion(version)
+  if (range.trim() === '*') return true
   return range.split(',').map((part) => part.trim()).every((part) => {
     const match = COMPARATOR.exec(part)
     if (!match) throw new Error(`Unknown version range: ${range}`)
     const difference = compareVersions(current, match[2])
-    return { '<': difference < 0, '<=': difference <= 0, '>': difference > 0, '>=': difference >= 0, '=': difference === 0 }[match[1]]
+    return { '<': difference < 0, '<=': difference <= 0, '>': difference > 0, '>=': difference >= 0, '=': difference === 0 }[match[1] || '=']
   })
+}
+
+function advisoryCovers(advisory, version, range) {
+  try {
+    return isInRange(version, range)
+  } catch {
+    throw new Error(`Advisory ${advisory.ghsa_id} names a version range this check cannot read: "${range}". Read it at ${advisory.html_url} and update scripts/check-playground-advisories.mjs.`)
+  }
 }
 
 export function listPlaygroundPackages(lockDocument) {
@@ -45,7 +57,7 @@ export function findAffectingAdvisories(advisories, installed) {
     for (const vulnerability of advisory.vulnerabilities || []) {
       if (vulnerability.package?.ecosystem !== 'npm' || !vulnerability.vulnerable_version_range) continue
       for (const { name, version } of installed) {
-        if (vulnerability.package.name !== name || !isInRange(version, vulnerability.vulnerable_version_range)) continue
+        if (vulnerability.package.name !== name || !advisoryCovers(advisory, version, vulnerability.vulnerable_version_range)) continue
         found.set(`${advisory.ghsa_id} ${name}@${version}`, {
           id: advisory.ghsa_id,
           packageName: name,
