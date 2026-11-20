@@ -217,7 +217,7 @@ test('a range of a .gz file the target gzips again gives the bytes of the .gz fi
 
 // An uncompressed 1000-byte file in ten chunks of 100. The first request's chunks read are
 // counted in `read`; a later request (the proxy's own range request) gets `ranged(request)`.
-function chunkedFile(ranged) {
+function chunkedFile(ranged, validators = { ETag: '"v1"' }) {
   const file = Uint8Array.from({ length: 1000 }, (_, index) => index % 251)
   const read = { chunks: 0, cancelled: false }
   const upstream = recorder((request) => {
@@ -233,7 +233,7 @@ function chunkedFile(ranged) {
       cancel() {
         read.cancelled = true
       },
-    }), { headers: { 'Content-Type': 'application/zip', 'Content-Length': '1000', ETag: '"v1"' } })
+    }), { headers: { 'Content-Type': 'application/zip', 'Content-Length': '1000', ...validators } })
   })
   return { file, read, upstream }
 }
@@ -260,7 +260,7 @@ test('a range of an uncompressed file is sliced from the start of the file and s
 test('a range later in an uncompressed file comes from the target when it answers with exactly those bytes, and the whole file is not read', async () => {
   const { file, read, upstream } = chunkedFile((request, whole) => {
     const [, start, end] = request.headers.get('Range').match(/bytes=(\d+)-(\d+)/).map(Number)
-    return new Response(whole.slice(start, end + 1), { status: 206, headers: { 'Content-Range': `bytes ${start}-${end}/1000`, 'Content-Length': String(end - start + 1) } })
+    return new Response(whole.slice(start, end + 1), { status: 206, headers: { 'Content-Range': `bytes ${start}-${end}/1000`, 'Content-Length': String(end - start + 1), ETag: '"v1"' } })
   })
   const response = await handleCorsProxy(proxied('https://example.com/plugin.zip', { headers: { Range: 'bytes=-100' } }), { fetch: upstream.fetch })
   assert.equal(response.status, 206)
@@ -274,10 +274,12 @@ test('a range later in an uncompressed file comes from the target when it answer
 
 test('a range answer from the target that is compressed, of another size or not the asked bytes is not used', async () => {
   const wrong = [
-    (start, end, whole) => new Response(whole.slice(start, end + 1), { status: 206, headers: { 'Content-Range': `bytes ${start}-${end}/640` } }),
-    (start, end, whole) => new Response(whole.slice(start, end + 1), { status: 206, headers: { 'Content-Range': `bytes ${start}-${end}/1000`, 'Content-Encoding': 'gzip' } }),
-    (start, end, whole) => new Response(whole.slice(0, end - start + 1), { status: 206, headers: { 'Content-Range': `bytes 0-${end - start}/1000` } }),
-    (start, end, whole) => new Response(whole.slice(start, end + 1), { status: 206, headers: { 'Content-Range': `bytes ${start}-${end}/1000`, 'Content-Length': '7' } }),
+    (start, end, whole) => new Response(whole.slice(start, end + 1), { status: 206, headers: { 'Content-Range': `bytes ${start}-${end}/640`, ETag: '"v1"' } }),
+    (start, end, whole) => new Response(whole.slice(start, end + 1), { status: 206, headers: { 'Content-Range': `bytes ${start}-${end}/1000`, 'Content-Encoding': 'gzip', ETag: '"v1"' } }),
+    (start, end, whole) => new Response(whole.slice(0, end - start + 1), { status: 206, headers: { 'Content-Range': `bytes 0-${end - start}/1000`, ETag: '"v1"' } }),
+    (start, end, whole) => new Response(whole.slice(start, end + 1), { status: 206, headers: { 'Content-Range': `bytes ${start}-${end}/1000`, 'Content-Length': '7', ETag: '"v1"' } }),
+    (start, end) => new Response(new Uint8Array(end - start + 1).fill(98), { status: 206, headers: { 'Content-Range': `bytes ${start}-${end}/1000`, ETag: '"v2"' } }),
+    (start, end) => new Response(new Uint8Array(end - start + 1).fill(98), { status: 206, headers: { 'Content-Range': `bytes ${start}-${end}/1000` } }),
     () => { throw new TypeError('network') },
   ]
   for (const [index, answer] of wrong.entries()) {
@@ -306,6 +308,20 @@ test('an invalid range gets the whole file, and a range of an empty file gets 41
     assert.equal(response.headers.get('Content-Range'), contentRange, label)
     if (status === 200) assert.equal(await response.text(), body, label)
     assert.deepEqual(upstream.calls.map((call) => call.headers.get('Range')), [null], label)
+  }
+})
+
+test('a range later in a file without a strong ETag is cut from the whole file, with no range request', async () => {
+  // A file that changed in between, at the same size, would otherwise give its new bytes.
+  for (const validators of [{ ETag: 'W/"old"' }, { 'Last-Modified': 'Thu, 19 Nov 2026 10:00:00 GMT' }, {}]) {
+    const { file, upstream } = chunkedFile((request) => {
+      const [, start, end] = request.headers.get('Range').match(/bytes=(\d+)-(\d+)/).map(Number)
+      return new Response(new Uint8Array(end - start + 1).fill(98), { status: 206, headers: { 'Content-Range': `bytes ${start}-${end}/1000`, ETag: '"new"' } })
+    }, validators)
+    const response = await handleCorsProxy(proxied('https://example.com/plugin.zip', { headers: { Range: 'bytes=500-504' } }), { fetch: upstream.fetch })
+    const label = JSON.stringify(validators)
+    assert.deepEqual(new Uint8Array(await response.arrayBuffer()), file.slice(500, 505), label)
+    assert.equal(upstream.calls.length, 1, label)
   }
 })
 

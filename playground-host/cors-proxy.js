@@ -221,21 +221,23 @@ const wholeFile = (body) => new Response(capped(body, MAX_DECODED_RANGE_SOURCE))
 // The range straight from the target, so the Worker need not read every byte before it
 // (a ZIP reader asks for the end of the file first). Taken only when the target answers
 // with exactly the asked bytes of a file of the size the whole-file answer declared, not
-// compressed; otherwise null, and the range is cut from the whole file. The whole-file
-// answer's strong ETag or Last-Modified goes along as If-Range, so a file that changed in
-// between comes back whole (200) and is not used.
+// compressed; otherwise null, and the range is cut from the whole file. Only a whole-file
+// answer with a strong ETag is asked about: the ETag goes along as If-Range, so a file
+// that changed in between comes back whole (200), and the range answer must carry the
+// same ETag. Without one (weak, or only Last-Modified) nothing proves it is the same file.
 async function targetSlice(askRange, { start, end }, size, upstream) {
   const etag = upstream.headers.get('ETag')
-  const validator = etag && !etag.startsWith('W/') ? etag : upstream.headers.get('Last-Modified')
+  if (!etag || etag.startsWith('W/')) return null
   let response
   try {
-    response = await askRange(`bytes=${start}-${end}`, validator)
+    response = await askRange(`bytes=${start}-${end}`, etag)
   } catch {
     return null
   }
   const encoding = response.headers.get('Content-Encoding')
   const declared = response.headers.get('Content-Length')
   const exact = response.status === 206 && response.body
+    && response.headers.get('ETag') === etag
     && (!encoding || encoding.toLowerCase() === 'identity')
     && response.headers.get('Content-Range') === `bytes ${start}-${end}/${size}`
     && (declared === null || Number(declared) === end - start + 1)
@@ -369,11 +371,11 @@ export async function handleCorsProxy(request, { fetch: fetchImpl = fetch, limit
   let upstream
   // Asks the target for one range of the file (rangeAnswer); not after a redirect the
   // Worker followed itself, which keeps the whole-file cut.
-  let askRange = range && ((value, validator) => {
+  let askRange = range && ((value, etag) => {
     const ranged = new Headers(outgoing)
     ranged.set('Range', value)
     ranged.set('Accept-Encoding', 'identity')
-    if (validator) ranged.set('If-Range', validator)
+    ranged.set('If-Range', etag)
     return fetchImpl(target.href, { method: 'GET', headers: ranged, redirect: 'manual' })
   })
   try {
