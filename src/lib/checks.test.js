@@ -61,7 +61,7 @@ const encode = (value) => Buffer.from(JSON.stringify(value)).toString('base64')
 const MEASURED = {
   title: 'Dashboard', time: 0.62, memory: 44 * 1048576, memoryLimit: 256 * 1048576, queries: 36, queryTime: 0.025,
   slowQueries: 0, duplicates: 2, errorCounts: { error: 0, warning: 0, notice: 0, deprecated: 0 }, errors: [],
-  http: [], plugins: [{ name: 'WP 2FA', time: 0.05 }, { name: 'Query Monitor', time: 0.02 }],
+  calls: 0, failedCalls: 0, http: [], plugins: [{ name: 'WP 2FA', time: 0.05 }, { name: 'Query Monitor', time: 0.02 }],
 }
 
 test('reads the numbers the measure plugin appends to the page', async () => {

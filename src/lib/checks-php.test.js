@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { getPHPLoaderModule } from '@php-wasm/node-8-3'
 import { loadPHPRuntime, PHP } from '@php-wasm/universal'
-import { CHECKS_PLUGIN, MEASURE_MARKER, MEASURE_PLUGIN, parseMeasurement } from './checks.js'
+import { CHECKS_PLUGIN, MEASURE_MARKER, MEASURE_PLUGIN, evaluateChecks, parseMeasurement } from './checks.js'
 
 // Runs the checks must-use plugin in real PHP 8.3 with add_action stubbed, then fires the
 // head and footer hooks for one request's techies-check value.
@@ -78,6 +78,9 @@ trigger_error( 'file_get_contents(https://api.vendor.com/v1/check?license_key=SE
 $wpdb = new stdClass();
 $wpdb->num_queries = 3;
 $wpdb->queries = array( array( "SELECT * FROM wp_options WHERE option_value = 'SECRET-KEY-123'", 0.01 ), array( "SELECT * FROM wp_options WHERE option_value = 'SECRET-KEY-123'", 0.2 ), array( 'SELECT 1', 0.001 ) );
+for ( $call = 0; $call < (int) getenv( 'CALLS_BEFORE' ); $call++ ) {
+	do_action( 'http_api_debug', array( 'code' => 200 ), 'response', 'WpOrg\\\\Requests\\\\Requests', array(), 'https://api.wordpress.org/plugins/info/' );
+}
 do_action( 'http_api_debug', array( 'code' => 403 ), 'response', 'WpOrg\\\\Requests\\\\Requests', array(), 'https://api.freemius.com/v1/check?license_key=SECRET-KEY-123' );
 echo '<html>page</html>';
 do_action( 'shutdown' );
@@ -85,11 +88,11 @@ echo "\\nHOOKS:" . implode( ',', array_keys( $GLOBALS['actions'] ) );
 echo "\\nPREVIOUS:" . json_encode( $GLOBALS['previous'] );
 `
 
-async function measure(on, { front = false } = {}) {
+async function measure(on, { front = false, callsBefore = 0 } = {}) {
   const php = new PHP(await loadPHPRuntime(await getPHPLoaderModule()))
   php.writeFile('/measure.php', MEASURE_PLUGIN)
   php.writeFile('/harness.php', MEASURE_HARNESS)
-  const response = await php.run({ scriptPath: '/harness.php', env: { MEASURE: on ? '1' : '', FRONT: front ? '1' : '' } })
+  const response = await php.run({ scriptPath: '/harness.php', env: { MEASURE: on ? '1' : '', FRONT: front ? '1' : '', CALLS_BEFORE: String(callsBefore) } })
   assert.equal(response.errors, '', response.errors)
   return response.text
 }
@@ -123,6 +126,15 @@ test('the measure plugin reports counts and times, never a query or an address w
 test('the measure plugin sends a front-end page title as plain text', async () => {
   const report = parseMeasurement(await measure(true, { front: true }))
   assert.equal(report.title, 'Site – Tagline & more')
+})
+
+test('a failed call after the first 20 still counts', async () => {
+  const report = parseMeasurement(await measure(true, { callsBefore: 20 }))
+  assert.deepEqual([report.calls, report.failedCalls], [21, 1])
+  assert.deepEqual(report.http.at(-1), { host: 'api.freemius.com', code: 403 })
+  const calls = evaluateChecks(report, ['query-monitor']).checks.find((check) => check.id === 'outside-calls')
+  assert.equal(calls.value, '1 failed')
+  assert.match(calls.details, /^1 of 21 calls to other sites failed: api\.freemius\.com\./)
 })
 
 test('the measure plugin does nothing on a normal page', async () => {
