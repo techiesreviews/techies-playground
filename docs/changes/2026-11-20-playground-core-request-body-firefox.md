@@ -2,9 +2,9 @@
 
 - Date: 2026-11-20
 - Owner: Claude (Opus 5.5) for Lex
-- Status: complete locally; the first patched Playground build runs in CI on the next push to `dev`
+- Status: complete
 - Disposition: kept
-- Related version: unreleased (0.10.4 is current)
+- Related version: 0.10.5 (unreleased)
 - Related commit/issue: Orbit TOOLS-254 (follows TOOLS-252); follows [2026-11-15-freemius-activation-firefox.md](2026-11-15-freemius-activation-firefox.md)
 
 ## Context
@@ -57,6 +57,7 @@ Success: a browser run in Firefox and Chromium shows the proxy receiving the ful
 | Playwright 1.65.1: Firefox (build 1572), Chromium (build 1255); local echo proxy | `PLAYWRIGHT=… node docs/changes/2026-11-20-playground-core-request-body-firefox/proxy-retry-body.mjs <v3.1.64 checkout>`, unpatched. POST `plugin=not-freemius&licence_key=TEST-KEY-123` to `https://non-freemius.invalid/wp-json/example-plugin/v1/activate`, which fails directly, so it is retried through the proxy | Firefox loses the body | Firefox: all 4 cases "lost the body, proxy got """ (`fetchWithCorsProxy` with a Request, with URL and init; `RawBytesFetch` with `Expect: 100-continue`, with Content-Length and chunked); Chromium: all 4 kept the body; exit 1 | Terminal run, 2026-11-20 |
 | Same | Same script, checkout with the patch applied | Every case keeps the body | Firefox and Chromium: all 4 cases "kept the body"; "every request kept its body"; exit 0 | Terminal run, 2026-11-20 |
 | Not run | Upstream `npm run build:website` with the patch (the CI build takes up to an hour and needs more memory than the shared machine had free) | | Not run locally; the first patched build runs in the `playground-build` job on the next push to `dev`, which fails if the patch does not apply or its hash differs | |
+| Blobless sparse clone of `v3.1.64` and of `v3.0.0` (only `packages/php-wasm/web-service-worker` and `packages/php-wasm/web`) | The new sync step's commands: `git clone --branch v<version> --depth 1 --filter=blob:none --sparse`, `sparse-checkout set`, `git apply --check --verbose playground-host/playground-core.patch` | Passes on the release the patch was made for, fails on one it no longer fits | `v3.1.64`: exit 0; `v3.0.0`: exit 1, "tcp-over-fetch-websocket.spec.ts: No such file or directory" | Terminal run, 2026-11-20 |
 
 Not tested here: a real plugin's activation inside a running Playground in Firefox on the preview, and Safari. Safari's probe already fails, so its service-worker retry took the `arrayBuffer()` path before and still does. Its TCP bridge path does change: with the patch, `RawBytesFetch` buffers the body in Safari too instead of passing a stream, which is the path the Firefox runs above prove, but it was not run in Safari (no WebKit build was installed on the shared machine).
 
@@ -71,11 +72,12 @@ Kept. It fixes the body loss for every plugin in our build and costs one verifie
 ## Documentation impact
 
 - New: this record, its [evidence folder](2026-11-20-playground-core-request-body-firefox/) and the patch file with its own header.
-- `docs/testing.md` (the `deploy-workflow.test.mjs` row names the patch checks) and `docs/architecture.md` (the Freemius paragraph says our build now fixes the retry).
+- `docs/testing.md` (the `deploy-workflow.test.mjs` row names the patch checks; the `playground-release-workflows.test.mjs` row names the sync's patch check), `docs/architecture.md` (the Freemius paragraph says our build now fixes the retry; Build and delivery says the build applies the patch and the sync checks it first) and `docs/agents/kitchen-extras.md` (Playground sync bullet).
+- `.github/workflows/sync-playground-release.yml`: a daily Playground update stops before it opens a PR when the patch no longer applies to the new release, so a merged update cannot break every preview deploy.
 - Users will notice the fix in Firefox (plugin licence activations and form posts that go through the proxy work again), so it has its own `CHANGELOG_ENTRIES` item and the patch version 0.10.5. The other open PR that also bumps the version (#42) moves to the next patch version when it lands.
 
 ## Follow-ups and open questions
 
 - Lex: send the upstream report (draft in [upstream-issue.md](2026-11-20-playground-core-request-body-firefox/upstream-issue.md)).
-- Fleet lead, after this lands: check the first `playground-build` run on `dev`, then in T3 on the preview, in Firefox with Chromium as a control, launch a non-Freemius plugin whose licence activation or form POST goes to a host that blocks CORS. Record as a new evidence row the plugin, the WordPress and PHP versions, the packages, the persistence mode, what the plugin showed, the `/cors-proxy.php?` request with its non-empty body, and any console or network errors.
+- Fleet lead, after this lands: check the first `playground-build` run on `dev` (the first patched build runs in CI there), then in T3 on the preview, in Firefox with Chromium as a control, launch a non-Freemius plugin whose licence activation or form POST goes to a host that blocks CORS. Record as a new evidence row the plugin, the WordPress and PHP versions, the packages, the persistence mode, what the plugin showed, the `/cors-proxy.php?` request with its non-empty body, and any console or network errors.
 - When the pinned Playground release contains the fix, remove the patch and its workflow steps; the build fails if the patch stops applying.

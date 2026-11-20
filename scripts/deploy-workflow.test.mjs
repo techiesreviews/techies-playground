@@ -107,5 +107,5 @@ test('the Playground core patch keeps request bodies when the browser cannot str
   }
   assert.ok(patch.includes('+\t\t\t\tclonedRequest.body instanceof ReadableStream'), 'the proxy retry reads the body when the clone has no stream')
   assert.ok(patch.includes('+\t\tif (!(request.body instanceof ReadableStream)) {'), 'the stream probe fails when Request.body is missing')
-  assert.ok(patch.includes('bodyToBuffer'), 'the TCP fetch buffers the body instead of streaming it')
+  assert.ok(patch.includes('bodyToBuffer: streamBody ? undefined : outboundBodyStream'), 'the TCP fetch buffers the body instead of streaming it')
 })

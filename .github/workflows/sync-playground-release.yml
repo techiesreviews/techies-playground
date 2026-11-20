@@ -74,6 +74,22 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/check-playground-advisories.mjs
 
+      # deploy-site.yml applies playground-host/playground-core.patch to the release tag and
+      # fails when it no longer applies, which would stop every preview deploy after this
+      # update merges. Plain git on the release's files, so no new package code runs.
+      - name: Check the Playground core patch applies to the new release
+        if: steps.sync.outputs.changed == 'true' && hashFiles('playground-host/playground-core.patch') != ''
+        env:
+          PLAYGROUND_VERSION: ${{ steps.sync.outputs.playground_version }}
+        run: |
+          git clone --branch "v${PLAYGROUND_VERSION}" --single-branch --depth 1 --filter=blob:none --sparse \
+            https://github.com/WordPress/wordpress-playground.git "$RUNNER_TEMP/wordpress-playground"
+          git -C "$RUNNER_TEMP/wordpress-playground" sparse-checkout set packages/php-wasm/web-service-worker packages/php-wasm/web
+          git -C "$RUNNER_TEMP/wordpress-playground" apply --check --verbose "$PWD/playground-host/playground-core.patch" || {
+            echo "::error::playground-host/playground-core.patch does not apply to Playground v${PLAYGROUND_VERSION}, so the preview deploy would fail after this update. If that release fixes request bodies in Firefox, remove the patch; otherwise update it. No pull request was opened."
+            exit 1
+          }
+
       # Runs the new release's code: the unit tests and the launcher build load it, and the
       # boot test installs @wp-playground/cli at the new version (with install scripts) and
       # starts WordPress once with the launcher's default setup and WP-CLI.

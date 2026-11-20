@@ -31,6 +31,20 @@ test('the Playground sync runs daily from dev and checks an update fully before 
   ])
   assert.match(steps['Save the update as a patch'] ?? '', /\n {10}git diff --check\n/)
   assert.match(steps['Check Playground security advisories'] ?? '', /run: node scripts\/check-playground-advisories\.mjs\n/)
+  // The deploy applies our Playground core patch to the release; a release it no longer
+  // applies to must not reach dev, or every preview deploy fails.
+  const patchCheck = steps['Check the Playground core patch applies to the new release'] ?? ''
+  assert.match(patchCheck, /git clone --branch "v\$\{PLAYGROUND_VERSION\}"/)
+  assert.match(patchCheck, /PLAYGROUND_VERSION: \$\{\{ steps\.sync\.outputs\.playground_version \}\}/)
+  assert.match(patchCheck, /apply --check --verbose "\$PWD\/playground-host\/playground-core\.patch" \|\| \{\n[^\n]*::error::[^\n]*\n\s+exit 1\n/)
+  const names = Object.keys(steps)
+  assert.ok(names.indexOf('Check the Playground core patch applies to the new release') < names.indexOf('Upload the update'))
+  // The patch check clones only the folders the patch touches.
+  const patch = await read('playground-host/playground-core.patch')
+  const touched = new Set([...patch.matchAll(/^diff --git a\/(packages\/php-wasm\/[^/]+)\//gm)].map(([, folder]) => folder))
+  assert.ok(touched.size > 0)
+  const [, sparse = ''] = /sparse-checkout set (.+)\n/.exec(patchCheck) ?? []
+  for (const folder of touched) assert.ok(sparse.split(' ').includes(folder), `the patch check checks out ${folder}`)
   // The pull request job needs every check of the prepare job to have passed.
   assert.match(source, /\n {2}pull-request:\n(?: {4}.*\n)*? {4}needs: prepare\n/)
 })
