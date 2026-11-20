@@ -93,7 +93,13 @@ test('the Playground sync keeps one update pull request into dev and never goes 
   assert.match(open, /tip_is_bot\(\) \{\n\s+\[ "\$\(git log -1 --format='%ae %ce' FETCH_HEAD\)" = "\$\{bot_email\} \$\{bot_email\}" \]\n\s+\}\n/)
   // The replaced branch is deleted only when the bot made its newest commit, and pull
   // requests from forks are left alone.
-  assert.match(open, /select\(\.isCrossRepository \| not\)/)
+  assert.match(open, /--json number,headRefName,isCrossRepository \\\n\s+--jq "\.\[\] \| select\(\.isCrossRepository \| not\) \|/)
+  // A fork's pull request with the update's branch name is neither edited nor read as a
+  // closed update: every lookup by branch name keeps only this repository's pull requests.
+  assert.match(open, /own_pr='\[\.\[\] \| select\(\.isCrossRepository \| not\)\]\[0\]\.number \/\/ empty'/)
+  const lookups = [...open.matchAll(/gh pr list --head "\$branch"[^\n]*/g)].map((match) => match[0])
+  assert.equal(lookups.length, 2)
+  for (const lookup of lookups) assert.match(lookup, /--json number,isCrossRepository --jq "\$own_pr"\)"$/)
   assert.match(open, /if tip_is_bot; then\n\s+gh pr close "\$number" --delete-branch /)
   assert.match(open, /else\n\s+gh pr close "\$number" --comment "[^"]*The branch is kept/)
   // A closed update is not opened again.
