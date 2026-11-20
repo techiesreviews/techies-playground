@@ -100,6 +100,38 @@ export function withLauncherGuard(html) {
   return `${html.slice(0, at)}${script}${html.slice(at)}`
 }
 
+// Playground downloads WP-CLI from playground.wordpress.net, a URL fixed in its source,
+// whenever a Blueprint asks for WP-CLI. The upstream build ships the same file as
+// /wp-cli.phar, so every Playground script points at the host's copy instead. The client
+// runs in the launcher's page, so it finds the host from its own file's URL; every other
+// script runs on the host's origin (its frame, workers and service worker), and some of
+// them are not modules.
+const UPSTREAM_WP_CLI = /(["'`])https:\/\/playground\.wordpress\.net\/wp-cli\.phar\1/g
+export const WP_CLI_FILE = 'wp-cli.phar'
+
+export function pointWpCliAtHost(source, { module = false } = {}) {
+  const base = module ? 'import.meta.url' : 'self.location.href'
+  let count = 0
+  const rewritten = source.replace(UPSTREAM_WP_CLI, () => {
+    count += 1
+    return `new URL("/${WP_CLI_FILE}", ${base}).href`
+  })
+  return { source: rewritten, count }
+}
+
+// The launcher bundles @wp-playground/blueprints, which carries the same URL. Vite knows
+// the Playground host when it builds the launcher, so the bundle names the host's copy.
+export function wpCliFromHostPlugin(origin) {
+  const url = JSON.stringify(`${origin}/${WP_CLI_FILE}`)
+  return {
+    name: 'wp-cli-from-playground-host',
+    transform(code) {
+      const rewritten = code.replace(UPSTREAM_WP_CLI, url)
+      return rewritten === code ? null : { code: rewritten, map: null }
+    },
+  }
+}
+
 function launcherOrigin(value) {
   let url
   try {
@@ -127,6 +159,8 @@ export function buildHeaders({ launcherOrigins, wordpressDirectories }) {
     ['/assets/*', ['Cache-Control: public, max-age=31536000, immutable']],
     // The launcher imports the Playground client from here as a cross-origin module.
     ['/client/*', ['Access-Control-Allow-Origin: *']],
+    // The client downloads WP-CLI from the launcher's page, so it is a cross-origin fetch too.
+    [`/${WP_CLI_FILE}`, ['Access-Control-Allow-Origin: *']],
     // Matches upstream: WordPress static files change when a build moves to a newer minor release.
     ...wordpressDirectories.map((directory) => [`/${directory}/*`, ['Cache-Control: public, max-age=3600']]),
   ]
@@ -206,6 +240,7 @@ export async function preparePlaygroundHost({
   const files = (await listFiles(source)).filter((file) => isKept(file, { phpVersions, offlineAssets })).sort()
   const manifest = {}
   const wordpressDirectories = new Set()
+  const wpCliLinks = []
   let fileCount = 0
   for (const file of files) {
     const from = path.join(source, file)
@@ -219,6 +254,15 @@ export async function preparePlaygroundHost({
       continue
     }
     const { size } = await stat(from)
+    if (/\.m?js$/.test(file) && size <= fileSizeLimit) {
+      const pointed = pointWpCliAtHost(await readFile(from, 'utf8'), { module: top === 'client' })
+      if (pointed.count) {
+        await writeFile(to, pointed.source)
+        wpCliLinks.push(file)
+        fileCount += 1
+        continue
+      }
+    }
     if (size > fileSizeLimit) {
       const parts = await splitFile(from, to, size, partSize)
       manifest[`/${file}`] = { size, parts: parts.map((index) => `/${file}.part${index}`) }
@@ -229,6 +273,10 @@ export async function preparePlaygroundHost({
     }
   }
 
+  if (wpCliLinks.length && !files.includes(WP_CLI_FILE)) {
+    throw new Error(`${wpCliLinks.join(', ')} now download WP-CLI from /${WP_CLI_FILE}, which the Playground build does not have.`)
+  }
+
   await writeFile(path.join(out, SPLIT_MANIFEST), `${JSON.stringify(manifest, null, 2)}\n`)
   const sortedDirectories = [...wordpressDirectories].sort()
   await writeFile(path.join(out, '_headers'), sortedDirectories.length
@@ -236,7 +284,7 @@ export async function preparePlaygroundHost({
     : headers)
   fileCount += 2
   if (fileCount > fileLimit) throw new Error(`The Playground host would have ${fileCount} files, more than ${fileLimit} files allowed.`)
-  return { fileCount, split: Object.keys(manifest), wordpressDirectories: sortedDirectories }
+  return { fileCount, split: Object.keys(manifest), wordpressDirectories: sortedDirectories, wpCliLinks }
 }
 
 // The same entry check as scripts/sync-wordpress-release.mjs.
