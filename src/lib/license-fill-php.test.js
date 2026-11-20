@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { getPHPLoaderModule } from '@php-wasm/node-8-3'
 import { loadPHPRuntime, PHP } from '@php-wasm/universal'
-import { LICENSE_FILL_CODE, licenseFillBody, parseLicenseFillResult, parseUnlicensedPremium, UNLICENSED_PREMIUM_CODE } from './license-fill.js'
+import { FREEMIUS_LICENSES_CODE, LICENSE_FILL_CODE, licenseFillBody, parseFreemiusLicenses, parseLicenseFillResult } from './license-fill.js'
 
 // Runs the fill code in real PHP 8.3 against a stub wp-load.php: the WordPress helpers it
 // calls and a Freemius class whose instances record the keys they were given.
@@ -101,25 +101,26 @@ Freemius::$instances = array(
 	new Freemius( 'menu-image/menu-image.php', false, false ),
 	new Freemius( 'wsal-premium/wp-security-audit-log.php', true, false ),
 	new Freemius( 'licensed-premium/licensed-premium.php', true, true ),
+	new Freemius( 'licensed-free/licensed-free.php', false, true ),
 	new Freemius( 'some-theme/functions.php', true, false, false ),
 	new OldSdk(),
 );
 `
 
-test('lists the premium Freemius plugins that cannot use their premium code yet', async () => {
+test('lists premium Freemius plugins that cannot use their premium code yet, and plugins whose licence is active', async () => {
   const php = new PHP(await loadPHPRuntime(await getPHPLoaderModule()))
   php.mkdir('/wordpress')
   php.writeFile('/wordpress/wp-load.php', PREMIUM_WP_LOAD)
-  const response = await php.run({ code: UNLICENSED_PREMIUM_CODE })
+  const response = await php.run({ code: FREEMIUS_LICENSES_CODE })
   assert.equal(response.errors, '', response.errors)
-  assert.deepEqual(parseUnlicensedPremium(response.text), ['wsal-premium'])
+  assert.deepEqual(parseFreemiusLicenses(response.text), { unlicensed: ['wsal-premium'], licensed: ['licensed-premium', 'licensed-free'] })
 })
 
 test('a site without Freemius has no premium plugin waiting for a licence', async () => {
   const php = new PHP(await loadPHPRuntime(await getPHPLoaderModule()))
   php.mkdir('/wordpress')
   php.writeFile('/wordpress/wp-load.php', '<?php function wp_set_current_user( $id ) {} function wp_json_encode( $value ) { return json_encode( $value ); }')
-  const response = await php.run({ code: UNLICENSED_PREMIUM_CODE })
+  const response = await php.run({ code: FREEMIUS_LICENSES_CODE })
   assert.equal(response.errors, '', response.errors)
-  assert.deepEqual(parseUnlicensedPremium(response.text), [])
+  assert.deepEqual(parseFreemiusLicenses(response.text), { unlicensed: [], licensed: [] })
 })

@@ -42,17 +42,35 @@ foreach ( get_plugins() as $file => $data ) {
 		}
 		continue;
 	}
+	// An update this site cannot run would leave the plugin switched off, so skip it.
+	$offer = $plugin_updates[ $file ];
+	$requires_php = is_object( $offer ) && ! empty( $offer->requires_php ) ? (string) $offer->requires_php : '';
+	$requires_wp = is_object( $offer ) && ! empty( $offer->requires ) ? (string) $offer->requires : '';
+	if ( $requires_php && ! is_php_version_compatible( $requires_php ) ) {
+		$result['failed'][] = array( 'name' => $data['Name'], 'message' => substr( 'Needs PHP ' . $requires_php . ' or newer.', 0, 200 ) );
+		continue;
+	}
+	if ( $requires_wp && ! is_wp_version_compatible( $requires_wp ) ) {
+		$result['failed'][] = array( 'name' => $data['Name'], 'message' => substr( 'Needs WordPress ' . $requires_wp . ' or newer.', 0, 200 ) );
+		continue;
+	}
 	$was_active = is_plugin_active( $file );
 	$skin = new Automatic_Upgrader_Skin();
 	$outcome = techies_playground_upgrade( new Plugin_Upgrader( $skin ), $skin, $file );
-	if ( true === $outcome ) {
+	$switch_on_error = '';
+	if ( $was_active && ! is_plugin_active( $file ) ) {
+		$activated = activate_plugin( $file, '', false, true );
+		if ( is_wp_error( $activated ) ) {
+			$switch_on_error = wp_strip_all_tags( $activated->get_error_message() );
+		}
+	}
+	if ( true === $outcome && '' === $switch_on_error ) {
 		$result['updated'][] = array( 'name' => $data['Name'], 'from' => $data['Version'], 'to' => '' );
 		$updated_files[ count( $result['updated'] ) - 1 ] = $file;
+	} elseif ( true === $outcome ) {
+		$result['failed'][] = array( 'name' => $data['Name'], 'message' => substr( 'Updated, but WordPress could not switch it back on: ' . $switch_on_error, 0, 200 ) );
 	} else {
 		$result['failed'][] = array( 'name' => $data['Name'], 'message' => substr( $outcome, 0, 200 ) );
-	}
-	if ( $was_active && ! is_plugin_active( $file ) ) {
-		activate_plugin( $file, '', false, true );
 	}
 }
 

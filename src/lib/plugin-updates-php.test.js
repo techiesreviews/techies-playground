@@ -16,14 +16,22 @@ $GLOBALS['plugins'] = array(
 	'query-monitor/query-monitor.php' => array( 'Name' => 'Query Monitor', 'Version' => '4.1.1' ),
 	'akismet/akismet.php' => array( 'Name' => 'Akismet', 'Version' => '5.5' ),
 	'sleepy/sleepy.php' => array( 'Name' => 'Sleepy', 'Version' => '0.9' ),
+	'needs-php/needs-php.php' => array( 'Name' => 'Needs PHP', 'Version' => '1.0' ),
+	'needs-wp/needs-wp.php' => array( 'Name' => 'Needs WP', 'Version' => '1.0' ),
+	'broken/broken.php' => array( 'Name' => 'Broken', 'Version' => '1.0' ),
 );
-$GLOBALS['active'] = array( 'wp-2fa/wp-2fa.php', 'example-pro/example.php', 'query-monitor/query-monitor.php' );
+$GLOBALS['active'] = array( 'wp-2fa/wp-2fa.php', 'example-pro/example.php', 'query-monitor/query-monitor.php', 'needs-php/needs-php.php', 'needs-wp/needs-wp.php', 'broken/broken.php' );
 $GLOBALS['offers'] = array(
 	'wp-2fa/wp-2fa.php' => (object) array( 'new_version' => '3.2', 'package' => 'install' ),
 	'example-pro/example.php' => (object) array( 'new_version' => '2.1', 'package' => 'refuse' ),
 	'silent/silent.php' => (object) array( 'new_version' => '1.1', 'package' => 'silent' ),
 	'sleepy/sleepy.php' => (object) array( 'new_version' => '1.0', 'package' => 'install' ),
+	'needs-php/needs-php.php' => (object) array( 'new_version' => '2.0', 'package' => 'install', 'requires_php' => '99.0' ),
+	'needs-wp/needs-wp.php' => (object) array( 'new_version' => '2.0', 'package' => 'install', 'requires' => '99.0' ),
+	'broken/broken.php' => (object) array( 'new_version' => '2.0', 'package' => 'install' ),
 );
+function is_php_version_compatible( $required ) { return empty( $required ) || version_compare( '8.3', $required, '>=' ); }
+function is_wp_version_compatible( $required ) { return empty( $required ) || version_compare( '6.8', $required, '>=' ); }
 class WP_Error { public function __construct( public $code, public $message ) {} public function get_error_message() { return $this->message; } }
 function is_wp_error( $thing ) { return $thing instanceof WP_Error; }
 function wp_strip_all_tags( $text ) { return trim( strip_tags( $text ) ); }
@@ -37,7 +45,12 @@ function get_site_transient( $name ) {
 }
 function get_plugins() { return $GLOBALS['plugins']; }
 function is_plugin_active( $file ) { return in_array( $file, $GLOBALS['active'], true ); }
-function activate_plugin( $file, $redirect, $network, $silent ) { $GLOBALS['active'][] = $file; $GLOBALS['reactivated'][] = array( $file, $silent ); }
+function activate_plugin( $file, $redirect, $network, $silent ) {
+	$GLOBALS['reactivated'][] = array( $file, $silent );
+	if ( 'broken/broken.php' === $file ) { return new WP_Error( 'incompatible', 'This plugin does not work with your version of PHP.' ); }
+	$GLOBALS['active'][] = $file;
+	return null;
+}
 function wp_clean_plugins_cache( $clear ) {}
 function wp_clean_themes_cache( $clear ) {}
 function get_stylesheet() { return 'current-theme'; }
@@ -83,15 +96,20 @@ test('updates each offered plugin, reports old and new version, and turns active
     { name: 'Sleepy', from: '0.9', to: '1.0' },
     { name: 'Old Theme', from: '1.0', to: '2.0' },
   ])
+  // An update this site's PHP or WordPress cannot run is skipped, and a plugin WordPress
+  // will not switch back on after its update is named as a failure too.
   assert.deepEqual(result.failed, [
     { name: 'Example Pro', message: 'Update package not available.' },
     { name: 'Silent', message: 'Could not copy files.' },
+    { name: 'Needs PHP', message: 'Needs PHP 99.0 or newer.' },
+    { name: 'Needs WP', message: 'Needs WordPress 99.0 or newer.' },
+    { name: 'Broken', message: 'Updated, but WordPress could not switch it back on: This plugin does not work with your version of PHP.' },
   ])
   // Already current lists only what the site uses: active plugins and the active theme.
   assert.deepEqual(result.current, [{ name: 'Query Monitor', version: '4.1.1' }, { name: 'Current Theme', version: '1.3' }])
   // A plugin that was on stays on, even when its update failed; one that was off stays off.
-  assert.deepEqual(state.reactivated, [['wp-2fa/wp-2fa.php', true], ['example-pro/example.php', true]])
-  assert.deepEqual([...state.active].sort(), ['example-pro/example.php', 'query-monitor/query-monitor.php', 'wp-2fa/wp-2fa.php'])
+  assert.deepEqual(state.reactivated, [['wp-2fa/wp-2fa.php', true], ['example-pro/example.php', true], ['broken/broken.php', true]])
+  assert.deepEqual([...state.active].sort(), ['example-pro/example.php', 'needs-php/needs-php.php', 'needs-wp/needs-wp.php', 'query-monitor/query-monitor.php', 'wp-2fa/wp-2fa.php'])
   // A fresh update check, not a cached one.
   assert.deepEqual(state.deleted, ['update_plugins', 'update_themes'])
 })

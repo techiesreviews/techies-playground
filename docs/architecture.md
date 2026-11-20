@@ -81,7 +81,7 @@ Recipe + local package IDs
   -> run the checks once when checks are in the setup and every needed licence is active
 ```
 
-The checks and the updates write only to their own state (`checksRun`, `pluginUpdates`); a result that arrives after the site closed or relaunched is dropped (`launchIdRef` for the updates, the client in `clientRef` for a check run). `licensedPackageIds` keeps which plugins needed a licence at launch (saved-key plugins, then premium Freemius plugins that cannot use their premium code), so the gate stays closed after Start without keys.
+The checks and the updates write only to their own state (`checksRun`, `pluginUpdates`); a result that arrives after the site closed or relaunched is dropped (`launchIdRef` for the updates, the client in `clientRef` for a check run). `licensedPackageIds` keeps which plugins needed a licence at launch (saved-key plugins, then premium Freemius plugins that cannot use their premium code; every uploaded plugin when the probe failed), so the gate stays closed after Start without keys. `siteLicensedIds` keeps which of them WordPress already reports as licensed, so a saved site with an active licence does not wait.
 
 Directory packages are included as Blueprint resource steps. Local packages cannot be embedded in a serializable recipe, so they are installed after the client is ready using their IndexedDB `File` objects.
 
@@ -162,7 +162,7 @@ WP-CLI comes from the Playground host: the host build points every hosted script
 - `src/App.jsx` contains UI and orchestration in one 2,500-line module. A rebuild may split components, but observable state transitions and focus behavior must remain identical.
 - The release sync script edits source text using stable markers. Renaming `CHANGELOG_ENTRIES` or the fallback marker requires updating and testing the script.
 - Site identity intentionally excludes most recipe settings. Changing name, exact WordPress version, or PHP creates a different saved site; changing packages/settings reuses the same site.
-- WordPress update automation is inline PHP in `App.jsx`; it is executed only in the local Playground runtime.
+- WordPress update automation is inline PHP in `src/lib/plugin-updates.js`; it is executed only in the local Playground runtime.
 - `@wp-playground/blueprints` is pinned to 3.1.64, the release CI builds the self-hosted Playground from; the client is no longer an npm dependency (it loads from the Playground host). The development-only `@php-wasm/node-8-3` and `@php-wasm/universal` are pinned to the same version so the Freemius plugin's tests run it in real PHP. Other dependencies retain existing semver ranges. The lockfile provides reproducible installed versions and CI uses `npm ci`. fast-uri resolves to patched 3.1.7. A temporary Sharp 0.35.4 override fixes the Miniflare tooling dependency until its upstream pin catches up.
 
 Recipe autosave uses validated serialization; invalid form input removes the stored draft rather than writing raw values. Import confirmation precedes applying/saving external setup recipes, and every launch with external sources asks again. Advanced settings open automatically when those sources are present.

@@ -299,8 +299,9 @@ export async function measurePage(client, currentPath) {
 
 // Checks start by themselves only once every license the setup needs (each launched plugin
 // with a saved key, and each premium Freemius plugin without one) was filled in and is active.
-export function checksGate(neededIds, licenseFill) {
+export function checksGate(neededIds, licenseFill, activeIds = []) {
   const active = neededIds.filter((id) => {
+    if (activeIds.includes(id)) return true
     const result = licenseFill.find((entry) => entry.id === id)
     return result?.status === 'active' || result?.status === 'activated'
   }).length
