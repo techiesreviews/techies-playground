@@ -5,7 +5,7 @@
 // GitHub's advisory database (reviewed and unreviewed npm advisories) and the advisories
 // WordPress/wordpress-playground publishes in its own repository.
 //
-// Run by .github/workflows/security-checks.yml and sync-playground-release.yml.
+// Run by .github/workflows/security-checks.yml, deploy-site.yml and sync-playground-release.yml.
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'

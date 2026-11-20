@@ -60,7 +60,7 @@ test('the Playground build reaches the host job as an artifact of the same run, 
   const jobs = readJobs(source)
   const build = jobs['playground-build'] ?? ''
   const host = jobs['playground-host'] ?? ''
-  assert.doesNotMatch(source, /actions\/cache/, 'no job reads or writes the Actions cache')
+  assert.doesNotMatch(source, /actions\/cache/, 'no job uses actions/cache')
 
   const upload = /uses: actions\/upload-artifact@[0-9a-f]{40} # v\S+\n\s+with:\n\s+name: (\S+)\n\s+path: \.playground-build\/wasm-wordpress-net\n/.exec(build)
   assert.ok(upload, 'the build job uploads the Playground build')

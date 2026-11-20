@@ -20,7 +20,7 @@ The Playground release sync record left two follow-ups for `deploy-site.yml`, he
 
 - A fresh `npm audit` of `origin/dev` shows no high advisory.
 - Neither deploy job starts until the security checks pass.
-- The host deploy job deploys only what the build job of the same run produced; no job reads or writes the Actions cache.
+- The host deploy job deploys only what the build job of the same run produced; no job uses `actions/cache`. (The `cache: npm` input of `actions/setup-node` stays in the test and deploy jobs: it holds npm downloads, which `npm ci` checks against the lockfile hashes.)
 
 ## Options considered
 
