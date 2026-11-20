@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
+import { PHP_VERSIONS } from '../src/lib/recipe.js'
 import {
-  addHostPackages,
   findAffectingAdvisories,
   HOST_PACKAGES,
   isInRange,
+  listCheckedPackages,
   listPlaygroundPackages,
 } from './check-playground-advisories.mjs'
 
@@ -96,31 +97,36 @@ test('keeps only the advisories that cover an installed version, once each', () 
   assert.equal(findAffectingAdvisories([database], installed)[0].patched, '3.1.66')
 })
 
-test('also checks the packages the Playground host ships at the pinned version', () => {
-  const launcher = [
-    { name: '@php-wasm/universal', version: '3.1.64' },
-    { name: '@wp-playground/blueprints', version: '3.1.64' },
-  ]
-  const installed = addHostPackages(launcher, '3.1.64')
-  assert.deepEqual(installed.map(({ name, version }) => `${name}@${version}`), [
-    '@php-wasm/universal@3.1.64',
-    '@php-wasm/web@3.1.64',
-    '@wp-playground/blueprints@3.1.64',
-    '@wp-playground/client@3.1.64',
-    '@wp-playground/remote@3.1.64',
-  ])
-  for (const name of HOST_PACKAGES) assert.ok(!launcher.some((entry) => entry.name === name), `${name} is not in the lockfile list`)
+test('also checks the packages the Playground host ships, at the pinned version', () => {
+  const lock = {
+    packages: {
+      'node_modules/@php-wasm/universal': { version: '3.1.64' },
+      'node_modules/@wp-playground/blueprints': { version: '3.1.64' },
+    },
+  }
+  // The pin decides the host's version, even before the lockfile has caught up.
+  const installed = listCheckedPackages(lock, { dependencies: { '@wp-playground/blueprints': '3.1.65' } })
+  const names = installed.map(({ name, version }) => `${name}@${version}`)
+  assert.ok(names.includes('@php-wasm/universal@3.1.64'))
+  assert.ok(names.includes('@wp-playground/blueprints@3.1.64'))
+  for (const name of HOST_PACKAGES) assert.ok(names.includes(`${name}@3.1.65`), `${name} is checked at the pin`)
+  assert.equal(installed.length, 2 + HOST_PACKAGES.length)
+  assert.throws(() => listCheckedPackages({ packages: {} }, { dependencies: { '@wp-playground/blueprints': '3.1.65' } }), /installs no Playground packages/)
+
+  // Every PHP version the launcher offers has its browser build checked.
+  for (const php of PHP_VERSIONS) assert.ok(HOST_PACKAGES.includes(`@php-wasm/web-${php.replace('.', '-')}`), `PHP ${php}`)
 
   // An advisory for the client counts even though the lockfile does not install it.
+  const launcher = listPlaygroundPackages(lock)
   const client = {
     ghsa_id: 'GHSA-gggg',
     severity: 'high',
     summary: 'client summary',
     html_url: 'https://github.com/advisories/GHSA-gggg',
-    vulnerabilities: [{ package: { ecosystem: 'npm', name: '@wp-playground/client' }, vulnerable_version_range: '<= 3.1.64', first_patched_version: '3.1.65' }],
+    vulnerabilities: [{ package: { ecosystem: 'npm', name: '@wp-playground/client' }, vulnerable_version_range: '<= 3.1.65', first_patched_version: '3.1.66' }],
   }
   assert.deepEqual(findAffectingAdvisories([client], launcher), [])
   assert.deepEqual(findAffectingAdvisories([client], installed).map(({ id, packageName, version }) => `${id} ${packageName}@${version}`), [
-    'GHSA-gggg @wp-playground/client@3.1.64',
+    'GHSA-gggg @wp-playground/client@3.1.65',
   ])
 })

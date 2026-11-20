@@ -12,9 +12,16 @@ import { fileURLToPath } from 'node:url'
 import { compareVersions, getPinnedPlaygroundVersion } from './sync-playground-release.mjs'
 
 const PLAYGROUND_PACKAGE = /(?:^|\/)node_modules\/(@(?:wp-playground|php-wasm)\/[^/]+)$/
-// Packages the self-hosted Playground ships that the launcher's lockfile does not install
-// (the client loads from the host, which runs the remote page and PHP in the browser).
-export const HOST_PACKAGES = ['@php-wasm/web', '@wp-playground/client', '@wp-playground/remote']
+// Packages the self-hosted Playground ships that the launcher's lockfile does not install:
+// the client and remote bundles, and @php-wasm/web with its Playground dependencies (one
+// PHP build per version, each served for a launcher that picks it).
+export const HOST_PACKAGES = [
+  '@php-wasm/fs-journal',
+  '@php-wasm/web',
+  ...['5-2', '7-4', '8-0', '8-1', '8-2', '8-3', '8-4', '8-5'].map((php) => `@php-wasm/web-${php}`),
+  '@wp-playground/client',
+  '@wp-playground/remote',
+]
 // An operator is optional (a bare version means "= version"); a pre-release or build
 // suffix on a bound counts as its release.
 const COMPARATOR = /^(<=|>=|<|>|=)?\s*v?(\d+(?:\.\d+)*)(?:[-+][0-9A-Za-z.-]+)?$/
@@ -56,8 +63,12 @@ export function listPlaygroundPackages(lockDocument) {
 
 const sortPackages = (found) => [...found.values()].sort((left, right) => left.name.localeCompare(right.name) || compareVersions(left.version, right.version))
 
-// The installed packages plus HOST_PACKAGES at the version the host is built from.
-export function addHostPackages(installed, hostVersion) {
+// The lockfile's Playground packages plus HOST_PACKAGES at the version the host is built
+// from (the @wp-playground/blueprints pin in package.json).
+export function listCheckedPackages(lockDocument, packageDocument) {
+  const installed = listPlaygroundPackages(lockDocument)
+  if (!installed.length) throw new Error('package-lock.json installs no Playground packages.')
+  const hostVersion = getPinnedPlaygroundVersion(packageDocument)
   const found = new Map(installed.map((entry) => [`${entry.name}@${entry.version}`, entry]))
   for (const name of HOST_PACKAGES) found.set(`${name}@${hostVersion}`, { name, version: hostVersion })
   return sortPackages(found)
@@ -96,10 +107,8 @@ async function fetchAdvisories(url) {
 
 async function main() {
   const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-  const launcher = listPlaygroundPackages(JSON.parse(await readFile(path.join(repositoryRoot, 'package-lock.json'), 'utf8')))
-  if (!launcher.length) throw new Error('package-lock.json installs no Playground packages.')
-  const hostVersion = getPinnedPlaygroundVersion(JSON.parse(await readFile(path.join(repositoryRoot, 'package.json'), 'utf8')))
-  const installed = addHostPackages(launcher, hostVersion)
+  const readJson = async (file) => JSON.parse(await readFile(path.join(repositoryRoot, file), 'utf8'))
+  const installed = listCheckedPackages(await readJson('package-lock.json'), await readJson('package.json'))
 
   const advisories = await fetchAdvisories(`https://api.github.com/repos/${UPSTREAM_REPOSITORY}/security-advisories?state=published&per_page=100`)
   for (let index = 0; index < installed.length; index += PACKAGES_PER_REQUEST) {
