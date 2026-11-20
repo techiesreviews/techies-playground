@@ -78,5 +78,5 @@ Kept. It fixes the body loss for every plugin in our build and costs one verifie
 
 - Lex: send the upstream report (draft in [upstream-issue.md](2026-11-20-playground-core-request-body-firefox/upstream-issue.md)).
 - After the other open PR lands: one line each in `docs/testing.md` (the two new `deploy-workflow.test.mjs` tests) and `docs/architecture.md` (the Freemius paragraph: the retry now keeps the body in Firefox), plus the changelog item and patch bump above.
-- Check the first `playground-build` run on `dev` after this lands, then in T3 on the preview, in Firefox with Chromium as a control, launch a non-Freemius plugin that POSTs to a host that blocks CORS, and record the `/cors-proxy.php?` request with a non-empty body as a new evidence row.
+- Fleet lead, after this lands: check the first `playground-build` run on `dev`, then in T3 on the preview, in Firefox with Chromium as a control, launch a non-Freemius plugin whose licence activation or form POST goes to a host that blocks CORS. Record as a new evidence row the plugin, the WordPress and PHP versions, the packages, the persistence mode, what the plugin showed, the `/cors-proxy.php?` request with its non-empty body, and any console or network errors.
 - When the pinned Playground release contains the fix, remove the patch and its workflow steps; the build fails if the patch stops applying.
