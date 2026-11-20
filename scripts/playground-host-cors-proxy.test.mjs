@@ -238,17 +238,21 @@ test('a range of an uncompressed file is sliced from the start of the file and s
   assert.ok(chunksRead <= 4, `read ${chunksRead} of 10 chunks`)
 })
 
-test('a range of an uncompressed file of 100 MB or more is still answered, reading only up to the range', async () => {
+test('a small range of an uncompressed file over 100 MB is answered, and a slice of 100 MB or more gets 413', async () => {
   const size = 150 * 1024 * 1024
   const chunk = new Uint8Array(1024 * 1024).fill(7)
   let chunksRead = 0
+  let cancelled = false
   const upstream = recorder(() => new Response(new ReadableStream({
     pull(controller) {
       chunksRead += 1
       if (chunksRead > 150) controller.close()
       else controller.enqueue(chunk)
     },
-  }), { headers: { 'Content-Type': 'application/zip', 'Content-Length': String(size) } }))
+    cancel() {
+      cancelled = true
+    },
+  }),{ headers: { 'Content-Type': 'application/zip', 'Content-Length': String(size) } }))
   const response = await handleCorsProxy(proxied('https://example.com/big.zip', { headers: { Range: 'bytes=0-99' } }), { fetch: upstream.fetch })
   assert.equal(response.status, 206)
   assert.equal(response.headers.get('Content-Range'), `bytes 0-99/${size}`)
@@ -256,9 +260,11 @@ test('a range of an uncompressed file of 100 MB or more is still answered, readi
   assert.ok(chunksRead <= 3, `read ${chunksRead} MB`)
 
   chunksRead = 0
+  cancelled = false
   const open = await handleCorsProxy(proxied('https://example.com/big.zip', { headers: { Range: 'bytes=0-' } }), { fetch: upstream.fetch })
   assert.equal(open.status, 413)
   assert.ok(chunksRead <= 3, `read ${chunksRead} MB for a slice of 100 MB or more`)
+  assert.equal(cancelled, true)
 })
 
 test('a range with If-Range gets the whole file, and the target never sees the range', async () => {
