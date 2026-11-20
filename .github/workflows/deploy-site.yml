@@ -28,11 +28,14 @@ jobs:
       playground_origin: ${{ steps.settings.outputs.playground_origin }}
       launcher_origins: ${{ steps.settings.outputs.launcher_origins }}
       playground_version: ${{ steps.release.outputs.version }}
+      playground_patch_sha256: ${{ steps.patch.outputs.sha256 }}
     steps:
-      - name: Check out package.json
+      - name: Check out package.json and the Playground core patch
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          sparse-checkout: package.json
+          sparse-checkout: |
+            package.json
+            playground-host/playground-core.patch
           sparse-checkout-cone-mode: false
 
       # The launcher bundles @wp-playground/blueprints and loads the client from the
@@ -46,6 +49,14 @@ jobs:
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # The build job has no token and no checkout, so it downloads the patch by commit and
+      # checks it against this hash. The hash is in the build cache key: a changed patch rebuilds.
+      - name: Hash the Playground core patch
+        id: patch
+        run: |
+          sha256="$(sha256sum playground-host/playground-core.patch | cut -d ' ' -f 1)"
+          echo "sha256=$sha256" >> "$GITHUB_OUTPUT"
 
       - name: Choose hosts for the environment
         id: settings
@@ -110,7 +121,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .playground-build/wasm-wordpress-net
-          key: playground-website-${{ needs.settings.outputs.playground_version }}-cors-proxy-v2
+          key: playground-website-${{ needs.settings.outputs.playground_version }}-cors-proxy-v2-patch-${{ needs.settings.outputs.playground_patch_sha256 }}
 
       # Upstream requires Node 24.18+ and npm 11.16+ (engine-strict); the runner's default
       # Node and npm may be older.
@@ -129,11 +140,22 @@ jobs:
           # proxy only serves playground.wordpress.net. Playground's service worker never
           # caches a .php path, so the name must end in .php. Change the cache key with it.
           CORS_PROXY_URL: /cors-proxy.php?
+          # Our fix for request bodies in Firefox (playground-host/playground-core.patch).
+          PATCH_SHA256: ${{ needs.settings.outputs.playground_patch_sha256 }}
         run: |
           git clone --branch "v${PLAYGROUND_VERSION}" --single-branch --depth 1 \
             --recurse-submodules --shallow-submodules \
             https://github.com/WordPress/wordpress-playground.git "$RUNNER_TEMP/wordpress-playground"
           cd "$RUNNER_TEMP/wordpress-playground"
+          # The repository is public, so the patch downloads without a token.
+          curl --fail --silent --show-error --location --retry 3 \
+            "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/playground-host/playground-core.patch" \
+            --output "$RUNNER_TEMP/playground-core.patch"
+          echo "$PATCH_SHA256  $RUNNER_TEMP/playground-core.patch" | sha256sum --check --strict
+          git apply --verbose "$RUNNER_TEMP/playground-core.patch" || {
+            echo "playground-host/playground-core.patch does not apply to Playground v${PLAYGROUND_VERSION}. If that release fixes request bodies in Firefox, remove the patch; otherwise update it." >&2
+            exit 1
+          }
           npm install --global npm@^11.16.0 --no-audit --no-fund
           echo "Node $(node --version), npm $(npm --version)"
           npm ci --no-audit --no-fund
@@ -167,7 +189,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .playground-build/wasm-wordpress-net
-          key: playground-website-${{ needs.settings.outputs.playground_version }}-cors-proxy-v2
+          key: playground-website-${{ needs.settings.outputs.playground_version }}-cors-proxy-v2-patch-${{ needs.settings.outputs.playground_patch_sha256 }}
           fail-on-cache-miss: true
 
       - name: Prepare the Playground host folder
