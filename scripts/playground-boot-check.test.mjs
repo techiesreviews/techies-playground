@@ -8,7 +8,7 @@ import {
   buildBootTestBlueprint,
   buildCliArguments,
   checkBootResult,
-} from './playground-boot-test.mjs'
+} from './playground-boot-check.mjs'
 
 test('boots the launcher’s own setup with WP-CLI, then reports from inside WordPress', () => {
   const blueprint = buildBootTestBlueprint()

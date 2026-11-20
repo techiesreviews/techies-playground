@@ -57,6 +57,16 @@ A scheduled job can move the whole Playground version at once and prove it boots
 | Local browser (Chromium through T3), launcher built with `VITE_PLAYGROUND_ORIGIN=http://127.0.0.1:8787`, served on `127.0.0.1:4173`. Stand-in host on `127.0.0.1:8787` serving `wp.techies.tools` with the host build's WP-CLI rewrite and its `/wp-cli.phar` `_headers` rule applied (neither is live yet) | Launch WordPress "Latest stable" (7.1.5), PHP 8.3, "Save playground in browser" on, "Load WP-CLI" on, open after launch: Plugins | WordPress boots; `wp-cli.phar` comes from the Playground host; nothing from `playground.wordpress.net` | Playground 3.1.64 (the launcher's pin and the live host's build). WordPress 7.1.5 booted and opened the Plugins screen. The rewritten client and service worker loaded (one link rewritten in each). Of the page's 21 resource entries, the only `wp-cli.phar` requests went to `http://127.0.0.1:8787/wp-cli.phar`, and none went to `playground.wordpress.net`. The page showed no error. The browser console was not captured in this run. An earlier try without the `_headers` rule failed at blueprint step 5 with a CORS error, which confirms that the rule is needed (`prepare-playground-host.test.mjs` checks it) | Stand-in log, page resource list, screenshots |
 | Local, PAT | Dependabot alerts API | Readable | 403 (the local token has no Dependabot scope); CI uses the workflow token or `DEPENDABOT_ALERTS_TOKEN` | API answer |
 
+### After the merge: fixes from the second look (GPT)
+
+- The update PR's push used a plain force-push, so a fix pushed to the branch between the check and the push would be overwritten. It now uses `--force-with-lease` on the tip it checked (or on "no branch" when there was none), so such a push fails instead.
+- The advisory check read only the lockfile, so the packages the self-hosted Playground ships but the launcher does not install (`@wp-playground/client`, `@wp-playground/remote`, `@php-wasm/web`) were never checked. They are now added at the pinned version.
+- The boot script is renamed `scripts/playground-boot-check.mjs` (and its test `playground-boot-check.test.mjs`): a file ending in `-test.mjs` is picked up by a bare `node --test`, which would start a full Playground boot. The rows above keep the old name because that is what ran.
+
+| Environment | Procedure/command | Expected | Actual | Evidence |
+| --- | --- | --- | --- | --- |
+| Local, Node 24 | `npm test`, `scripts/agents/kit unit`, `scripts/agents/kit doctor`, `scripts/agents/kit build` | All pass | 215 tests pass (a new test finds a client advisory the lockfile alone misses), doctor 17/17 (the test-file check passed only after the rename), build ok | Test runner and kit summaries |
+
 ## Result
 
 The sync prepares a full, verified Playground update in one PR, and the security checks cover the three sources the card asks for. WP-CLI now comes from our own host. The workflows only start once this change reaches `main`, because GitHub runs scheduled workflows from the default branch.
