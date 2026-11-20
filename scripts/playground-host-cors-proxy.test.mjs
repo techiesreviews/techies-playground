@@ -215,18 +215,36 @@ test('a range of a .gz file the target gzips again gives the bytes of the .gz fi
   }
 })
 
-test('a range of an uncompressed file is sliced from the start of the file and stops reading once it is complete', async () => {
+// An uncompressed 1000-byte file in ten chunks of 100. The first request's chunks read are
+// counted in `read`; a later request (the proxy's own range request) gets `ranged(request)`.
+function chunkedFile(ranged) {
   const file = Uint8Array.from({ length: 1000 }, (_, index) => index % 251)
-  let chunksRead = 0
-  const upstream = recorder(() => new Response(new ReadableStream({
-    pull(controller) {
-      if (chunksRead === 10) return controller.close()
-      controller.enqueue(file.slice(chunksRead * 100, chunksRead * 100 + 100))
-      chunksRead += 1
-    },
-  }), { headers: { 'Content-Type': 'application/zip', 'Content-Length': '1000', ETag: '"v1"' } }))
+  const read = { chunks: 0, cancelled: false }
+  const upstream = recorder((request) => {
+    if (upstream.calls.length > 1) return ranged(request, file)
+    let chunk = 0
+    return new Response(new ReadableStream({
+      pull(controller) {
+        if (chunk === 10) return controller.close()
+        controller.enqueue(file.slice(chunk * 100, chunk * 100 + 100))
+        chunk += 1
+        read.chunks = chunk
+      },
+      cancel() {
+        read.cancelled = true
+      },
+    }), { headers: { 'Content-Type': 'application/zip', 'Content-Length': '1000', ETag: '"v1"' } })
+  })
+  return { file, read, upstream }
+}
+
+test('a range of an uncompressed file is sliced from the start of the file and stops reading once it is complete, when the target ignores the range', async () => {
+  const { file, read, upstream } = chunkedFile((_, whole) => new Response(whole, { headers: { 'Content-Length': '1000' } }))
   const response = await handleCorsProxy(proxied('https://example.com/plugin.zip', { headers: { Range: 'bytes=150-249' } }), { fetch: upstream.fetch })
   assert.equal(upstream.calls[0].headers.get('Range'), null)
+  assert.equal(upstream.calls[1].headers.get('Range'), 'bytes=150-249')
+  assert.equal(upstream.calls[1].headers.get('Accept-Encoding'), 'identity')
+  const chunksRead = read.chunks
   assert.equal(response.status, 206)
   assert.equal(response.headers.get('Content-Range'), 'bytes 150-249/1000')
   assert.equal(response.headers.get('Content-Length'), '100')
@@ -235,7 +253,67 @@ test('a range of an uncompressed file is sliced from the start of the file and s
   assert.equal(response.headers.get('Cache-Control'), 'no-store, no-transform')
   assert.equal(response.headers.get('Content-Encoding'), null)
   assert.deepEqual(new Uint8Array(await response.arrayBuffer()), file.slice(150, 250))
-  assert.ok(chunksRead <= 4, `read ${chunksRead} of 10 chunks`)
+  assert.ok(read.chunks <= 4, `read ${read.chunks} of 10 chunks`)
+  assert.ok(chunksRead <= 1, 'the whole file waits until the range request is answered')
+})
+
+test('a range later in an uncompressed file comes from the target when it answers with exactly those bytes, and the whole file is not read', async () => {
+  const { file, read, upstream } = chunkedFile((request, whole) => {
+    const [, start, end] = request.headers.get('Range').match(/bytes=(\d+)-(\d+)/).map(Number)
+    return new Response(whole.slice(start, end + 1), { status: 206, headers: { 'Content-Range': `bytes ${start}-${end}/1000`, 'Content-Length': String(end - start + 1) } })
+  })
+  const response = await handleCorsProxy(proxied('https://example.com/plugin.zip', { headers: { Range: 'bytes=-100' } }), { fetch: upstream.fetch })
+  assert.equal(response.status, 206)
+  assert.equal(response.headers.get('Content-Range'), 'bytes 900-999/1000')
+  assert.equal(upstream.calls[1].headers.get('Range'), 'bytes=900-999')
+  assert.equal(upstream.calls[1].headers.get('If-Range'), '"v1"')
+  assert.deepEqual(new Uint8Array(await response.arrayBuffer()), file.slice(900))
+  assert.ok(read.chunks <= 1, `read ${read.chunks} chunks of the whole file`)
+  assert.equal(read.cancelled, true)
+})
+
+test('a range answer from the target that is compressed, of another size or not the asked bytes is not used', async () => {
+  const wrong = [
+    (start, end, whole) => new Response(whole.slice(start, end + 1), { status: 206, headers: { 'Content-Range': `bytes ${start}-${end}/640` } }),
+    (start, end, whole) => new Response(whole.slice(start, end + 1), { status: 206, headers: { 'Content-Range': `bytes ${start}-${end}/1000`, 'Content-Encoding': 'gzip' } }),
+    (start, end, whole) => new Response(whole.slice(0, end - start + 1), { status: 206, headers: { 'Content-Range': `bytes 0-${end - start}/1000` } }),
+    (start, end, whole) => new Response(whole.slice(start, end + 1), { status: 206, headers: { 'Content-Range': `bytes ${start}-${end}/1000`, 'Content-Length': '7' } }),
+    () => { throw new TypeError('network') },
+  ]
+  for (const [index, answer] of wrong.entries()) {
+    const { file, upstream } = chunkedFile((request, whole) => {
+      const [, start, end] = request.headers.get('Range').match(/bytes=(\d+)-(\d+)/).map(Number)
+      return answer(start, end, whole)
+    })
+    const response = await handleCorsProxy(proxied('https://example.com/plugin.zip', { headers: { Range: 'bytes=300-349' } }), { fetch: upstream.fetch })
+    assert.equal(response.status, 206, String(index))
+    assert.equal(response.headers.get('Content-Range'), 'bytes 300-349/1000', String(index))
+    assert.deepEqual(new Uint8Array(await response.arrayBuffer()), file.slice(300, 350), String(index))
+  }
+})
+
+test('an invalid range gets the whole file, and a range of an empty file gets 416, with no range sent on', async () => {
+  for (const [range, body, declared, status, contentRange] of [
+    ['bytes=5-2', 'abcdefghij', '10', 200, null],
+    ['items=0-1', 'abcdefghij', '10', 200, null],
+    ['bytes=0-0', '', '0', 416, 'bytes */0'],
+    ['bytes=0-0', '', null, 416, 'bytes */0'],
+  ]) {
+    const upstream = recorder(() => new Response(body, { headers: declared ? { 'Content-Length': declared } : {} }))
+    const response = await handleCorsProxy(proxied('https://example.com/a.txt', { headers: { Range: range } }), { fetch: upstream.fetch })
+    const label = `${range} on ${JSON.stringify(body)}`
+    assert.equal(response.status, status, label)
+    assert.equal(response.headers.get('Content-Range'), contentRange, label)
+    if (status === 200) assert.equal(await response.text(), body, label)
+    assert.deepEqual(upstream.calls.map((call) => call.headers.get('Range')), [null], label)
+  }
+})
+
+test('a range from the start of the file makes no range request', async () => {
+  const { file, upstream } = chunkedFile(() => assert.fail('no second request'))
+  const response = await handleCorsProxy(proxied('https://example.com/plugin.zip', { headers: { Range: 'bytes=0-99' } }), { fetch: upstream.fetch })
+  assert.deepEqual(new Uint8Array(await response.arrayBuffer()), file.slice(0, 100))
+  assert.equal(upstream.calls.length, 1)
 })
 
 test('a range answer drops the checksums of the whole file, with or without a declared size', async () => {
@@ -569,4 +647,18 @@ test('a followed redirect keeps HEAD as HEAD', async () => {
   assert.equal(response.status, 200)
   assert.equal(response.body, null)
   assert.deepEqual(upstream.calls.map((call) => [call.method, call.headers.get('Authorization')]), [['HEAD', 'Bearer secret'], ['HEAD', null]])
+})
+
+test('a range after a followed redirect is cut from the redirected file, with no range request and no Authorization', async () => {
+  const upstream = recorder((request) => new URL(request.url).hostname === 'api.example.com'
+    ? new Response(null, { status: 302, headers: { Location: 'https://cdn.example.net/file.txt' } })
+    : new Response('abcdefghijklmnopqrstuvwxyz', { headers: { 'Content-Length': '26' } }))
+  const response = await handleCorsProxy(proxied('https://api.example.com/file.txt', { headers: { ...withAuthorization, Range: 'bytes=20-24' } }), { fetch: upstream.fetch })
+  assert.equal(response.status, 206)
+  assert.equal(response.headers.get('Content-Range'), 'bytes 20-24/26')
+  assert.equal(await response.text(), 'uvwxy')
+  assert.deepEqual(upstream.calls.map((call) => [call.url, call.headers.get('Range'), call.headers.get('Authorization')]), [
+    ['https://api.example.com/file.txt', null, 'Bearer secret'],
+    ['https://cdn.example.net/file.txt', null, null],
+  ])
 })
