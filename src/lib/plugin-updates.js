@@ -114,3 +114,31 @@ export function updatedNote(result) {
   if (!first) return ''
   return `${first.name} ${first.from} → ${first.to}${rest.length ? ` +${rest.length}` : ''}`
 }
+
+// What the bar's Updates control says: idle and running before the updates finish, then
+// what changed. ready is true once there is something to open.
+export function updatesLabel(updates) {
+  const none = { note: '', count: '' }
+  if (updates.state === 'running') return { label: 'Updating…', ...none, ready: false }
+  if (updates.state === 'skipped') return { label: 'Updates', note: 'networking blocked', count: '', ready: true }
+  if (updates.state === 'error') return { label: 'Updates', note: 'failed', count: '', ready: true }
+  if (updates.state !== 'done') return { label: 'Updates', ...none, ready: false }
+  const { updated, failed } = updates.result
+  if (updated.length) return { label: 'Updated', note: updatedNote(updates.result), count: String(updated.length), ready: true }
+  if (failed.length) return { label: 'Update failed', note: failed.map((entry) => entry.name).join(', '), count: String(failed.length), ready: true }
+  return { label: 'Up to date', ...none, ready: true }
+}
+
+// What a screen reader hears from the bar while the updates run and when they finish.
+export function updatesAnnouncement(updates) {
+  if (updates.state === 'running') return 'Updating plugins and themes.'
+  if (updates.state === 'skipped') return 'Plugins were not updated: this setup blocks networking.'
+  if (updates.state === 'error') return `Plugins were not updated. ${updates.message}`
+  if (updates.state !== 'done') return ''
+  const { updated, failed } = updates.result
+  if (!updated.length && !failed.length) return 'Every plugin and theme was up to date.'
+  return [
+    updated.length ? `Updated at start: ${updated.map((entry) => `${entry.name} ${entry.from} to ${entry.to}`).join(', ')}.` : '',
+    failed.length ? `Not updated: ${failed.map((entry) => entry.name).join(', ')}.` : '',
+  ].filter(Boolean).join(' ')
+}
