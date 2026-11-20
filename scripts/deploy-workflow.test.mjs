@@ -69,7 +69,7 @@ test('the Playground build applies our core patch and keys its cache on the patc
   const build = jobs['playground-build'] ?? ''
   const host = jobs['playground-host'] ?? ''
 
-  assert.ok(settings.includes(`            ${patchPath}\n`), 'the settings job checks out the patch')
+  assert.match(settings, /sparse-checkout: \|\n(?: +\S+\n)* +playground-host\/playground-core\.patch\n/, 'the settings job checks out the patch')
   assert.ok(settings.includes(`sha256sum ${patchPath}`), 'the settings job hashes the patch')
   assert.ok(settings.includes('playground_patch_sha256: ${{ steps.patch.outputs.sha256 }}\n'), 'the settings job outputs the hash')
 

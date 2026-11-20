@@ -294,7 +294,7 @@ index 152b5a8..9e8dac1 100644
  import express, { type Express } from 'express';
  import http from 'http';
  import https from 'https';
-@@ -1047,6 +1048,78 @@ describe('RawBytesFetch', () => {
+@@ -1047,6 +1048,109 @@ describe('RawBytesFetch', () => {
  		const requestBody = await new Response(request.body).text();
  		expect(requestBody).toEqual(body);
  	});
@@ -340,6 +340,37 @@ index 152b5a8..9e8dac1 100644
 +			expect(request.body).toBeNull();
 +			sendBody();
 +			expect(await new Response(bodyToBuffer).text()).toEqual(body);
++		});
++
++		it('parseHttpRequest ends a chunked body to buffer at the last chunk while the socket stays open', async () => {
++			let sendChunks: () => void = () => {};
++			const { request, bodyToBuffer } =
++				await RawBytesFetch.parseHttpRequest(
++					new ReadableStream({
++						start(controller) {
++							controller.enqueue(
++								new TextEncoder().encode(
++									`POST /echo HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: chunked\r\nExpect: 100-continue\r\n\r\n`
++								)
++							);
++							// The socket is never closed: the body must end
++							// at the terminating zero-length chunk.
++							sendChunks = () =>
++								controller.enqueue(
++									new TextEncoder().encode(
++										'6\r\nhello=\r\n5\r\nworld\r\n0\r\n\r\n'
++									)
++								);
++						},
++					}),
++					'example.com',
++					'https'
++				);
++			expect(request.body).toBeNull();
++			sendChunks();
++			expect(await new Response(bodyToBuffer).text()).toEqual(
++				'hello=world'
++			);
 +		});
 +
 +		it('fetchRawResponseBytes sends the buffered body', async () => {

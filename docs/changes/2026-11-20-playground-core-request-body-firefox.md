@@ -49,19 +49,20 @@ Success: a browser run in Firefox and Chromium shows the proxy receiving the ful
 | --- | --- | --- | --- | --- |
 | This repository, Node 24.22.2 | `node --test scripts/deploy-workflow.test.mjs` with the two new tests, before the patch file and workflow change | New tests fail | Both failed: "the settings job checks out the patch" and ENOENT for `playground-host/playground-core.patch` | Terminal run, 2026-11-20 |
 | Same | `scripts/agents/kit unit --affected` after the change | All pass | `RESULT: ok unit 6/6 (1 files)` | `.scratch/unit/20261120T094302-3332066.log` (local) |
-| Sparse checkout of WordPress Playground tag `v3.1.64`, vitest 3.2.4 | Upstream specs `utils.spec.ts`, `fetch-with-cors-proxy.spec.ts`, `tcp-over-fetch-websocket.spec.ts` with the new tests, source unpatched | The 4 new Firefox tests fail, the rest pass | `Tests 4 failed \| 67 passed (71)`: the 4 new tests | Terminal run, 2026-11-20 |
-| Same | Same specs with `playground-host/playground-core.patch` applied | All pass | `Test Files 3 passed (3)`, `Tests 71 passed (71)` | Terminal run, 2026-11-20 |
+| Sparse checkout of WordPress Playground tag `v3.1.64`, vitest 3.2.4 | Upstream specs `utils.spec.ts`, `fetch-with-cors-proxy.spec.ts`, `tcp-over-fetch-websocket.spec.ts` with the new tests, source unpatched | The 5 new Firefox tests fail, the rest pass | `Tests 5 failed \| 67 passed (72)`: the 5 new tests, including the chunked body that ends at the zero-length chunk while the socket stays open | Terminal run, 2026-11-20 |
+| Same | Same specs with `playground-host/playground-core.patch` applied | All pass | `Test Files 3 passed (3)`, `Tests 72 passed (72)` | Terminal run, 2026-11-20 |
 | Same, clean tree | `git apply --check --verbose` then `git apply playground-host/playground-core.patch`; compare `git diff` with the source diff | Applies cleanly, same result | Exit 0; `git diff` identical to the source diff | Terminal run, 2026-11-20 |
+| Sparse checkout of WordPress Playground `trunk` at 5e4e5d6 (2026-11-19) | `cmp` of the three changed source files with `v3.1.64`; `git apply --check playground-host/playground-core.patch` | Same code upstream | The three files are byte-identical to `v3.1.64`; the patch applies (exit 0) | Terminal run, 2026-11-20 |
 | Same, TypeScript 5.9.3 | `tsc --noEmit --strict` on the three changed source files, unpatched and patched | No new errors | 125 identical lines both times (existing typing gaps in the local check setup, none in the changed lines) | Terminal run, 2026-11-20 |
-| Playwright 1.65.1: Firefox (build 1572), Chromium (build 1255); local echo proxy | `PLAYWRIGHT=… node docs/changes/2026-11-20-playground-core-request-body-firefox/proxy-retry-body.mjs <v3.1.64 checkout>`, unpatched. POST `plugin=not-freemius&licence_key=TEST-KEY-123` to `https://non-freemius.invalid/wp-json/example-plugin/v1/activate`, which fails directly, so it is retried through the proxy | Firefox loses the body | Firefox: all 3 cases "lost the body, proxy got """ (`fetchWithCorsProxy` with a Request, with URL and init, `RawBytesFetch` with `Expect: 100-continue`); Chromium: all 3 kept the body; exit 1 | Terminal run, 2026-11-20 |
-| Same | Same script, checkout with the patch applied | Every case keeps the body | Firefox and Chromium: all 3 cases "kept the body"; "every request kept its body"; exit 0 | Terminal run, 2026-11-20 |
+| Playwright 1.65.1: Firefox (build 1572), Chromium (build 1255); local echo proxy | `PLAYWRIGHT=… node docs/changes/2026-11-20-playground-core-request-body-firefox/proxy-retry-body.mjs <v3.1.64 checkout>`, unpatched. POST `plugin=not-freemius&licence_key=TEST-KEY-123` to `https://non-freemius.invalid/wp-json/example-plugin/v1/activate`, which fails directly, so it is retried through the proxy | Firefox loses the body | Firefox: all 4 cases "lost the body, proxy got """ (`fetchWithCorsProxy` with a Request, with URL and init; `RawBytesFetch` with `Expect: 100-continue`, with Content-Length and chunked); Chromium: all 4 kept the body; exit 1 | Terminal run, 2026-11-20 |
+| Same | Same script, checkout with the patch applied | Every case keeps the body | Firefox and Chromium: all 4 cases "kept the body"; "every request kept its body"; exit 0 | Terminal run, 2026-11-20 |
 | Not run | Upstream `npm run build:website` with the patch (the CI build takes up to an hour and needs more memory than the shared machine had free) | | Not run locally; the first patched build runs in the `playground-build` job on the next push to `dev`, which fails if the patch does not apply or its hash differs | |
 
-Not tested here: a real plugin's activation inside a running Playground in Firefox on the preview, and Safari (Safari's probe already fails, so it took the `arrayBuffer()` path before and still does).
+Not tested here: a real plugin's activation inside a running Playground in Firefox on the preview, and Safari. Safari's probe already fails, so its service-worker retry took the `arrayBuffer()` path before and still does. Its TCP bridge path does change: with the patch, `RawBytesFetch` buffers the body in Safari too instead of passing a stream, which is the path the Firefox runs above prove, but it was not run in Safari (no WebKit build was installed on the shared machine).
 
 ## Result
 
-With the patch, the proxy receives the full body in Firefox for a non-Freemius POST, through both the service worker's retry and the TCP bridge, including the delayed body of `Expect: 100-continue`. Chromium behaves as before. Without it, Firefox sends the retry with an empty body in all three cases.
+With the patch, the proxy receives the full body in Firefox for a non-Freemius POST, through both the service worker's retry and the TCP bridge, including the delayed body of `Expect: 100-continue` with Content-Length or chunked framing. Chromium behaves as before. Without it, Firefox sends the retry with an empty body in all four cases.
 
 ## Disposition and rationale
 
@@ -71,7 +72,7 @@ Kept. It fixes the body loss for every plugin in our build and costs one verifie
 
 - New: this record, its [evidence folder](2026-11-20-playground-core-request-body-firefox/) and the patch file with its own header.
 - `docs/testing.md` (the `deploy-workflow.test.mjs` row) and `docs/architecture.md` (the Freemius paragraph, which describes the unpatched retry) still need one line each; both files are being changed in another open PR, so they are left for after it lands.
-- No changelog entry or version bump in this change: the launcher does not change; the fix reaches the Playground host on the next deploy.
+- No changelog entry or version bump in this change: the launcher does not change, and `src/App.jsx`, `package.json` and `package-lock.json` are also being changed in that other open PR. The fix reaches the Playground host on the next deploy; whether the next release notes mention it is decided at release time.
 
 ## Follow-ups and open questions
 

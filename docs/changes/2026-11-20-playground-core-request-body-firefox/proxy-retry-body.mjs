@@ -66,27 +66,35 @@ for (const browserType of [firefox, chromium]) {
       const form = { 'content-type': 'application/x-www-form-urlencoded' }
       // The raw HTTP response carries a status line, headers and chunk sizes around the JSON.
       const received = (text) => JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)).body
+      // PHP's curl or wp_remote_post() over the TCP-over-fetch bridge. With
+      // "Expect: 100-continue" the body arrives only after the headers were parsed.
+      const bridge = async (framing, payload, closeSocket) => {
+        const encoder = new TextEncoder()
+        let socket
+        const bytes = new ReadableStream({ start: (controller) => { socket = controller } })
+        socket.enqueue(encoder.encode(
+          `POST /wp-json/example-plugin/v1/activate HTTP/1.1\r\nHost: ${host}\r\n` +
+          `Content-Type: application/x-www-form-urlencoded\r\n${framing}\r\nExpect: 100-continue\r\n\r\n`
+        ))
+        const { request, bodyToBuffer } = await RawBytesFetch.parseHttpRequest(bytes, host, 'https')
+        const response = RawBytesFetch.fetchRawResponseBytes(request, proxy, bodyToBuffer)
+        setTimeout(() => {
+          socket.enqueue(encoder.encode(payload))
+          if (closeSocket) socket.close()
+        }, 50)
+        return received(await new Response(response).text())
+      }
+      const chunked = `${body.slice(0, 10).length.toString(16)}\r\n${body.slice(0, 10)}\r\n` +
+        `${body.slice(10).length.toString(16)}\r\n${body.slice(10)}\r\n0\r\n\r\n`
       const scenarios = {
         // A plugin's fetch() from the page (Request object), as the service worker sees it.
         'fetchWithCorsProxy, Request': async () =>
           received(await (await fetchWithCorsProxy(new Request(target, { method: 'POST', headers: form, body }), undefined, proxy)).text()),
         'fetchWithCorsProxy, URL and init': async () =>
           received(await (await fetchWithCorsProxy(target, { method: 'POST', headers: form, body }, proxy)).text()),
-        // PHP's curl or wp_remote_post() over the TCP-over-fetch bridge. With
-        // "Expect: 100-continue" the body arrives only after the headers were parsed.
-        'RawBytesFetch, Expect: 100-continue': async () => {
-          const encoder = new TextEncoder()
-          let socket
-          const bytes = new ReadableStream({ start: (controller) => { socket = controller } })
-          socket.enqueue(encoder.encode(
-            `POST /wp-json/example-plugin/v1/activate HTTP/1.1\r\nHost: ${host}\r\n` +
-            `Content-Type: application/x-www-form-urlencoded\r\nContent-Length: ${body.length}\r\nExpect: 100-continue\r\n\r\n`
-          ))
-          const { request, bodyToBuffer } = await RawBytesFetch.parseHttpRequest(bytes, host, 'https')
-          const response = RawBytesFetch.fetchRawResponseBytes(request, proxy, bodyToBuffer)
-          setTimeout(() => { socket.enqueue(encoder.encode(body)); socket.close() }, 50)
-          return received(await new Response(response).text())
-        },
+        'RawBytesFetch, Content-Length, Expect: 100-continue': () => bridge(`Content-Length: ${body.length}`, body, true),
+        // A chunked body ends at the zero-length chunk; the socket stays open.
+        'RawBytesFetch, chunked, Expect: 100-continue': () => bridge('Transfer-Encoding: chunked', chunked, false),
       }
       const out = { expected: body }
       for (const [name, run] of Object.entries(scenarios)) {
