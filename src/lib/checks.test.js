@@ -163,3 +163,17 @@ test('screen readers hear when the checks start and what they found', async () =
   assert.equal(checksAnnouncement({ state: 'done', report: { passed: 7, warnings: 0, failed: 1, checks: Array(8) } }), 'Checks: 1 check failed.')
   assert.equal(checksAnnouncement({ state: 'error', message: 'This page did not return its numbers.' }), 'The checks could not run. This page did not return its numbers.')
 })
+
+test('a second run on the same site waits, while a run on a new site can start', async () => {
+  const { createRunGuard } = await import('./checks.js')
+  const guard = createRunGuard()
+  const oldSite = {}
+  const newSite = {}
+  assert.equal(guard.start(oldSite), true)
+  assert.equal(guard.start(oldSite), false)
+  assert.equal(guard.start(newSite), true)
+  guard.finish(oldSite)
+  assert.equal(guard.start(newSite), false, 'the old run finishing does not unblock the new site')
+  guard.finish(newSite)
+  assert.equal(guard.start(newSite), true)
+})

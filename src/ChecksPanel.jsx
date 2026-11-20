@@ -32,7 +32,7 @@ export function ChecksButton({ siteReady, run, gate, open, onToggle, buttonRef }
       aria-expanded={open}
       aria-controls={CHECKS_PANEL_ID}
       disabled={!siteReady}
-      title={siteReady ? 'Checks' : 'Available when setup finishes'}
+      title={!siteReady ? 'Available when setup finishes' : waitsForLicenses ? 'Checks · activate licenses first' : 'Checks'}
       onClick={onToggle}
       className={BAR_BUTTON_CLASS}
     >
