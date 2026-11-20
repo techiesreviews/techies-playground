@@ -310,7 +310,23 @@ export function checksAnnouncement(run) {
   return ''
 }
 
-export const formatSeconds = (seconds) => `${seconds < 10 ? seconds.toFixed(2) : seconds.toFixed(1)} s`
+// One measurement per site at a time. A run left over from an earlier launch cannot
+// unblock the site that replaced it.
+export function createRunGuard() {
+  let running = null
+  return {
+    start(client) {
+      if (running === client) return false
+      running = client
+      return true
+    },
+    finish(client) {
+      if (running === client) running = null
+    },
+  }
+}
+
+export const formatSeconds =(seconds) => `${seconds < 10 ? seconds.toFixed(2) : seconds.toFixed(1)} s`
 const formatMegabytes = (bytes) => `${Math.round(bytes / 1048576)} MB`
 const ERROR_KINDS = [['error', 'error'], ['warning', 'warning'], ['notice', 'notice'], ['deprecated', 'deprecation notice']]
 
