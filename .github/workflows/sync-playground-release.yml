@@ -1,0 +1,112 @@
+name: Sync WordPress Playground release
+
+# Opens one pull request into dev when WordPress Playground publishes a release. One
+# version moves the launcher's Playground packages, the Playground client and the
+# self-hosted Playground together (deploy-site.yml builds wp.techies.tools from the tag
+# that matches the @wp-playground/blueprints pin). Merging into dev updates the previews
+# only; releasing to main needs Lex's approval every time.
+on:
+  schedule:
+    - cron: '47 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-playground-release
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Check Playground releases and prepare an update
+    if: github.repository == 'techiesreviews/techies-playground'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Check out dev
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: dev
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Synchronize the Playground release
+        id: sync
+        run: node scripts/sync-playground-release.mjs
+
+      # The boot test installs @wp-playground/cli at the new version and starts WordPress
+      # once with the launcher's default setup and WP-CLI.
+      - name: Verify the generated update
+        if: steps.sync.outputs.changed == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          npm test
+          npm run build
+          npm audit --audit-level=high
+          node scripts/check-playground-advisories.mjs
+          node scripts/playground-boot-test.mjs
+          git diff --check
+
+      - name: Open or refresh the update pull request
+        if: steps.sync.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APP_VERSION: ${{ steps.sync.outputs.app_version }}
+          PLAYGROUND_VERSION: ${{ steps.sync.outputs.playground_version }}
+          PREVIOUS_VERSION: ${{ steps.sync.outputs.previous_version }}
+          DROPPED_OVERRIDES: ${{ steps.sync.outputs.dropped_overrides }}
+        run: |
+          branch="automation/playground-${PLAYGROUND_VERSION}"
+          title="Update WordPress Playground to ${PLAYGROUND_VERSION}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -C "$branch"
+          git add package.json package-lock.json src/App.jsx
+          git commit -m "$title"
+          git push --force origin "$branch"
+
+          dropped=""
+          if [ -n "$DROPPED_OVERRIDES" ]; then
+            dropped="- Dropped package overrides that this release no longer needs: ${DROPPED_OVERRIDES}."
+          fi
+          body="$(cat <<EOF
+          Automated update to the official WordPress Playground release ${PLAYGROUND_VERSION} (from ${PREVIOUS_VERSION}).
+
+          - One version moves together: the launcher's Playground packages, the Playground client and the self-hosted Playground (deploy-site.yml builds it from tag v${PLAYGROUND_VERSION}).
+          - App version ${APP_VERSION}, with a changelog entry.
+          - Checked before this pull request opened: unit tests, the launcher build, npm audit (high and above), Playground security advisories, and one boot of Playground ${PLAYGROUND_VERSION} with the launcher's default setup and WP-CLI.
+          ${dropped}
+
+          Going live: merging into dev updates the previews (preview-play.techies.tools and preview-wp.techies.tools) only. Releasing to main needs Lex's approval every time; this update never goes live on its own.
+
+          Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          EOF
+          )"
+
+          existing_pr="$(gh pr list --head "$branch" --base dev --state open --json number --jq '.[0].number')"
+          if [ -z "$existing_pr" ]; then
+            gh pr create \
+              --base dev \
+              --head "$branch" \
+              --title "$title" \
+              --body "$body"
+          else
+            gh pr edit "$existing_pr" --body "$body"
+          fi
+
+          # One update pull request at a time: an older Playground update still open is replaced.
+          gh pr list --base dev --state open --json number,headRefName \
+            --jq ".[] | select(.headRefName | startswith(\"automation/playground-\")) | select(.headRefName != \"${branch}\") | .number" |
+            while read -r number; do
+              gh pr close "$number" --delete-branch --comment "Replaced by the update to Playground ${PLAYGROUND_VERSION}."
+            done

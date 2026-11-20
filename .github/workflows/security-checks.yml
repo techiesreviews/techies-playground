@@ -1,0 +1,65 @@
+name: Security checks
+
+# npm audit, open Dependabot alerts and WordPress Playground security advisories. The
+# self-hosted Playground is built from the same release as the launcher's Playground
+# packages, so the advisory check covers it too.
+on:
+  schedule:
+    - cron: '23 7 * * *'
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: read
+
+concurrency:
+  group: security-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  security:
+    name: Check dependencies and advisories
+    if: github.repository == 'techiesreviews/techies-playground'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Audit the npm dependencies
+        run: npm audit --audit-level=high
+
+      - name: Check Playground security advisories
+        if: success() || failure()
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/check-playground-advisories.mjs
+
+      # Dependabot alerts describe the default branch (main), so a push to dev does not
+      # read them. The workflow token reads them with security-events: read; if GitHub
+      # refuses it, a repository secret DEPENDABOT_ALERTS_TOKEN (a fine-grained token
+      # with "Dependabot alerts: read") is used instead.
+      - name: Check open Dependabot alerts
+        if: github.event_name != 'push' && (success() || failure())
+        env:
+          GH_TOKEN: ${{ secrets.DEPENDABOT_ALERTS_TOKEN || github.token }}
+        run: |
+          if ! alerts="$(gh api "repos/${GITHUB_REPOSITORY}/dependabot/alerts?state=open&severity=high,critical&per_page=100" \
+            --jq '.[] | "\(.security_advisory.ghsa_id) (\(.security_advisory.severity)) \(.dependency.package.name): \(.security_advisory.summary) \(.html_url)"')"; then
+            echo "::error::GitHub refused to list Dependabot alerts. Add a repository secret DEPENDABOT_ALERTS_TOKEN: a fine-grained token for this repository with Dependabot alerts: read."
+            exit 1
+          fi
+          if [ -n "$alerts" ]; then
+            echo "$alerts"
+            echo "::error::Open high or critical Dependabot alerts."
+            exit 1
+          fi
+          echo "No open high or critical Dependabot alerts."
