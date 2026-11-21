@@ -28,7 +28,7 @@ The GPT second look and the Claude review on the 0.11.0 release (`dev` to `main`
 ## Implementation or prototype
 
 - `src/lib/plugin-updates.js`: one PHP helper, `techies_playground_incompatible()`, reads `requires_php` and `requires` from an offer (an object for plugins, an array for themes) and returns the reason or an empty string. The plugin loop uses it in place of its own two checks, and the theme loop now calls it before the upgrader.
-- `src/UpdatesControl.jsx`: when the state is `error` or `skipped`, an amber `ExclamationTriangleIcon` (hidden from screen readers) follows the label at every width, right after `Updates` like the Checks waiting note. The tooltip says `Updates failed at start` in those states and also when the step ran but only failures came back (`Update failed`), or `Updates · networking blocked`. This replaces the previous record's rule that these two states show only `Updates` up to 1040 px; the words themselves stay screen-reader only up to 1040 px.
+- `src/UpdatesControl.jsx`: when the state is `error` or `skipped`, an amber `ExclamationTriangleIcon` (hidden from screen readers) follows the label at every width, right after `Updates` like the Checks waiting note. The tooltip says `Updates failed at start` when the step failed or only failures came back (`Update failed`), and `Updates · networking blocked` when networking is blocked. This replaces the previous record's rule that these two states show only `Updates` up to 1040 px; the words themselves stay screen-reader only up to 1040 px.
 
 ## Tests and evidence
 
