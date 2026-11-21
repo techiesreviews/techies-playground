@@ -55,6 +55,14 @@ test('the page to measure is the current page with the measure request, never an
   assert.equal(measurePath('/?techies-check=query-monitor'), '/?techies-measure=1')
   assert.equal(measurePath(''), '/wp-admin/?techies-measure=1')
   assert.equal(measurePath('https://example.com/steal'), '/wp-admin/?techies-measure=1')
+  // A plain edit screen has an action but no nonce, so it is measured as it is.
+  assert.equal(measurePath('/wp-admin/post.php?post=1&action=edit'), '/wp-admin/post.php?post=1&action=edit&techies-measure=1')
+})
+
+test('Run again never repeats an action the current page ran from its address', async () => {
+  const { measurePath } = await import('./checks.js')
+  assert.equal(measurePath('/wp-admin/update.php?action=upgrade-plugin&plugin=x%2Fx.php&_wpnonce=abc'), '/wp-admin/?techies-measure=1')
+  assert.equal(measurePath('/wp-admin/admin.php?page=tool&_ajax_nonce=abc'), '/wp-admin/?techies-measure=1')
 })
 
 const encode = (value) => Buffer.from(JSON.stringify(value)).toString('base64')
