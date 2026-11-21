@@ -35,7 +35,7 @@ The GPT second look on the 0.11.0 release (`dev` to `main`, PR #53) found four p
 - `src/App.jsx`, `src/ChecksPanel.jsx`, `src/UpdatesControl.jsx`: the bar labels and the compact paddings use `max-md:` (below 768 px) instead of `max-sm:`, and the compact licence summary uses `md:hidden` (768 px and up), so both sides switch at the same width; the existing icon-only `N failed` rule moved from `max-[767px]:` to `max-md:` too, because Tailwind reads `max-[767px]:` as "narrower than 767 px" and left a 1 px band where neither rule applied. The 1040/1041 pair had the same band (the Updates note and its count both showing, the button unable to shrink, and the Checks waiting note showing at exactly 1040 px), so its hide side moved from `max-[1040px]:` to `max-[1041px]:`. Close keeps its own phone padding and the tap overlays keep their phone geometry.
 - `src/lib/plugin-updates.js`: the update code remembers `is_plugin_active_for_network( $file )` before the update and passes it as the network flag to `activate_plugin()`.
 - `src/ChecksPanel.jsx`: Run checks uses `any-pointer-coarse:min-h-11`; Open in drops its fine-pointer-hidden overlay and uses the same class.
-- `src/UpdatesControl.jsx`: the note (`role=dialog`, named by its heading, so it says **Updates at start** when nothing was updated) has `tabIndex=0`, a teal focus ring and takes focus when it opens.
+- `src/UpdatesControl.jsx`: the note (`role=dialog`, named by its heading, so it says **Updates at start** when networking is blocked or the update failed) has `tabIndex=0`, a teal focus ring and takes focus when it opens.
 
 The bar's own tap overlays (`BarTapTarget`) are unchanged: they already reach 48 px on a phone, and making them show with a mouse on a crowded bar would make the overlays overlap.
 
@@ -67,4 +67,4 @@ Kept. Each change is small, covered by a test that failed before it, and matches
 
 ## Follow-ups and open questions
 
-- None.
+- The GPT second look on this change asked for browser tests: keyboard scrolling of a long note (focus, ArrowDown, Escape back to Updates) and the 44 px targets with a fine main pointer plus a touchscreen. The project's test runner is Node without a browser, so these stay source inspection plus the recorded renders; a browser test runner would be its own change.
