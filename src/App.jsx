@@ -1849,7 +1849,9 @@ export default function App() {
   const unlockResolveRef = useRef(null)
   const [licenseFill, setLicenseFill] = useState([])
   const [launchedChecks, setLaunchedChecks] = useState([])
-  // The launched plugins whose saved keys the license step fills: checks wait for these.
+  // The launched plugins whose licences the checks wait for: saved-key plugins, then premium
+  // Freemius plugins that cannot use their premium code (every uploaded plugin when the
+  // licence probe failed). siteLicensedIds: those WordPress already reports as active.
   const [licensedPackageIds, setLicensedPackageIds] = useState([])
   const [siteLicensedIds, setSiteLicensedIds] = useState([])
   const [pluginUpdates, setPluginUpdates] = useState({ state: 'idle' })

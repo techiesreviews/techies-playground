@@ -37,11 +37,24 @@ function is_wp_error( $thing ) { return $thing instanceof WP_Error; }
 function wp_strip_all_tags( $text ) { return trim( strip_tags( $text ) ); }
 function wp_json_encode( $value ) { return json_encode( $value ); }
 function delete_site_transient( $name ) { $GLOBALS['deleted'][] = $name; }
-function wp_update_plugins() {}
-function wp_update_themes() {}
+// The update checks call WordPress.org, once or again after a failed try; each answer goes
+// to the http_api_debug listeners, as WP_Http does after every request.
+$GLOBALS['theme_offers'] = array( 'old-theme' => array( 'new_version' => '2.0', 'package' => 'install' ) );
+$GLOBALS['answers'] = array( 'plugins' => array( array( 'response' => array( 'code' => 200 ) ) ), 'themes' => array( array( 'response' => array( 'code' => 200 ) ) ) );
+function add_action( $hook, $callback, $priority = 10, $args = 1 ) { $GLOBALS['actions'][ $hook ][] = $callback; }
+function wp_remote_retrieve_response_code( $response ) { return is_array( $response ) ? $response['response']['code'] : ''; }
+function techies_stub_update_check( $kind ) {
+	foreach ( $GLOBALS['answers'][ $kind ] as $answer ) {
+		foreach ( $GLOBALS['actions']['http_api_debug'] ?? array() as $callback ) {
+			$callback( $answer, 'response', 'Requests', array(), 'https://api.wordpress.org/' . $kind . '/update-check/1.1/' );
+		}
+	}
+}
+function wp_update_plugins() { techies_stub_update_check( 'plugins' ); }
+function wp_update_themes() { techies_stub_update_check( 'themes' ); }
 function get_site_transient( $name ) {
 	if ( 'update_plugins' === $name ) { return (object) array( 'response' => $GLOBALS['offers'] ); }
-	return (object) array( 'response' => array( 'old-theme' => array( 'new_version' => '2.0', 'package' => 'install' ) ) );
+	return (object) array( 'response' => $GLOBALS['theme_offers'] );
 }
 function get_plugins() { return $GLOBALS['plugins']; }
 function is_plugin_active( $file ) { return in_array( $file, $GLOBALS['active'], true ); }
@@ -78,11 +91,11 @@ class Theme_Upgrader { public function __construct( public $skin ) {} public fun
 register_shutdown_function( function () { echo "\\nSTATE:" . json_encode( array( 'active' => $GLOBALS['active'], 'reactivated' => $GLOBALS['reactivated'] ?? array(), 'deleted' => $GLOBALS['deleted'] ?? array() ) ); } );
 `
 
-async function run() {
+async function run(setup = '') {
   const php = new PHP(await loadPHPRuntime(await getPHPLoaderModule()))
   php.mkdir('/wordpress/wp-admin/includes')
   for (const file of ['file', 'plugin', 'theme', 'update', 'class-wp-upgrader', 'class-automatic-upgrader-skin']) php.writeFile(`/wordpress/wp-admin/includes/${file}.php`, '<?php')
-  php.writeFile('/wordpress/wp-load.php', WP_LOAD)
+  php.writeFile('/wordpress/wp-load.php', WP_LOAD + setup)
   const response = await php.run({ code: PLUGIN_UPDATES_CODE })
   assert.equal(response.errors, '', response.errors)
   const [before, state] = response.text.split('\nSTATE:')
@@ -112,4 +125,28 @@ test('updates each offered plugin, reports old and new version, and turns active
   assert.deepEqual([...state.active].sort(), ['example-pro/example.php', 'needs-php/needs-php.php', 'needs-wp/needs-wp.php', 'query-monitor/query-monitor.php', 'wp-2fa/wp-2fa.php'])
   // A fresh update check, not a cached one.
   assert.deepEqual(state.deleted, ['update_plugins', 'update_themes'])
+})
+
+test('an update check WordPress.org did not answer is named as failed, and nothing is called current', async () => {
+  // WordPress keeps no update list when its check fails, so only an offer from a plugin's own
+  // update server (here WP 2FA) is left. The theme check gets an error page.
+  const { result } = await run(`
+$GLOBALS['answers'] = array( 'plugins' => array( new WP_Error( 'http_request_failed', 'cURL error 28: Operation timed out' ) ), 'themes' => array( array( 'response' => array( 'code' => 503 ) ) ) );
+$GLOBALS['offers'] = array( 'wp-2fa/wp-2fa.php' => $GLOBALS['offers']['wp-2fa/wp-2fa.php'] );
+$GLOBALS['theme_offers'] = array();
+`)
+  assert.deepEqual(result.updated, [{ name: 'WP 2FA', from: '3.1', to: '3.2' }])
+  assert.deepEqual(result.failed, [
+    { name: 'Plugin update check', message: 'WordPress.org did not answer (cURL error 28: Operation timed out), so other plugins may have updates.' },
+    { name: 'Theme update check', message: 'WordPress.org did not answer (HTTP 503), so themes may have updates.' },
+  ])
+  assert.deepEqual(result.current, [])
+})
+
+test('a check that fails over https and then answers over http still counts as answered', async () => {
+  const { result } = await run(`
+$GLOBALS['answers']['plugins'] = array( new WP_Error( 'http_request_failed', 'SSL connect error' ), array( 'response' => array( 'code' => 200 ) ) );
+`)
+  assert.ok(!result.failed.some((entry) => entry.name === 'Plugin update check'), JSON.stringify(result.failed))
+  assert.deepEqual(result.current, [{ name: 'Query Monitor', version: '4.1.1' }, { name: 'Current Theme', version: '1.3' }])
 })

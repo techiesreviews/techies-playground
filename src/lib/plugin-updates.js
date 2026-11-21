@@ -29,15 +29,42 @@ function techies_playground_upgrade( $upgrader, $skin, $item ) {
 	return true;
 }
 
+// When WordPress.org does not answer its update check, WordPress keeps no update list, and a
+// missing offer would read as up to date. So the check counts only once it got an answer
+// (WordPress tries https, then http), and otherwise it is named as failed.
+$update_checks = array(
+	'plugins' => array( 'answered' => false, 'error' => 'no request was made' ),
+	'themes' => array( 'answered' => false, 'error' => 'no request was made' ),
+);
+add_action( 'http_api_debug', function ( $response, $context, $class, $args, $url ) use ( &$update_checks ) {
+	if ( ! preg_match( '#^https?://api\\.wordpress\\.org/(plugins|themes)/update-check/#', (string) $url, $match ) ) {
+		return;
+	}
+	$code = is_wp_error( $response ) ? 0 : (int) wp_remote_retrieve_response_code( $response );
+	if ( 200 === $code ) {
+		$update_checks[ $match[1] ]['answered'] = true;
+	} else {
+		$update_checks[ $match[1] ]['error'] = is_wp_error( $response ) ? wp_strip_all_tags( $response->get_error_message() ) : 'HTTP ' . $code;
+	}
+}, 10, 5 );
+
+function techies_playground_check_failed( $check, $name, $others ) {
+	return array( 'name' => $name, 'message' => substr( 'WordPress.org did not answer (' . $check['error'] . '), so ' . $others . ' may have updates.', 0, 200 ) );
+}
+
 delete_site_transient( 'update_plugins' );
 wp_update_plugins();
 $plugin_state = get_site_transient( 'update_plugins' );
 $plugin_updates = is_object( $plugin_state ) && ! empty( $plugin_state->response ) ? (array) $plugin_state->response : array();
+$plugins_checked = $update_checks['plugins']['answered'];
+if ( ! $plugins_checked ) {
+	$result['failed'][] = techies_playground_check_failed( $update_checks['plugins'], 'Plugin update check', 'other plugins' );
+}
 $updated_files = array();
 
 foreach ( get_plugins() as $file => $data ) {
 	if ( ! isset( $plugin_updates[ $file ] ) ) {
-		if ( is_plugin_active( $file ) ) {
+		if ( $plugins_checked && is_plugin_active( $file ) ) {
 			$result['current'][] = array( 'name' => $data['Name'], 'version' => $data['Version'] );
 		}
 		continue;
@@ -86,10 +113,14 @@ delete_site_transient( 'update_themes' );
 wp_update_themes();
 $theme_state = get_site_transient( 'update_themes' );
 $theme_updates = is_object( $theme_state ) && ! empty( $theme_state->response ) ? (array) $theme_state->response : array();
+$themes_checked = $update_checks['themes']['answered'];
+if ( ! $themes_checked ) {
+	$result['failed'][] = techies_playground_check_failed( $update_checks['themes'], 'Theme update check', 'themes' );
+}
 
 foreach ( wp_get_themes() as $slug => $theme ) {
 	if ( ! isset( $theme_updates[ $slug ] ) ) {
-		if ( get_stylesheet() === $slug ) {
+		if ( $themes_checked && get_stylesheet() === $slug ) {
 			$result['current'][] = array( 'name' => $theme->get( 'Name' ), 'version' => $theme->get( 'Version' ) );
 		}
 		continue;
