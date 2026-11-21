@@ -50,7 +50,7 @@ export function ChecksButton({ siteReady, run, gate, open, onToggle, buttonRef }
         // The chart stays until the spinner shows, so a quick run does not flash it.
         <span className="grid shrink-0 place-items-center *:col-start-1 *:row-start-1">
           <ChartBarIcon className="checks-delay-out size-4 fill-neutral-300" />
-          <Spinner className="checks-delay-in text-neutral-300" />
+          <span className="checks-delay-in inline-flex"><Spinner className="text-neutral-300" /></span>
         </span>
       ) : <ChartBarIcon className="size-4 shrink-0 fill-neutral-300" />}
       <span className="max-md:sr-only">Checks</span>
@@ -210,7 +210,7 @@ function CheckDetail({ limit, check, running, onOpenCheck }) {
           <>
             <p className="text-[2rem]/11 font-semibold tracking-[-0.02em] text-neutral-300" aria-hidden="true">–</p>
             <p className="inline-flex items-center gap-1.5 self-center text-sm/5 font-medium text-neutral-600">
-              <Spinner className="checks-delay-in" />
+              <span className="checks-delay-in inline-flex"><Spinner /></span>
               Running checks…
             </p>
           </>
@@ -440,7 +440,7 @@ export function ChecksPanel({ checks, run, gate, onRun, onClose, onOpenCheck, es
   let subline
   if (running) {
     verdictBox = VERDICT_BOX.wait
-    verdictIcon = <Spinner className="checks-delay-in" />
+    verdictIcon = <span className="checks-delay-in inline-flex"><Spinner /></span>
     headline = 'Running checks…'
     subline = <p className="mt-0.5 text-sm/5 text-neutral-600">{checks.map((check) => check.name).join(', then ')}</p>
   } else if (verdict) {
