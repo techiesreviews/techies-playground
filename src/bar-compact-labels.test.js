@@ -95,23 +95,13 @@ test('below 384 px the close confirmation keeps its 10 px gap, so Keep open and 
   assert.doesNotMatch(withoutNormalBarGap, /max-xs:gap-/, 'no tight gap applies while confirming')
 })
 
-test('the Checks numbers switch to two columns by the panel width in rem, so larger text never spills', () => {
+test('the limits under one check stack below 15 rem, so 200% text at 320 px stays inside the panel', () => {
+  // At 320 px with 200% text the panel is 10 rem wide: three columns side by side would spill.
   const panel = checksPanel.slice(checksPanel.indexOf('<aside'), checksPanel.indexOf('</aside>'))
-  // The panel is the container: 25 rem wide at most, so four tiles only when it has its full
-  // width, whatever the text size.
   assert.match(panel.match(/<aside[\s\S]*?className="([^"]*)"/)[1], /(^|\s)@container(\s|$)/)
-  const grid = panel.match(/<div className="(mt-3 grid [^"]*)">/)
-  assert.ok(grid, 'found the tiles grid')
-  assert.match(grid[1], /\bgrid-cols-4\b/)
-  assert.match(grid[1], /@max-\[25rem\]:grid-cols-2/)
-  assert.doesNotMatch(grid[1], /max-\[\d+px\]:/, 'no viewport pixel breakpoint: it ignores the text size')
-})
-
-test('the Checks numbers go to one column below 15 rem, so 200% text at 320 px keeps 1024 MB inside its box', () => {
-  // At 320 px with 200% text the panel is 10 rem wide: two columns put "1024 MB" about 50 px past
-  // its tile. Normal text at 320 px is 20 rem wide, so it keeps two columns.
-  const panel = checksPanel.slice(checksPanel.indexOf('<aside'), checksPanel.indexOf('</aside>'))
-  const grid = panel.match(/<div className="(mt-3 grid [^"]*)">/)
-  assert.ok(grid, 'found the tiles grid')
-  assert.match(grid[1], /@max-\[15rem\]:grid-cols-1/)
+  const scale = checksPanel.match(/aria-label=\{`Limits for \$\{limit\.name\}`\}\s*className="([^"]*)"/)
+  assert.ok(scale, 'found the limits under one check')
+  assert.match(scale[1], /\bgrid-flow-col\b/)
+  assert.match(scale[1], /@max-\[15rem\]:grid-flow-row/)
+  assert.doesNotMatch(scale[1], /max-\[\d+px\]:/, 'no viewport pixel breakpoint: it ignores the text size')
 })
