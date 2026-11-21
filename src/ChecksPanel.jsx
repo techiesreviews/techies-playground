@@ -40,7 +40,7 @@ export function ChecksButton({ siteReady, run, gate, open, onToggle, buttonRef }
       {run.state === 'running' ? <Spinner className="text-neutral-300" /> : <ChartBarIcon className="size-4 shrink-0 fill-neutral-300" />}
       <span className="max-md:sr-only">Checks</span>
       {waitsForLicenses && <ExclamationTriangleIcon className="size-3.5 shrink-0 fill-amber-300" aria-hidden="true" />}
-      {waitingNote && <span className="font-normal text-neutral-300 max-[1040px]:sr-only">· {waitingNote}</span>}
+      {waitingNote && <span className="font-normal text-neutral-300 max-[1041px]:sr-only">· {waitingNote}</span>}
       {verdict && (
         <span className={`inline-flex items-center gap-1 ${statusColor}`}>
           <StatusIcon className="size-3.5 shrink-0 fill-current" />
