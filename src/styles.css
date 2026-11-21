@@ -3,8 +3,8 @@
 @theme {
   --font-sans: InterVariable, Inter, ui-sans-serif, system-ui, sans-serif;
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  /* 360 px: below it the Playground bar tightens so Close fits a full bar at 320 px. */
-  --breakpoint-xs: 22.5rem;
+  /* 384 px: below it the Playground bar tightens so Close fits a full bar from 320 px. */
+  --breakpoint-xs: 24rem;
 }
 
 @keyframes license-popover-in {
