@@ -37,7 +37,7 @@ The GPT second look and the Claude review on the 0.11.0 release (`dev` to `main`
 | Node 24, before the fix | `node --test src/lib/plugin-updates-php.test.js src/updates-control.test.js` with the new tests only | The two new tests fail | 2 failed: both themes reported as updated; no icon or state tooltip in the button | `plugin-updates-php.test.js` (theme versions), `updates-control.test.js` (warning icon) |
 | Node 24, after the fix | `node --test src/updates-control.test.js src/bar-compact-labels.test.js src/lib/plugin-updates.test.js src/lib/plugin-updates-php.test.js` | All pass | 24 passed, including a theme offer this site can run still reaching the theme upgrader | Same files |
 | Headless Chrome, this branch | The bar (real `UpdatesControl` and `ChecksButton`, a copy of the App bar), rendered to static markup with this branch's built CSS by a throwaway script, and measured in the page (Close's right edge against the bar, the button height, the icon's width): networking blocked, update step failed, one update and two failures, a long name with date versions; each with the normal bar and a full bar (`· 10 of 12 active`, `12 warnings`), at 641, 700, 767, 768, 800, 900, 1040, 1041, 1100 and 1280 px | Close inside the bar, one line, the amber icon visible | All 80 renders: Close inside the bar, one line, the amber icon visible | ![The bar at 800 px in all eight cases](assets/2026-11-21-failed-updates-icon-800.png) |
-| Playwright viewport emulation, this branch and `dev` (760ad32) | The same bar at 320, 360, 375, 390 and 414 px | No new phone regression from the icon | 360 to 414 px: Close inside on both. 320 px: Close is cut on a full bar and in the done-with-failures cases on both `dev` and this branch, so it comes from before this change | Measurements of both runs |
+| Playwright viewport emulation (playwright-core with Chrome), this branch and `dev` (760ad32) | The same eight bars, the same markup script and each build's CSS, at 320, 360, 375, 390 and 414 px; Close's right edge measured against the bar's right edge (320) | Close inside from 360 px | 360 to 414 px: Close inside in all eight cases on both. 320 px, Close's right edge on `dev` → this branch: cases 1 and 3 (normal bar, not run) 312.0 → 312.0; cases 2 and 4 (full bar, networking blocked or failed) 321.3 → 341.3, so the icon adds 20 px to a cut that was 1.3 px; cases 5 and 7 (done with failures, normal bar) 319.3 → 319.3; cases 6 and 8 (done with failures, full bar) 355.3 → 355.3 | The measurements in this row |
 
 ## Result
 
@@ -55,4 +55,4 @@ Kept. Each change reuses an existing pattern (the plugin version check; the ambe
 
 ## Follow-ups and open questions
 
-- The 320 px phone case with a failed update stays as Lex chose on 2026-11-21.
+- The 320 px phone case stays as Lex chose on 2026-11-21: on a full bar Close was already cut there, and with networking blocked or a failed update the icon cuts it 20 px further.
