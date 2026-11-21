@@ -82,11 +82,15 @@ function CheckRow({ id, name, check, onOpen }) {
           ? <Icon className={`size-4 shrink-0 ${ICON_COLOR[check.status]}`} aria-hidden="true" />
           : <span className="grid size-4 shrink-0 place-items-center" aria-hidden="true"><span className="size-1.5 rounded-full bg-neutral-300" /></span>}
         {check && <span className="sr-only">{STATUS_LABEL[check.status]}:</span>}
-        <span className="min-w-0 flex-1 font-medium [overflow-wrap:anywhere]">{name}</span>
-        <span className={`shrink-0 whitespace-nowrap tabular-nums ${check ? VALUE_COLOR[check.status] : 'text-neutral-400'}`}>
-          {check ? <Figure value={check.value} /> : <><span aria-hidden="true">–</span><span className="sr-only">running</span></>}
+        {/* The value drops below the name when both do not fit (320 px with 200% text). */}
+        <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2.5">
+          <span className="min-w-0 flex-1 basis-[6em] font-medium [overflow-wrap:anywhere]">{name}</span>
+          <span className={`ml-auto shrink-0 whitespace-nowrap tabular-nums ${check ? VALUE_COLOR[check.status] : 'text-neutral-400'}`}>
+            {check ? <Figure value={check.value} /> : <><span aria-hidden="true">–</span><span className="sr-only">running</span></>}
+          </span>
         </span>
-        <ChevronRightIcon className="size-4 shrink-0 fill-neutral-400" aria-hidden="true" />
+        {/* The arrow gives its width to the name when the panel is narrow for its text. */}
+        <ChevronRightIcon className="size-4 shrink-0 fill-neutral-400 @max-[15rem]:hidden" aria-hidden="true" />
       </button>
     </li>
   )
@@ -351,7 +355,10 @@ export function ChecksPanel({ checks, run, gate, onRun, onClose, onOpenCheck, es
       views.getBoundingClientRect()
       delete views.dataset.instant
     }
-    const target = focusAfterViewRef.current
+    // The check closed by itself (a failed run): its row takes the focus that was in the check
+    // or on All checks, which is gone. Focus in WordPress or elsewhere stays where it is.
+    const lost = document.activeElement === document.body || detailRef.current?.contains(document.activeElement)
+    const target = focusAfterViewRef.current || (view === 'list' && openId && lost ? openId : null)
     focusAfterViewRef.current = null
     if (target === 'back') backRef.current?.focus({ preventScroll: true })
     else if (target) listRef.current?.querySelector(`[data-check="${target}"]`)?.focus({ preventScroll: true })
@@ -363,6 +370,12 @@ export function ChecksPanel({ checks, run, gate, onRun, onClose, onOpenCheck, es
     shownTimeRef.current = run.time
     if (report) playFigures(view === 'detail' ? detailRef.current : listRef.current)
   }, [run.time, report, view])
+
+  // Every number on screen after this render rolls from its value when the next result comes,
+  // whichever view it is in: only a number that appears with a new result rolls from 0.
+  useLayoutEffect(() => {
+    for (const figure of viewsRef.current.querySelectorAll('[data-figure]:not([data-rolled])')) figure.dataset.rolled = ''
+  })
 
   // A click outside the i closes it, and so does a click inside WordPress: the frame sends no
   // pointerdown to this page, but the window loses focus.
@@ -382,9 +395,7 @@ export function ChecksPanel({ checks, run, gate, onRun, onClose, onOpenCheck, es
 
   // A failed run has nothing to show in a check, so the overview takes over and stays.
   useEffect(() => {
-    if (run.state !== 'error' || !openId) return
-    if (detailRef.current?.contains(document.activeElement)) focusAfterViewRef.current = openId
-    setOpenId(null)
+    if (run.state === 'error' && openId) setOpenId(null)
   }, [run.state, openId])
 
   function showView(id, instant) {
@@ -443,8 +454,10 @@ export function ChecksPanel({ checks, run, gate, onRun, onClose, onOpenCheck, es
         </li>
       )
     }
+    // When the panel is narrow for its text (320 px at 200%), the counts also use the space under
+    // the verdict icon (its width plus the gap), so "0 Improve" stays inside the box.
     subline = (
-      <ul role="list" className="mt-0.5 flex flex-wrap gap-x-3.5 gap-y-0.5 text-sm/5 text-neutral-600 tabular-nums">
+      <ul role="list" className="mt-0.5 flex flex-wrap gap-x-3.5 gap-y-0.5 text-sm/5 text-neutral-600 tabular-nums @max-[15rem]:-ml-7.5">
         {count('pass', report.passed)}
         {count('warn', report.warnings)}
         {count('fail', report.failed)}
