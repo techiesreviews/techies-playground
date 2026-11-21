@@ -71,7 +71,7 @@ export function UpdatesControl({ updates, open, onOpenChange, buttonRef }) {
             down to nothing on a full bar, before its versions and +N; only very long
             versions are clipped as a last resort. */}
         {(note || noteEnd) && (
-          <span className={`flex min-w-0 overflow-hidden font-normal whitespace-pre text-neutral-300 ${count ? 'max-[1040px]:hidden' : 'max-md:sr-only'}`}>
+          <span className={`flex min-w-0 overflow-hidden font-normal whitespace-pre text-neutral-300 ${count ? 'max-[1041px]:hidden' : 'max-md:sr-only'}`}>
             {count ? (note ? ': ' : ':') : '· '}
             <span className="min-w-0 max-w-48 truncate" title={note}>{note}</span>
             {noteEnd}
