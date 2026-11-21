@@ -12,9 +12,10 @@ export function Spinner({ className = '' }) {
   return <span className={`m-px size-3.5 shrink-0 animate-spin rounded-full border-[1.5px] border-current border-t-transparent motion-reduce:animate-[spin_2.4s_linear_infinite] ${className}`} aria-hidden="true" />
 }
 
-// Unlike the other bar buttons, Updates may shrink: on a full bar its first name is cut
-// before Close is pushed off the edge.
-const UPDATES_BUTTON_CLASS = BAR_BUTTON_CLASS.replace('shrink-0', 'min-w-0')
+// From 1041 px, where the note shows a name, Updates may shrink unlike the other bar
+// buttons: on a full bar its name is cut before Close is pushed off the edge.
+const SHRINK_WITH_NAME = 'min-[1041px]:shrink min-[1041px]:min-w-0'
+const UPDATES_BUTTON_CLASS = `${BAR_BUTTON_CLASS} ${SHRINK_WITH_NAME}`
 
 export const clockTime = (date) => date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
@@ -43,7 +44,7 @@ export function UpdatesControl({ updates, open, onOpenChange, buttonRef }) {
   const result = updates.state === 'done' ? updates.result : null
 
   return (
-    <span ref={wrapRef} className="relative flex min-w-0">
+    <span ref={wrapRef} className={`relative flex shrink-0 ${SHRINK_WITH_NAME}`}>
       <button
         ref={buttonRef}
         type="button"
@@ -57,11 +58,12 @@ export function UpdatesControl({ updates, open, onOpenChange, buttonRef }) {
         <BarTapTarget />
         {updates.state === 'running' ? <Spinner className="text-neutral-300" /> : <ArrowPathIcon className="size-4 shrink-0 fill-neutral-300" />}
         <span className="max-sm:sr-only">{label}</span>
-        {/* Where the bar runs out of room, a change list shortens to its count. A long name
-            is cut short, down to nothing on a full bar; its versions and +N always show. */}
+        {/* Up to 1040 px a change list shortens to its count. Wider, a long name is cut short,
+            down to nothing on a full bar, before its versions and +N; only very long
+            versions are clipped as a last resort. */}
         {(note || noteEnd) && (
-          <span className={`flex min-w-0 font-normal whitespace-pre text-neutral-300 ${count ? 'max-[1040px]:hidden' : 'max-sm:sr-only'}`}>
-            {count ? ': ' : '· '}
+          <span className={`flex min-w-0 overflow-hidden font-normal whitespace-pre text-neutral-300 ${count ? 'max-[1040px]:hidden' : 'max-sm:sr-only'}`}>
+            {count ? (note ? ': ' : ':') : '· '}
             <span className="min-w-0 max-w-48 truncate" title={note}>{note}</span>
             {noteEnd}
           </span>
@@ -75,7 +77,7 @@ export function UpdatesControl({ updates, open, onOpenChange, buttonRef }) {
           <span className="inline-flex items-center gap-1 font-normal whitespace-nowrap text-amber-300">
             <ExclamationTriangleIcon className="size-3.5 shrink-0 fill-amber-300" aria-hidden="true" />
             <span className="sr-only">, </span>
-            <span className="max-sm:sr-only">{failed} failed</span>
+            <span className="max-[767px]:sr-only">{failed} failed</span>
           </span>
         )}
       </button>

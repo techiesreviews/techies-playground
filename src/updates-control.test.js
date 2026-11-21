@@ -12,7 +12,8 @@ test('the Updates button shows how many failed next to what updated', () => {
   assert.match(button, /\{failed && \(/)
   assert.match(button, /ExclamationTriangleIcon/)
   // The icon is hidden from screen readers, so a separator keeps the count apart from the note.
-  assert.match(button, /<span className="sr-only">, <\/span>\s*<span className="max-sm:sr-only">\{failed\} failed<\/span>/)
+  // Up to 767 px the mark is the icon alone, so the count-only bar still fits from 641 px.
+  assert.match(button, /<span className="sr-only">, <\/span>\s*<span className="max-\[767px\]:sr-only">\{failed\} failed<\/span>/)
 })
 
 test('only the name in the note is cut short, so the versions and +N always show', () => {
@@ -21,16 +22,21 @@ test('only the name in the note is cut short, so the versions and +N always show
   assert.match(name[1], /\bmin-w-0\b/)
   assert.match(name[1], /\bmax-w-\S+/)
   assert.match(name[1], /\btruncate\b/)
-  // An item WordPress sent without a name still shows its versions and +N.
+  // An item WordPress sent without a name still shows its versions and +N, with one space.
   assert.match(button, /\{\(note \|\| noteEnd\) && \(/)
+  assert.match(button, /\{count \? \(note \? ': ' : ':'\) : '· '\}/)
 })
 
-test('on a full bar the Updates button shrinks instead of pushing Close off the edge', () => {
-  // Every box from the wrapper down to the name may shrink below its content width.
-  assert.match(source, /const UPDATES_BUTTON_CLASS = BAR_BUTTON_CLASS\.replace\('shrink-0', 'min-w-0'\)/)
-  assert.match(source, /<span ref=\{wrapRef\} className="relative flex min-w-0">/)
+test('where a name shows, the Updates button shrinks instead of pushing Close off the edge', () => {
+  // Every box from the wrapper down to the name may shrink below its content width, but only
+  // from 1041 px: below that the note is a count with nothing to cut, so it keeps its width.
+  assert.match(source, /export const BAR_BUTTON_CLASS = '[^']*\bshrink-0\b/)
+  assert.match(source, /const SHRINK_WITH_NAME = 'min-\[1041px\]:shrink min-\[1041px\]:min-w-0'/)
+  assert.match(source, /const UPDATES_BUTTON_CLASS = `\$\{BAR_BUTTON_CLASS\} \$\{SHRINK_WITH_NAME\}`/)
+  assert.match(source, /<span ref=\{wrapRef\} className=\{`relative flex shrink-0 \$\{SHRINK_WITH_NAME\}`\}>/)
   assert.match(button, /className=\{UPDATES_BUTTON_CLASS\}/)
-  assert.match(button, /<span className=\{`flex min-w-0 /)
+  // Very long versions are clipped inside the note rather than drawn over Close.
+  assert.match(button, /<span className=\{`flex min-w-0 overflow-hidden /)
   // Now that the button may shrink, the count and "N failed" must not wrap onto a second line.
   assert.match(button, /<span className="[^"]*\bwhitespace-nowrap\b[^"]*min-\[1041px\]:hidden">/)
   assert.match(button, /<span className="inline-flex [^"]*\bwhitespace-nowrap\b[^"]*text-amber-300">/)
