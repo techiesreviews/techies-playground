@@ -32,10 +32,10 @@ The GPT second look on the 0.11.0 release (`dev` to `main`, PR #53) found four p
 
 ## Implementation or prototype
 
-- `src/App.jsx`, `src/ChecksPanel.jsx`, `src/UpdatesControl.jsx`: the bar labels and the compact paddings use `max-[767px]:` instead of `max-sm:`, and the compact licence summary shows below 768 px (`min-[768px]:hidden`). Close keeps its own phone padding and the tap overlays keep their phone geometry.
+- `src/App.jsx`, `src/ChecksPanel.jsx`, `src/UpdatesControl.jsx`: the bar labels and the compact paddings use `max-md:` (below 768 px) instead of `max-sm:`, and the compact licence summary uses `md:hidden` (768 px and up), so both sides switch at the same width; the existing icon-only `N failed` rule moved from `max-[767px]:` to `max-md:` too, because Tailwind reads `max-[767px]:` as "narrower than 767 px" and left a 1 px band where neither rule applied. Close keeps its own phone padding and the tap overlays keep their phone geometry.
 - `src/lib/plugin-updates.js`: the update code remembers `is_plugin_active_for_network( $file )` before the update and passes it as the network flag to `activate_plugin()`.
 - `src/ChecksPanel.jsx`: Run checks uses `any-pointer-coarse:min-h-11`; Open in drops its fine-pointer-hidden overlay and uses the same class.
-- `src/UpdatesControl.jsx`: the note (`role=dialog`, labelled **Updated at start**) has `tabIndex=0`, a teal focus ring and takes focus when it opens.
+- `src/UpdatesControl.jsx`: the note (`role=dialog`, named by its heading, so it says **Updates at start** when nothing was updated) has `tabIndex=0`, a teal focus ring and takes focus when it opens.
 
 The bar's own tap overlays (`BarTapTarget`) are unchanged: they already reach 48 px on a phone, and making them show with a mouse on a crowded bar would make the overlays overlap.
 
@@ -49,7 +49,7 @@ The bar's own tap overlays (`BarTapTarget`) are unchanged: they already reach 48
 | Headless Chrome, `dev` styles | The bar (real `UpdatesControl` and `ChecksButton`, a copy of the App bar) rendered with `dev`'s built CSS, networking blocked, at 641 and 700 px | Reproduces the finding | Close's right edge at 730 px on a 641 px and a 700 px bar | Render script measurements |
 | Headless Chrome, this branch | Six update results (networking blocked, six failures, one update and two failures, a long name, date versions, up to date) at 641, 700, 767, 768, 1041 and 1280 px | Close inside the bar, one line | Close inside the bar in all 36 renders, every bar one line | Render script measurements and screenshots at 700 px |
 
-The headless browser reports a fine pointer as absent, so the bar's 48 px tap overlays show there; at 641 and 700 px the icon-only Updates button's overlay is wider than the button. The overlay is invisible and its button keeps one line.
+The headless browser reports a fine pointer as absent, so the bar's 48 px tap overlays show there; at 641, 700 and 767 px the icon-only Updates button's overlay (networking blocked, up to date) is wider than the button. The overlay is invisible and its button keeps one line.
 
 ## Result
 
