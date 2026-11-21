@@ -51,7 +51,7 @@ test('the note can be reached and scrolled with the keyboard, and takes focus wh
   const note = source.slice(source.indexOf('{open && ('), source.indexOf('</h3>'))
   assert.match(note, /ref=\{noteRef\}/)
   assert.match(note, /role="dialog"/)
-  // Named by its heading, which says "Updates at start" when nothing was updated.
+  // Named by its heading, which says "Updates at start" when networking is blocked or the update failed.
   assert.match(note, /aria-labelledby=\{titleId\}/)
   assert.match(note, /<h3 id=\{titleId\}/)
   assert.doesNotMatch(note, /aria-label="/)
