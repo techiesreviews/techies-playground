@@ -51,6 +51,12 @@ test('a long list of failures shortens to the first name and a count, like updat
   assert.deepEqual(updatesLabel({ state: 'done', result: { updated: [], failed, current: [] } }), { label: 'Update failed', note: 'Plugin update check', noteEnd: ' +5', count: '6', failed: '', ready: true })
 })
 
+test('an item without a name still gives its versions and count', async () => {
+  const { updatesLabel } = await import('./plugin-updates.js')
+  const result = { updated: [{ name: '', from: '1', to: '2' }, { name: 'B', from: '1', to: '2' }], failed: [], current: [] }
+  assert.deepEqual(updatesLabel({ state: 'done', result }), { label: 'Updated', note: '', noteEnd: ' 1 → 2 +1', count: '2', failed: '', ready: true })
+})
+
 test('failures still show on the button when something else updated', async () => {
   const { updatesLabel } = await import('./plugin-updates.js')
   const result = { updated: [{ name: 'WP 2FA', from: '3.1', to: '3.2' }], failed: [{ name: 'X', message: 'Updated, but WordPress could not switch it back on.' }, { name: 'Y', message: 'No' }], current: [] }

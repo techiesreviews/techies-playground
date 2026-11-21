@@ -157,7 +157,7 @@ const CHANGELOG_ENTRIES = [
       'Plugins and themes update automatically while your test site starts, and active plugins stay active afterward. The Updates button in the top bar shows what changed (from old to new version) and how many could not update; click it to see every update, anything that could not update or an update check that failed, and what was already up to date. Setups with networking turned off skip updates and say so on the button.',
       'When your setup includes Query Monitor or Code Profiler, checks run automatically once the site is ready. If a plugin in your setup still needs its license activated, checks wait and the Checks button asks you to activate licenses first; once you activate them in WordPress, click Run checks in the panel.',
       'Click Checks in the top bar to open the Checks panel beside WordPress. It shows one verdict and four numbers (page time, memory, database queries, and PHP errors). Failed checks and warnings appear first, while passed checks fold into one line.',
-      'Click any check row to see what it measured, then use Open in Query Monitor or Open in Code Profiler for full details. Click Run again to measure the page currently open in WordPress (or the dashboard, when that page just ran an action such as an update).',
+      'Click any check row to see what it measured, then use Open in Query Monitor or Open in Code Profiler for full details. Click Run again to measure the page currently open in WordPress. When that page just ran an action, such as an update, Run again and Open in Query Monitor use the dashboard instead.',
       'Automatic updates at start and the Checks panel replace the old Update all button and Checks menu.',
     ],
   },
