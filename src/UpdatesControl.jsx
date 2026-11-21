@@ -54,7 +54,7 @@ export function UpdatesControl({ updates, open, onOpenChange, buttonRef }) {
   const notRun = updates.state === 'error' || updates.state === 'skipped'
   const title = !ready
     ? 'Available when setup finishes'
-    : updates.state === 'error' || label === 'Update failed'
+    : updates.state === 'error' || (result && !result.updated.length && result.failed.length)
       ? 'Updates failed at start'
       : updates.state === 'skipped' ? 'Updates · networking blocked' : 'Updated at start'
 

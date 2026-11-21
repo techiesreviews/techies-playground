@@ -31,7 +31,7 @@ test('a failed or blocked update keeps an amber warning icon on the button at ev
   // The tooltip names the state instead of saying "Updated at start", also when the step ran
   // and only failures came back.
   assert.match(button, /title=\{title\}/)
-  assert.match(source, /updates\.state === 'error' \|\| label === 'Update failed'\s*\? 'Updates failed at start'/)
+  assert.match(source, /updates\.state === 'error' \|\| \(result && !result\.updated\.length && result\.failed\.length\)\s*\? 'Updates failed at start'/)
   assert.match(source, /updates\.state === 'skipped' \? 'Updates · networking blocked'/)
 })
 
