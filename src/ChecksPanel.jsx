@@ -355,13 +355,17 @@ export function ChecksPanel({ checks, run, gate, onRun, onClose, onOpenCheck, es
       views.getBoundingClientRect()
       delete views.dataset.instant
     }
-    // The check closed by itself (a failed run): its row takes the focus that was in the check
-    // or on All checks, which is gone. Focus in WordPress or elsewhere stays where it is.
+    // The check closed by itself (a failed run): the focus that was in the check or on All checks,
+    // which is gone, goes to its row, or to the panel when the failed run shows no rows. Focus in
+    // WordPress or elsewhere stays where it is.
     const lost = document.activeElement === document.body || detailRef.current?.contains(document.activeElement)
     const target = focusAfterViewRef.current || (view === 'list' && openId && lost ? openId : null)
     focusAfterViewRef.current = null
     if (target === 'back') backRef.current?.focus({ preventScroll: true })
-    else if (target) listRef.current?.querySelector(`[data-check="${target}"]`)?.focus({ preventScroll: true })
+    else if (target) {
+      const focusTo = listRef.current?.querySelector(`[data-check="${target}"]`) || panelRef.current
+      focusTo?.focus({ preventScroll: true })
+    }
   }, [view])
 
   // New results roll their numbers in the view that shows; reopening the panel does not.
@@ -474,7 +478,7 @@ export function ChecksPanel({ checks, run, gate, onRun, onClose, onOpenCheck, es
     headline = gate.ready ? 'Not run yet' : 'Activate licenses first'
     subline = (
       <p className="mt-0.5 text-sm/5 text-pretty text-neutral-600 tabular-nums">
-        {gate.ready ? 'Checks the page open in WordPress.' : `${gate.active} of ${gate.total} active. Activate them in WordPress, then the checks run.`}
+        {gate.ready ? 'Checks the page open in WordPress.' : `${gate.active} of ${gate.total} active. Activate them in WordPress, then run the checks.`}
       </p>
     )
   }

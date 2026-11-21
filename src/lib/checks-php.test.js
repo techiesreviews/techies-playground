@@ -146,6 +146,9 @@ $GLOBALS['qm'] = array(
 		),
 	),
 );
+for ( $call = 0; $call < (int) getenv( 'CALLS_BEFORE' ); $call++ ) {
+	array_unshift( $GLOBALS['qm']['http']->http, (object) array( 'host' => 'api.wordpress.org', 'type' => 'HTTP 200', 'local' => false ) );
+}
 `
 
 async function measure(on, { front = false, callsBefore = 0, queryMonitor = false } = {}) {
@@ -185,6 +188,13 @@ test('with Query Monitor active, the numbers are the ones Query Monitor collecte
   const page = text.split('\nHOOKS:')[0]
   assert.doesNotMatch(page, /SECRET-KEY-123/)
   assert.doesNotMatch(atob(page.match(/TECHIES_MEASURE:([A-Za-z0-9+/=]+)/)[1]), /wp_options|SELECT/, 'no SQL leaves the page')
+})
+
+test('with Query Monitor active, failed calls after the first 40 still name their site', async () => {
+  const report = parseMeasurement(await measure(true, { queryMonitor: true, callsBefore: 40 }))
+  assert.deepEqual([report.calls, report.failedCalls], [44, 2])
+  assert.equal(report.http.length, 22, 'the first 20 calls and the later failed ones')
+  assert.deepEqual(report.http.slice(20), [{ host: 'api.vendor.com', code: 403 }, { host: 'api.other.com', code: 0 }])
 })
 
 test('the measure plugin reports counts and times, never a query or an address with a key in it', async () => {

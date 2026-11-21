@@ -61,6 +61,14 @@ test('a check that is open stays open when the page changes, and a failed run go
   const viewEffect = checksPanel.slice(checksPanel.indexOf('// The view changed'), checksPanel.indexOf('}, [view])'))
   assert.match(viewEffect, /const lost = document\.activeElement === document\.body \|\| detailRef\.current\?\.contains\(document\.activeElement\)/)
   assert.match(viewEffect, /focusAfterViewRef\.current \|\| \(view === 'list' && openId && lost \? openId : null\)/)
+  // A failed run shows no rows, so the panel itself takes the focus.
+  assert.match(viewEffect, /const focusTo = listRef\.current\?\.querySelector\(`\[data-check="\$\{target\}"\]`\) \|\| panelRef\.current\s+focusTo\?\.focus\(\{ preventScroll: true \}\)/)
+})
+
+test('while licences wait, the panel says to run the checks by hand once they are active', () => {
+  // The licence gate is read only at launch, so activating a licence later does not start the checks.
+  assert.match(checksPanel, /Activate them in WordPress, then run the checks\./)
+  assert.doesNotMatch(checksPanel, /then the checks run/)
 })
 
 test('the i closes on a click inside WordPress, as the Updates note does', () => {
@@ -88,10 +96,17 @@ test('a run on a page change keeps the last result on screen at first, and says 
 
 test('Run again during that wait joins the run on the same page and shows Running at once', () => {
   const run = app.slice(app.indexOf('async function runChecks('), app.indexOf('function watchPages('))
-  assert.match(run, /if \(!auto && checksActiveRunRef\.current\?\.page === page\) checksActiveRunRef\.current\.join\(\)/)
+  assert.match(run, /if \(!auto\) \{\s+if \(checksActiveRunRef\.current\?\.page === page\) checksActiveRunRef\.current\.join\(\)/)
   assert.match(run, /const active = \{ page, join: \(\) => \{ manual = true; showRunning\(\) \} \}/)
   assert.match(run, /const showRunning = \(\) => \{\s+window\.clearTimeout\(runningTimer\)/, 'the waiting timer is dropped once Running shows')
   assert.match(run, /if \(checksActiveRunRef\.current === active\) checksActiveRunRef\.current = null/)
+})
+
+test('Run again on a page that waits behind another run starts it as Run again', () => {
+  const run = app.slice(app.indexOf('async function runChecks('), app.indexOf('function watchPages('))
+  assert.match(run, /else checksManualNextRef\.current = page/)
+  assert.match(run, /const manualNext = next !== null && checksManualNextRef\.current === next\s+checksManualNextRef\.current = null/)
+  assert.match(run, /runChecksRef\.current\(client, \{ auto: !manualNext, path: next \}\)/)
 })
 
 test('the numbers roll only for new results, and never with reduced motion', () => {
