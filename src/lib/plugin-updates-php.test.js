@@ -91,8 +91,8 @@ class Plugin_Upgrader {
 		return true;
 	}
 }
-class Theme_Upgrader { public function __construct( public $skin ) {} public function upgrade( $slug, $args ) { return true; } }
-register_shutdown_function( function () { echo "\\nSTATE:" . json_encode( array( 'active' => $GLOBALS['active'], 'network_active' => $GLOBALS['network_active'], 'reactivated' => $GLOBALS['reactivated'] ?? array(), 'deleted' => $GLOBALS['deleted'] ?? array() ) ); } );
+class Theme_Upgrader { public function __construct( public $skin ) {} public function upgrade( $slug, $args ) { $GLOBALS['themes_upgraded'][] = $slug; return true; } }
+register_shutdown_function( function () { echo "\\nSTATE:" . json_encode( array( 'active' => $GLOBALS['active'], 'network_active' => $GLOBALS['network_active'], 'reactivated' => $GLOBALS['reactivated'] ?? array(), 'deleted' => $GLOBALS['deleted'] ?? array(), 'themes_upgraded' => $GLOBALS['themes_upgraded'] ?? array() ) ); } );
 `
 
 async function run(setup = '') {
@@ -153,6 +153,22 @@ $GLOBALS['answers']['plugins'] = array( new WP_Error( 'http_request_failed', 'SS
 `)
   assert.ok(!result.failed.some((entry) => entry.name === 'Plugin update check'), JSON.stringify(result.failed))
   assert.deepEqual(result.current, [{ name: 'Query Monitor', version: '4.1.1' }, { name: 'Current Theme', version: '1.3' }])
+})
+
+test('a theme update this site cannot run is skipped and named, like a plugin update', async () => {
+  // WordPress's update list gives a theme offer as an array with requires and requires_php.
+  const { result, state } = await run(`
+$GLOBALS['theme_offers'] = array(
+	'old-theme' => array( 'new_version' => '2.0', 'package' => 'install', 'requires_php' => '99.0' ),
+	'spare-theme' => array( 'new_version' => '2.0', 'package' => 'install', 'requires' => '99.0' ),
+);
+`)
+  assert.ok(!result.updated.some((entry) => entry.name.endsWith('Theme')), JSON.stringify(result.updated))
+  assert.deepEqual(result.failed.filter((entry) => entry.name.endsWith('Theme')), [
+    { name: 'Spare Theme', message: 'Needs WordPress 99.0 or newer.' },
+    { name: 'Old Theme', message: 'Needs PHP 99.0 or newer.' },
+  ])
+  assert.deepEqual(state.themes_upgraded, [])
 })
 
 test('a plugin on for the whole network of a Multisite test site is on for the whole network again after its update', async () => {

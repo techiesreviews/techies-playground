@@ -22,6 +22,16 @@ test('up to 1040 px "networking blocked" and "failed" after Updates are for scre
   assert.match(button, /\$\{count \? 'max-\[1041px\]:hidden' : 'max-\[1041px\]:sr-only'\}/)
 })
 
+test('a failed or blocked update keeps an amber warning icon on the button at every width', () => {
+  // The words are screen-reader only up to 1040 px, so the icon is what shows the state there,
+  // like the Checks waiting note. It has no responsive hide class.
+  assert.match(source, /const notRun = updates\.state === 'error' \|\| updates\.state === 'skipped'/)
+  assert.match(button, /\{notRun && <ExclamationTriangleIcon className="size-3\.5 shrink-0 fill-amber-300" aria-hidden="true" \/>\}/)
+  // The tooltip names the state instead of saying "Updated at start".
+  assert.match(button, /updates\.state === 'error' \? 'Updates failed at start'/)
+  assert.match(button, /updates\.state === 'skipped' \? 'Updates · networking blocked'/)
+})
+
 test('only the name in the note is cut short, so the versions and +N always show', () => {
   const name = button.match(/<span className="([^"]*)" title=\{note\}>\{note\}<\/span>\s*\{noteEnd\}/)
   assert.ok(name, 'the name has its own span, followed by noteEnd outside it')
