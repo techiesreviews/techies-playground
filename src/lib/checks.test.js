@@ -33,6 +33,8 @@ test('Query Monitor results open on the current page with the panel request', ()
   assert.equal(checkResultsPath(queryMonitor, recipe(), '/?techies-check=old'), '/?techies-check=query-monitor')
   assert.equal(checkResultsPath(queryMonitor, recipe(), 'https://elsewhere.example/wp-admin/'), '/wp-admin/?techies-check=query-monitor')
   assert.equal(checkResultsPath(queryMonitor, recipe(), ''), '/wp-admin/?techies-check=query-monitor')
+  // Opening the tool never repeats an action the current page ran from its address.
+  assert.equal(checkResultsPath(queryMonitor, recipe(), '/wp-admin/update.php?action=upgrade-plugin&_wpnonce=abc'), '/wp-admin/?techies-check=query-monitor')
   assert.equal(checkResultsPath(codeProfiler, recipe({ repositoryPlugins: ['code-profiler'] }), '/'), '/wp-admin/admin.php?page=code-profiler&techies-check=code-profiler')
   assert.equal(checkResultsPath(codeProfiler, recipe({ plugins: ['code-profiler-pro'] }), '/'), '/wp-admin/admin.php?page=code-profiler-pro&techies-check=code-profiler')
 })

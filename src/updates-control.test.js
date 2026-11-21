@@ -3,25 +3,26 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 // Source inspection of UpdatesControl: the Node runner cannot render JSX, so these tests read the
-// button and note markup. The real-browser look is checked with kit ux and recorded in docs/changes.
+// button and note markup. The rendered look is recorded in docs/changes, apart from these tests.
 const source = readFileSync(new URL('./UpdatesControl.jsx', import.meta.url), 'utf8')
 const button = source.slice(source.indexOf('<button'), source.indexOf('</button>'))
 
 test('the Updates button shows how many failed next to what updated', () => {
-  assert.match(source, /const \{ label, note, count, failed, ready \} = updatesLabel\(updates\)/)
+  assert.match(source, /const \{ label, note, noteEnd, count, failed, ready \} = updatesLabel\(updates\)/)
   assert.match(button, /\{failed && \(/)
   assert.match(button, /ExclamationTriangleIcon/)
-  assert.match(button, /\{failed\} failed/)
+  // The icon is hidden from screen readers, so a separator keeps the count apart from the note.
+  assert.match(button, /<span className="sr-only">, <\/span>\s*<span className="max-sm:sr-only">\{failed\} failed<\/span>/)
 })
 
-test('the change note on the button has a width cap so it never pushes Close off the bar', () => {
-  const note = button.match(/\{note && <span className=\{`([^`]*)`\}/)
-  assert.ok(note, 'the note span has a class list')
-  assert.match(note[1], /\bmax-w-\S+/)
-  assert.match(note[1], /\btruncate\b/)
+test('only the name in the note is cut short, so the versions and +N always show', () => {
+  const name = button.match(/<span className="([^"]*)" title=\{note\}>\{note\}<\/span>\s*\{noteEnd\}/)
+  assert.ok(name, 'the name has its own span, followed by noteEnd outside it')
+  assert.match(name[1], /\bmax-w-\S+/)
+  assert.match(name[1], /\btruncate\b/)
 })
 
 test('rows in the note are keyed by position, not by a name two items can share', () => {
   assert.doesNotMatch(source, /key=\{entry\.name\}/)
-  assert.match(source, /\[overflow-wrap:anywhere\]/)
+  assert.equal(source.match(/\[overflow-wrap:anywhere\]/g).length, 3, 'updated names, failed rows and the Already current line wrap long names')
 })

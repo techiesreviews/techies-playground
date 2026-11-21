@@ -18,7 +18,7 @@ export const clockTime = (date) => date.toLocaleTimeString([], { hour: '2-digit'
 // opens a note with every change, what failed, and what was already current.
 export function UpdatesControl({ updates, open, onOpenChange, buttonRef }) {
   const wrapRef = useRef(null)
-  const { label, note, count, failed, ready } = updatesLabel(updates)
+  const { label, note, noteEnd, count, failed, ready } = updatesLabel(updates)
 
   useEffect(() => {
     if (!open) return undefined
@@ -53,8 +53,15 @@ export function UpdatesControl({ updates, open, onOpenChange, buttonRef }) {
         <BarTapTarget />
         {updates.state === 'running' ? <Spinner className="text-neutral-300" /> : <ArrowPathIcon className="size-4 shrink-0 fill-neutral-300" />}
         <span className="max-sm:sr-only">{label}</span>
-        {/* Where the bar runs out of room, a change list shortens to its count. */}
-        {note && <span className={`max-w-64 truncate font-normal text-neutral-300 ${count ? 'max-[1040px]:hidden' : 'max-sm:sr-only'}`}>{count ? ': ' : ' · '}{note}</span>}
+        {/* Where the bar runs out of room, a change list shortens to its count. A long name
+            is cut short; its versions and +N always show. */}
+        {note && (
+          <span className={`flex min-w-0 font-normal whitespace-pre text-neutral-300 ${count ? 'max-[1040px]:hidden' : 'max-sm:sr-only'}`}>
+            {count ? ': ' : '· '}
+            <span className="max-w-48 truncate" title={note}>{note}</span>
+            {noteEnd}
+          </span>
+        )}
         {count && (
           <span className="font-normal text-neutral-300 min-[1041px]:hidden">
             <span className="max-sm:sr-only">· </span>{count}
@@ -63,6 +70,7 @@ export function UpdatesControl({ updates, open, onOpenChange, buttonRef }) {
         {failed && (
           <span className="inline-flex items-center gap-1 font-normal text-amber-300">
             <ExclamationTriangleIcon className="size-3.5 shrink-0 fill-amber-300" aria-hidden="true" />
+            <span className="sr-only">, </span>
             <span className="max-sm:sr-only">{failed} failed</span>
           </span>
         )}
@@ -103,7 +111,7 @@ export function UpdatesControl({ updates, open, onOpenChange, buttonRef }) {
               )}
               {!result.updated.length && !result.failed.length && <p className="mt-2 text-neutral-600">No plugin or theme had an update.</p>}
               {result.current.length > 0 && (
-                <p className="mt-2 border-t border-neutral-950/10 pt-2 text-sm/5 text-neutral-500 tabular-nums">
+                <p className="mt-2 border-t border-neutral-950/10 pt-2 text-sm/5 text-neutral-500 tabular-nums [overflow-wrap:anywhere]">
                   Already current: {result.current.map((entry) => `${entry.name} ${entry.version}`).join(', ')}
                 </p>
               )}
