@@ -13,7 +13,7 @@ test('the Updates button shows how many failed next to what updated', () => {
   assert.match(button, /ExclamationTriangleIcon/)
   // The icon is hidden from screen readers, so a separator keeps the count apart from the note.
   // Up to 767 px the mark is the icon alone, so the count-only bar still fits from 641 px.
-  assert.match(button, /<span className="sr-only">, <\/span>\s*<span className="max-\[767px\]:sr-only">\{failed\} failed<\/span>/)
+  assert.match(button, /<span className="sr-only">, <\/span>\s*<span className="max-md:sr-only">\{failed\} failed<\/span>/)
 })
 
 test('only the name in the note is cut short, so the versions and +N always show', () => {
@@ -48,10 +48,13 @@ test('where a name shows, the Updates button shrinks instead of pushing Close of
 })
 
 test('the note can be reached and scrolled with the keyboard, and takes focus when it opens', () => {
-  const note = source.slice(source.indexOf('role="dialog"') - 200, source.indexOf('<h3'))
+  const note = source.slice(source.indexOf('{open && ('), source.indexOf('</h3>'))
   assert.match(note, /ref=\{noteRef\}/)
   assert.match(note, /role="dialog"/)
-  assert.match(note, /aria-label="Updated at start"/)
+  // Named by its heading, which says "Updates at start" when nothing was updated.
+  assert.match(note, /aria-labelledby=\{titleId\}/)
+  assert.match(note, /<h3 id=\{titleId\}/)
+  assert.doesNotMatch(note, /aria-label="/)
   assert.match(note, /tabIndex=\{0\}/)
   assert.match(note, /focus-visible:outline-2/)
   // Opening the note moves focus into it, so arrow keys scroll a long list; Escape returns focus

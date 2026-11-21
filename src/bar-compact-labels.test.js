@@ -20,15 +20,18 @@ test('up to 767 px the bar buttons show their icons only, so Close stays on a fu
     assert.doesNotMatch(source, /(^|[\s"'`])sm:hidden/, `${name}: no compact text shows only up to 640 px`)
   }
   // Each label keeps its accessible name: it is hidden visually, not removed.
-  assert.match(bar, /<span className="max-\[767px\]:sr-only">Licenses<\/span>/)
-  assert.match(bar, /<span className="max-\[767px\]:sr-only">\{snapshotExporting \? 'Exporting…' : 'Export snapshot'\}<\/span>/)
-  assert.match(checksButton, /<span className="max-\[767px\]:sr-only">Checks<\/span>/)
-  assert.match(updatesButton, /<span className="shrink-0 whitespace-nowrap max-\[767px\]:sr-only">\{label\}<\/span>/)
+  assert.match(bar, /<span className="max-md:sr-only">Licenses<\/span>/)
+  assert.match(bar, /<span className="max-md:sr-only">\{snapshotExporting \? 'Exporting…' : 'Export snapshot'\}<\/span>/)
+  assert.match(checksButton, /<span className="max-md:sr-only">Checks<\/span>/)
+  assert.match(updatesButton, /<span className="shrink-0 whitespace-nowrap max-md:sr-only">\{label\}<\/span>/)
   // Licenses shows 2/3 instead of "· 2 of 3 active" up to 767 px.
-  assert.match(bar, /<span className="max-\[767px\]:sr-only">· \{licenseFillSummary\(licenseFill\)\}<\/span>/)
-  assert.match(bar, /<span className="min-\[768px\]:hidden" aria-hidden="true">/)
+  assert.match(bar, /<span className="max-md:sr-only">· \{licenseFillSummary\(licenseFill\)\}<\/span>/)
+  assert.match(bar, /<span className="md:hidden" aria-hidden="true">/)
+  // Both sides use the theme's md breakpoint (max-md is below 768 px, md is 768 px and up), so
+  // no window width shows both the full summary and 2/3, or neither.
+  assert.doesNotMatch(`${bar}${checksButton}${updatesButton}`, /(max|min)-\[76[78]px\]:/, 'compact rules use the md breakpoint, not a pixel value')
   // An icon alone gets even padding on both sides.
-  assert.match(updatesControl, /export const BAR_BUTTON_CLASS = '[^']*max-\[767px\]:px-2\.5/)
+  assert.match(updatesControl, /export const BAR_BUTTON_CLASS = '[^']*max-md:px-2\.5/)
   assert.doesNotMatch(bar, /max-sm:px-2\.5/)
 })
 

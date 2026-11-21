@@ -1,8 +1,8 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import { ArrowPathIcon, ExclamationTriangleIcon } from '@heroicons/react/16/solid'
 import { updatesLabel } from './lib/plugin-updates'
 
-export const BAR_BUTTON_CLASS = 'relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white tabular-nums ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-[767px]:px-2.5 disabled:cursor-not-allowed disabled:opacity-50 aria-expanded:bg-white/15'
+export const BAR_BUTTON_CLASS = 'relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white tabular-nums ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-md:px-2.5 disabled:cursor-not-allowed disabled:opacity-50 aria-expanded:bg-white/15'
 
 export function BarTapTarget() {
   return <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)]" aria-hidden="true" />
@@ -24,6 +24,7 @@ export const clockTime = (date) => date.toLocaleTimeString([], { hour: '2-digit'
 export function UpdatesControl({ updates, open, onOpenChange, buttonRef }) {
   const wrapRef = useRef(null)
   const noteRef = useRef(null)
+  const titleId = useId()
   const { label, note, noteEnd, count, failed, ready } = updatesLabel(updates)
 
   // The note takes focus when it opens, so arrow keys scroll a long list; Escape (App.jsx)
@@ -65,12 +66,12 @@ export function UpdatesControl({ updates, open, onOpenChange, buttonRef }) {
         <BarTapTarget />
         {updates.state === 'running' ? <Spinner className="text-neutral-300" /> : <ArrowPathIcon className="size-4 shrink-0 fill-neutral-300" />}
         {/* Up to 767 px the bar buttons show their icons only, so Close stays on a full bar. */}
-        <span className="shrink-0 whitespace-nowrap max-[767px]:sr-only">{label}</span>
+        <span className="shrink-0 whitespace-nowrap max-md:sr-only">{label}</span>
         {/* Up to 1040 px a change list shortens to its count. Wider, a long name is cut short,
             down to nothing on a full bar, before its versions and +N; only very long
             versions are clipped as a last resort. */}
         {(note || noteEnd) && (
-          <span className={`flex min-w-0 overflow-hidden font-normal whitespace-pre text-neutral-300 ${count ? 'max-[1040px]:hidden' : 'max-[767px]:sr-only'}`}>
+          <span className={`flex min-w-0 overflow-hidden font-normal whitespace-pre text-neutral-300 ${count ? 'max-[1040px]:hidden' : 'max-md:sr-only'}`}>
             {count ? (note ? ': ' : ':') : '· '}
             <span className="min-w-0 max-w-48 truncate" title={note}>{note}</span>
             {noteEnd}
@@ -78,14 +79,14 @@ export function UpdatesControl({ updates, open, onOpenChange, buttonRef }) {
         )}
         {count && (
           <span className="font-normal whitespace-nowrap text-neutral-300 min-[1041px]:hidden">
-            <span className="max-[767px]:sr-only">· </span>{count}
+            <span className="max-md:sr-only">· </span>{count}
           </span>
         )}
         {failed && (
           <span className="inline-flex items-center gap-1 font-normal whitespace-nowrap text-amber-300">
             <ExclamationTriangleIcon className="size-3.5 shrink-0 fill-amber-300" aria-hidden="true" />
             <span className="sr-only">, </span>
-            <span className="max-[767px]:sr-only">{failed} failed</span>
+            <span className="max-md:sr-only">{failed} failed</span>
           </span>
         )}
       </button>
@@ -93,11 +94,11 @@ export function UpdatesControl({ updates, open, onOpenChange, buttonRef }) {
         <div
           ref={noteRef}
           role="dialog"
-          aria-label="Updated at start"
+          aria-labelledby={titleId}
           tabIndex={0}
           className="license-popover-enter focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 absolute top-full right-0 z-60 mt-2 max-h-[calc(100dvh-4rem)] w-[min(21rem,calc(100vw-2.5rem))] overflow-y-auto overscroll-contain rounded-[min(2vw,var(--radius-xl))] bg-white px-3.5 pt-3 pb-3.5 text-base/7 text-neutral-950 shadow-2xl ring-1 ring-neutral-950/10 max-sm:fixed max-sm:top-10 max-sm:right-2 sm:text-sm/6"
         >
-          <h3 className="flex justify-between gap-3 font-semibold">
+          <h3 id={titleId} className="flex justify-between gap-3 font-semibold">
             {result ? 'Updated at start' : 'Updates at start'}
             {updates.time && <span className="font-normal text-neutral-500 tabular-nums">{clockTime(updates.time)}</span>}
           </h3>
