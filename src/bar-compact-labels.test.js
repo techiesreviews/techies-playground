@@ -106,3 +106,10 @@ test('the Checks numbers switch to two columns by the panel width in rem, so lar
   assert.match(grid[1], /@max-\[25rem\]:grid-cols-2/)
   assert.doesNotMatch(grid[1], /max-\[\d+px\]:/, 'no viewport pixel breakpoint: it ignores the text size')
 })
+
+test('the Checks numbers go to one column below 15 rem, so 200% text at 320 px keeps 1024 MB inside its box', () => {
+  // At 320 px with 200% text the panel is 10 rem wide: two columns put "1024 MB" about 50 px past
+  // its tile. Normal text at 320 px is 20 rem wide, so it keeps two columns.
+  const grid = checksPanel.match(/<div className="(mt-3 grid [^"]*)">/)[1]
+  assert.match(grid, /@max-\[15rem\]:grid-cols-1/)
+})
