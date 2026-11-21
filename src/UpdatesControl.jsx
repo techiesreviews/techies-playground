@@ -57,7 +57,7 @@ export function UpdatesControl({ updates, open, onOpenChange, buttonRef }) {
       >
         <BarTapTarget />
         {updates.state === 'running' ? <Spinner className="text-neutral-300" /> : <ArrowPathIcon className="size-4 shrink-0 fill-neutral-300" />}
-        <span className="max-sm:sr-only">{label}</span>
+        <span className="shrink-0 whitespace-nowrap max-sm:sr-only">{label}</span>
         {/* Up to 1040 px a change list shortens to its count. Wider, a long name is cut short,
             down to nothing on a full bar, before its versions and +N; only very long
             versions are clipped as a last resort. */}

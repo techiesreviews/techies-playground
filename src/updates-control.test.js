@@ -37,7 +37,12 @@ test('where a name shows, the Updates button shrinks instead of pushing Close of
   assert.match(button, /className=\{UPDATES_BUTTON_CLASS\}/)
   // Very long versions are clipped inside the note rather than drawn over Close.
   assert.match(button, /<span className=\{`flex min-w-0 overflow-hidden /)
-  // Now that the button may shrink, the count and "N failed" must not wrap onto a second line.
+  // Now that the button may shrink, the label, the count and "N failed" must not wrap onto a
+  // second line: "Update failed" would break at its space and be clipped by the bar row.
+  const label = button.match(/<span className="([^"]*)">\{label\}<\/span>/)
+  assert.ok(label, 'the label has its own span')
+  assert.match(label[1], /\bshrink-0\b/)
+  assert.match(label[1], /\bwhitespace-nowrap\b/)
   assert.match(button, /<span className="[^"]*\bwhitespace-nowrap\b[^"]*min-\[1041px\]:hidden">/)
   assert.match(button, /<span className="inline-flex [^"]*\bwhitespace-nowrap\b[^"]*text-amber-300">/)
 })
