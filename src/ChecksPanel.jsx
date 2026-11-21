@@ -38,14 +38,14 @@ export function ChecksButton({ siteReady, run, gate, open, onToggle, buttonRef }
     >
       <BarTapTarget />
       {run.state === 'running' ? <Spinner className="text-neutral-300" /> : <ChartBarIcon className="size-4 shrink-0 fill-neutral-300" />}
-      <span className="max-sm:sr-only">Checks</span>
+      <span className="max-[767px]:sr-only">Checks</span>
       {waitsForLicenses && <ExclamationTriangleIcon className="size-3.5 shrink-0 fill-amber-300" aria-hidden="true" />}
       {waitingNote && <span className="font-normal text-neutral-300 max-[1040px]:sr-only">· {waitingNote}</span>}
       {verdict && (
         <span className={`inline-flex items-center gap-1 ${statusColor}`}>
           <StatusIcon className="size-3.5 shrink-0 fill-current" />
           {verdict.short.replace(/ .*/, '')}
-          <span className="max-sm:sr-only">{verdict.short.replace(/^\d+/, '')}</span>
+          <span className="max-[767px]:sr-only">{verdict.short.replace(/^\d+/, '')}</span>
         </span>
       )}
     </button>
@@ -83,9 +83,8 @@ function CheckRow({ check, onOpenCheck }) {
         <button
           type="button"
           onClick={() => onOpenCheck(check.tool)}
-          className="relative mt-2.5 inline-flex items-center rounded-lg bg-white px-3 py-1.5 text-sm/5 font-medium text-neutral-800 ring-1 ring-neutral-950/10 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+          className="mt-2.5 inline-flex items-center rounded-lg bg-white px-3 py-1.5 text-sm/5 font-medium text-neutral-800 ring-1 ring-neutral-950/10 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 any-pointer-coarse:min-h-11"
         >
-          <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,2.75rem)] -translate-1/2" aria-hidden="true" />
           Open in {toolName(check.tool)}
         </button>
       </div>
@@ -208,7 +207,7 @@ export function ChecksPanel({ checks, run, gate, onRun, onClose, onOpenCheck }) 
           type="button"
           aria-disabled={running}
           onClick={() => { if (!running) onRun() }}
-          className="inline-flex min-h-9 items-center rounded-lg bg-white px-3 py-1.5 text-sm/5 font-medium whitespace-nowrap text-neutral-800 ring-1 ring-neutral-950/10 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 aria-disabled:cursor-default aria-disabled:text-neutral-500 aria-disabled:hover:bg-white pointer-coarse:min-h-11"
+          className="inline-flex min-h-9 items-center rounded-lg bg-white px-3 py-1.5 text-sm/5 font-medium whitespace-nowrap text-neutral-800 ring-1 ring-neutral-950/10 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 aria-disabled:cursor-default aria-disabled:text-neutral-500 aria-disabled:hover:bg-white any-pointer-coarse:min-h-11"
         >
           {running ? 'Running…' : report || run.state === 'error' ? 'Run again' : 'Run checks'}
         </button>
