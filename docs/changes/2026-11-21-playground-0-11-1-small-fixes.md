@@ -30,7 +30,7 @@ Four small defects were left after 0.11.0:
 - **Close at 320 px: a pixel `max-[384px]` breakpoint.** The bar's tests require each pixel breakpoint to come in a hide/show pair; a theme breakpoint (`xs`, 24rem, like `sm` and `md`) is the project's way to add a named width.
 - **Close at 320 px: the breakpoint at 360 px (22.5rem).** The first version used it. Review asked for two-digit update counts: with 12 updates and 2 failures on a full bar, Close's edge was at 363.3 px at 360 px (3.3 px off screen, the same on `dev`). At 24rem (384 px) the tighter bar covers that case; from 384 px up the normal bar fits every measured case.
 - **Checks numbers: a smaller font or a lower pixel breakpoint.** A pixel breakpoint cannot see the text size; a container query in rem (`@max-[25rem]`) switches by the panel's width measured in the current text size, so larger text switches to two columns before a number spills.
-- **Spinner: keep a slower turn.** A turning spinner is still motion. What is left shows the work is in progress: in the Checks panel the words `Running checks…`; on the bar the Updates button stays disabled with the update icon swapped for the still ring, and from 768 px up the label `Updating…`.
+- **Spinner: keep a slower turn.** A turning spinner is still motion. What is left shows the work is in progress: in the Checks panel the words `Running checks…`; on the bar the Updates button stays disabled with the update icon swapped for the still ring, and from 768 px up the label `Updating…`; the Checks bar button swaps its chart icon for the still ring (below 1041 px its `running…` is for screen readers only).
 
 ## Implementation or prototype
 
@@ -80,6 +80,15 @@ Four small defects were left after 0.11.0:
 
 - Fixed: the failing-first run of the tap-area test is now a row in the evidence table.
 - Left as a follow-up (optional note): the recipe name's room on a full bar at 320 px.
+
+### Release review (`kit review --base origin/main`, Claude Opus 5.5)
+
+- Fixed (P2): the 4 px gap below 384 px sat on the bar row, which also holds the close confirmation, so the gap between Keep open and the destructive Discard and close shrank from 10 to 4 px. The tight gap now applies only to the normal bar (`${confirmingPlaygroundClose ? '' : 'max-xs:gap-1'}` on the row).
+
+| Environment | Procedure/command | Expected | Actual | Evidence |
+| --- | --- | --- | --- | --- |
+| Node 24 | `node --test src/bar-compact-labels.test.js` with a new test that the confirmation gets no `max-xs:gap-` class, and the bar test asking for the conditional class, run before the change | Both fail | 6 tests: 4 passed, 2 failed; after the change 6 passed; `npm test` 287 passed, 0 failed | `src/bar-compact-labels.test.js` |
+| Headless Chrome (playwright-core with Chrome), built CSS of this branch | A throwaway page renders the confirmation row with the old class list and the new one, at 320, 340, 375, 383 and 384 px; measures the gap between the buttons, Discard and close's right edge and whether a tap at each button's centre reaches it | 10 px gap at every width; both buttons inside the row | Old: 4.0 px below 384 px. New: 10.0 px at every width. Discard and close's right edge equals the row's inner edge (312.0 at 320 px); taps at both centres reach their button at every width | Measured values in this row |
 
 ## Result
 

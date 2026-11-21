@@ -62,8 +62,7 @@ test('below 384 px the bar is tighter, so Close stays on screen on a full bar fr
   // 384 px, not 360: at 360 px a full bar with two-digit counts put Close 3.3 px off screen.
   const styles = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
   assert.match(styles, /@theme \{[^}]*--breakpoint-xs: 24rem;/)
-  const barRow = app.slice(app.lastIndexOf('<div className="', app.indexOf('{confirmingPlaygroundClose ? (')))
-  assert.match(barRow.match(/className="([^"]*)"/)[1], /\bmax-sm:gap-2\.5 max-xs:gap-1\b/)
+  assert.match(barRowClass(), /\bmax-sm:gap-2\.5 \$\{confirmingPlaygroundClose \? '' : 'max-xs:gap-1'\}/)
   const closeButton = app.slice(app.indexOf('aria-label="Close Playground"'), app.indexOf('</button>', app.indexOf('aria-label="Close Playground"')))
   // Below 384 px every bar button is at least 40 px wide, so with the 4 px gap each tap area is
   // at least 44 px. The room comes from tighter padding and inner gaps on buttons with a count.
@@ -80,6 +79,20 @@ test('below 384 px the bar is tighter, so Close stays on screen on a full bar fr
   const tapAreas = [...`${bar}${closeButton}${updatesControl}`.matchAll(/max-sm:w-\[calc\(100%\+0\.625rem\)\]([^"]*)"/g)]
   assert.equal(tapAreas.length, 4, 'Licenses, Export snapshot, Close and BarTapTarget')
   for (const [, rest] of tapAreas) assert.match(rest, /^ max-xs:w-\[calc\(100%\+0\.25rem\)\]/)
+})
+
+// The className of the bar row that holds both the normal bar and the close confirmation.
+function barRowClass() {
+  const start = app.lastIndexOf('<div className=', app.indexOf('{confirmingPlaygroundClose ? ('))
+  return app.slice(start, app.indexOf('>', start))
+}
+
+test('below 384 px the close confirmation keeps its 10 px gap, so Keep open and Discard and close stay apart', () => {
+  // Only the normal bar needs the 4 px gap to fit Close; the confirmation fits at 320 px without it.
+  const rowClass = barRowClass()
+  assert.match(rowClass, /\bmax-sm:gap-2\.5\b/)
+  const withoutNormalBarGap = rowClass.replace("${confirmingPlaygroundClose ? '' : 'max-xs:gap-1'}", '')
+  assert.doesNotMatch(withoutNormalBarGap, /max-xs:gap-/, 'no tight gap applies while confirming')
 })
 
 test('the Checks numbers switch to two columns by the panel width in rem, so larger text never spills', () => {

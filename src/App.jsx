@@ -3328,7 +3328,8 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
 
       <section className={showPlayground ? 'fixed inset-0 z-50 grid bg-white' : 'hidden'} aria-label="WordPress Playground">
         <div className="grid min-h-0 grid-rows-[2rem_1fr] overflow-hidden bg-white">
-          <div className="relative z-20 flex min-w-0 items-center gap-1.5 bg-[#1d2327] px-2 text-white max-sm:gap-2.5 max-xs:gap-1">
+          {/* Only the normal bar tightens below 384 px; the close confirmation keeps its buttons apart. */}
+          <div className={`relative z-20 flex min-w-0 items-center gap-1.5 bg-[#1d2327] px-2 text-white max-sm:gap-2.5 ${confirmingPlaygroundClose ? '' : 'max-xs:gap-1'}`}>
             {confirmingPlaygroundClose ? (
               <>
                 <p className="min-w-0 flex-1 truncate text-sm/5 font-medium">Discard this temporary site?</p>
