@@ -199,9 +199,11 @@ function techies_measure_caller( $stack ) {
 
 // With Query Monitor active, the page's numbers come from its own collectors, so the panel
 // shows what Query Monitor shows for the same page. Fatal errors, which Query Monitor does not
-// record, still come from this plugin. Returns null without Query Monitor.
+// record, still come from this plugin. Returns null without Query Monitor, and on pages where
+// it stopped collecting (qm/cease: the Site Editor, a Customizer preview, …), where its
+// collectors stay but hold no data.
 function techies_measure_query_monitor() {
-	if ( ! class_exists( 'QM_Collectors' ) ) {
+	if ( ! class_exists( 'QM_Collectors' ) || did_action( 'qm/cease' ) ) {
 		return null;
 	}
 	try {
@@ -219,6 +221,9 @@ function techies_measure_query_monitor() {
 	}
 	$overview = $collected['overview'];
 	$db       = $collected['db_queries'];
+	if ( ! isset( $overview->time_taken, $db->total_qs ) ) {
+		return null;
+	}
 
 	$query_time = 0;
 	$groups     = array();

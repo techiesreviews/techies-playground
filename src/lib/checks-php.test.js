@@ -50,7 +50,9 @@ const MEASURE_HARNESS = `<?php
 define( 'ABSPATH', '/wordpress/' );
 $GLOBALS['actions'] = array();
 function add_action( $hook, $callback, $priority = 10, $args = 1 ) { $GLOBALS['actions'][ $hook ][] = $callback; }
-function do_action( $hook, ...$args ) { foreach ( $GLOBALS['actions'][ $hook ] ?? array() as $callback ) { $callback( ...$args ); } }
+$GLOBALS['done_actions'] = array();
+function do_action( $hook, ...$args ) { $GLOBALS['done_actions'][ $hook ] = ( $GLOBALS['done_actions'][ $hook ] ?? 0 ) + 1; foreach ( $GLOBALS['actions'][ $hook ] ?? array() as $callback ) { $callback( ...$args ); } }
+function did_action( $hook ) { return $GLOBALS['done_actions'][ $hook ] ?? 0; }
 function plugin_basename( $file ) { return str_replace( '/wordpress/wp-content/plugins/', '', $file ); }
 function wp_parse_url( $url, $part ) { return parse_url( $url, $part ); }
 function is_wp_error( $thing ) { return false; }
@@ -149,14 +151,23 @@ $GLOBALS['qm'] = array(
 for ( $call = 0; $call < (int) getenv( 'CALLS_BEFORE' ); $call++ ) {
 	array_unshift( $GLOBALS['qm']['http']->http, (object) array( 'host' => 'api.wordpress.org', 'type' => 'HTTP 200', 'local' => false ) );
 }
+// Query Monitor stops collecting on pages it does not support (the Site Editor, a Customizer
+// preview): it fires qm/cease and each collector discards its data, but the collectors stay.
+// (The variable is not named QM_…: PHP's wasm runtime then empties QM.)
+if ( getenv( 'CEASED' ) ) {
+	foreach ( array_keys( $GLOBALS['qm'] ) as $id ) {
+		$GLOBALS['qm'][ $id ] = (object) array();
+	}
+	do_action( 'qm/cease' );
+}
 `
 
-async function measure(on, { front = false, callsBefore = 0, queryMonitor = false } = {}) {
+async function measure(on, { front = false, callsBefore = 0, queryMonitor = false, queryMonitorCeased = false } = {}) {
   const php = new PHP(await loadPHPRuntime(await getPHPLoaderModule()))
   php.writeFile('/measure.php', MEASURE_PLUGIN)
   php.writeFile('/query-monitor.php', QUERY_MONITOR_STUB)
   php.writeFile('/harness.php', MEASURE_HARNESS)
-  const response = await php.run({ scriptPath: '/harness.php', env: { MEASURE: on ? '1' : '', FRONT: front ? '1' : '', CALLS_BEFORE: String(callsBefore), QM: queryMonitor ? '1' : '' } })
+  const response = await php.run({ scriptPath: '/harness.php', env: { MEASURE: on ? '1' : '', FRONT: front ? '1' : '', CALLS_BEFORE: String(callsBefore), QM: queryMonitor ? '1' : '', CEASED: queryMonitorCeased ? '1' : '' } })
   assert.equal(response.errors, '', response.errors)
   return response.text
 }
@@ -195,6 +206,13 @@ test('with Query Monitor active, failed calls after the first 40 still name thei
   assert.deepEqual([report.calls, report.failedCalls], [44, 2])
   assert.equal(report.http.length, 22, 'the first 20 calls and the later failed ones')
   assert.deepEqual(report.http.slice(20), [{ host: 'api.vendor.com', code: 403 }, { host: 'api.other.com', code: 0 }])
+})
+
+test('on a page where Query Monitor stopped collecting, the numbers are the Playground\'s own', async () => {
+  const report = parseMeasurement(await measure(true, { queryMonitor: true, queryMonitorCeased: true }))
+  assert.equal(report.source, 'playground')
+  assert.deepEqual(report.errorCounts, { error: 0, warning: 2, notice: 0, deprecated: 1 })
+  assert.deepEqual([report.queries, report.time], [3, 0.5])
 })
 
 test('the measure plugin reports counts and times, never a query or an address with a key in it', async () => {
