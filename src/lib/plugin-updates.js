@@ -81,12 +81,14 @@ foreach ( get_plugins() as $file => $data ) {
 		$result['failed'][] = array( 'name' => $data['Name'], 'message' => substr( 'Needs WordPress ' . $requires_wp . ' or newer.', 0, 200 ) );
 		continue;
 	}
+	// On Multisite a plugin on for the whole network goes back on for the whole network.
 	$was_active = is_plugin_active( $file );
+	$was_network_active = is_plugin_active_for_network( $file );
 	$skin = new Automatic_Upgrader_Skin();
 	$outcome = techies_playground_upgrade( new Plugin_Upgrader( $skin ), $skin, $file );
 	$switch_on_error = '';
 	if ( $was_active && ! is_plugin_active( $file ) ) {
-		$activated = activate_plugin( $file, '', false, true );
+		$activated = activate_plugin( $file, '', $was_network_active, true );
 		if ( is_wp_error( $activated ) ) {
 			$switch_on_error = wp_strip_all_tags( $activated->get_error_message() );
 		}
