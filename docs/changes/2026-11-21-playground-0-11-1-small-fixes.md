@@ -84,6 +84,8 @@ Four small defects were left after 0.11.0:
 ### Release review (`kit review --base origin/main`, Claude Opus 5.5)
 
 - Fixed (P2): the 4 px gap below 384 px sat on the bar row, which also holds the close confirmation, so the gap between Keep open and the destructive Discard and close shrank from 10 to 4 px. The tight gap now applies only to the normal bar (`${confirmingPlaygroundClose ? '' : 'max-xs:gap-1'}` on the row).
+- Fixed (doc nit): the spinner option now names the Checks bar button's still ring as a cue that remains.
+- Left as a follow-up (optional note, same on `main`): Keep open and Discard and close have no 44 px tap area, and with larger browser text at 320 px the confirmation row can push Discard and close off screen.
 
 | Environment | Procedure/command | Expected | Actual | Evidence |
 | --- | --- | --- | --- | --- |
