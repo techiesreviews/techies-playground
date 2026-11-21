@@ -55,12 +55,12 @@ test('the panel says which page it checked, and when a check is running', () => 
 test('a check that is open stays open when the page changes, and a failed run goes back to the overview', () => {
   // The open check lives in the panel, not in the run: a new run only refreshes it.
   assert.match(checksPanel, /const \[openId, setOpenId\] = useState\(null\)/)
-  const closes = [...checksPanel.matchAll(/setOpenId\(null\)/g)].map((match) => checksPanel.slice(Math.max(0, match.index - 300), match.index))
-  const byRun = closes.filter((before) => /useEffect\(\(\) => \{(?![\s\S]*useEffect)/.test(before))
-  assert.equal(byRun.length, 1, 'one effect closes the check')
-  assert.match(byRun[0], /if \(run\.state !== 'error' \|\| !openId\) return/, 'only a failed run closes it')
-  // Focus follows to the row only when it was inside the check, never out of WordPress.
-  assert.match(byRun[0], /if \(detailRef\.current\?\.contains\(document\.activeElement\)\) focusAfterViewRef\.current = openId/)
+  assert.match(checksPanel, /if \(run\.state === 'error' && openId\) setOpenId\(null\)/, 'only a failed run closes it')
+  // The overview shows in the same render as the failure, so the view effect moves the focus:
+  // to the row, only when focus was in the check or on All checks (now gone), never out of WordPress.
+  const viewEffect = checksPanel.slice(checksPanel.indexOf('// The view changed'), checksPanel.indexOf('}, [view])'))
+  assert.match(viewEffect, /const lost = document\.activeElement === document\.body \|\| detailRef\.current\?\.contains\(document\.activeElement\)/)
+  assert.match(viewEffect, /focusAfterViewRef\.current \|\| \(view === 'list' && openId && lost \? openId : null\)/)
 })
 
 test('the i closes on a click inside WordPress, as the Updates note does', () => {
@@ -73,14 +73,25 @@ test('a new result rolls each number from the one shown before; a number that ju
   // A number that stays on screen rolls by its own transition, so a digit that did not change stays still.
   assert.match(checksPanel, /querySelectorAll\('\[data-figure\]:not\(\[data-rolled\]\)'\)/)
   assert.match(checksPanel, /figure\.dataset\.rolled = ''/)
+  // Numbers that showed without playing (a reopened panel, a check just opened, the view not shown)
+  // are marked after every render, so they too roll from their value next time.
+  assert.match(checksPanel, /useLayoutEffect\(\(\) => \{\s+for \(const figure of viewsRef\.current\.querySelectorAll\('\[data-figure\]:not\(\[data-rolled\]\)'\)\) figure\.dataset\.rolled = ''\s+\}\)/)
 })
 
 test('a run on a page change keeps the last result on screen at first, and says nothing new', () => {
   const run = app.slice(app.indexOf('async function runChecks('), app.indexOf('function watchPages('))
-  assert.match(run, /if \(auto\) runningTimer = window\.setTimeout\(showRunning, 600\)\s+else showRunning\(\)/)
+  assert.match(run, /if \(manual\) showRunning\(\)\s+else runningTimer = window\.setTimeout\(showRunning, 600\)/)
   assert.match(run, /finally \{\s+window\.clearTimeout\(runningTimer\)/)
-  assert.match(run, /state: 'running', path: page, auto/)
-  assert.match(run, /quiet: checksQuiet\(\{ auto, panelOpen: checksPanelOpenRef\.current, previous: current\.report, report \}\)/)
+  assert.match(run, /state: 'running', path: page, auto: !manual/)
+  assert.match(run, /quiet: checksQuiet\(\{ auto: !manual, panelOpen: checksPanelOpenRef\.current, previous: current\.report, report \}\)/)
+})
+
+test('Run again during that wait joins the run on the same page and shows Running at once', () => {
+  const run = app.slice(app.indexOf('async function runChecks('), app.indexOf('function watchPages('))
+  assert.match(run, /if \(!auto && checksActiveRunRef\.current\?\.page === page\) checksActiveRunRef\.current\.join\(\)/)
+  assert.match(run, /const active = \{ page, join: \(\) => \{ manual = true; showRunning\(\) \} \}/)
+  assert.match(run, /const showRunning = \(\) => \{\s+window\.clearTimeout\(runningTimer\)/, 'the waiting timer is dropped once Running shows')
+  assert.match(run, /if \(checksActiveRunRef\.current === active\) checksActiveRunRef\.current = null/)
 })
 
 test('the numbers roll only for new results, and never with reduced motion', () => {
@@ -110,8 +121,11 @@ test('at 320 px with 200% text the Checks title wraps above Run again and Close'
 
 test('row names wrap and values keep their width, so 200% text at 320 px stays inside the panel', () => {
   const row = checksPanel.slice(checksPanel.indexOf('data-check={'), checksPanel.indexOf('</button>', checksPanel.indexOf('data-check={')))
-  assert.match(row, /className="min-w-0 flex-1 font-medium[^"]*"/)
-  assert.match(row, /className=\{?[`"]shrink-0 whitespace-nowrap tabular-nums/)
+  assert.match(row, /className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2\.5"/, 'name and value share a line that wraps')
+  assert.match(row, /className="min-w-0 flex-1 basis-\[6em\] font-medium[^"]*"/, 'the name keeps at least 6 letters before the value drops below it')
+  assert.match(row, /className=\{?[`"]ml-auto shrink-0 whitespace-nowrap tabular-nums/)
+  // With the arrow, "Memory" broke as "Memor y" at 320 px with 200% text in Chromium.
+  assert.match(row, /<ChevronRightIcon className="[^"]*@max-\[15rem\]:hidden"/, 'the arrow gives its width to the name')
 })
 
 test('at 320 px with 200% text the i drops below the headline instead of covering it', () => {
@@ -119,6 +133,9 @@ test('at 320 px with 200% text the i drops below the headline instead of coverin
   assert.ok(classOf(row, '<div').includes('@max-[15rem]:flex-wrap'), 'the headline row wraps when the panel is narrow for its text')
   assert.ok(classOf(row, '<p').includes('@max-[15rem]:basis-full'), 'the headline takes the whole line')
   assert.ok(classOf(row, 'aria-label="What the scores mean"').includes('@max-[15rem]:ml-auto'), 'the i stays at the right, where its table opens')
+  // The counts were 4 px past the box in Chromium at that size; under the icon they fit.
+  const counts = checksPanel.slice(checksPanel.indexOf('subline = (', checksPanel.indexOf('count(\'pass\'') - 400))
+  assert.ok(classOf(counts, '<ul').includes('@max-[15rem]:-ml-7.5'), 'the counts use the space under the verdict icon')
 })
 
 test('Keep open and Discard and close have 44 px tap areas on every screen', () => {

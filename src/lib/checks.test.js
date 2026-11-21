@@ -274,7 +274,7 @@ test('a page change is not announced twice: no start, and the result only when i
   assert.equal(checksAnnouncement({ state: 'running', auto: true }), '')
   const report = { passed: 8, warnings: 0, failed: 0, checks: Array(8) }
   assert.equal(checksAnnouncement({ state: 'done', title: 'Dashboard', report, quiet: true }), '')
-  assert.equal(checksAnnouncement({ state: 'done', title: 'Dashboard', report, auto: true }), 'Checks on Dashboard: All 8 checks passed.')
+  assert.equal(checksAnnouncement({ state: 'done', title: 'Dashboard', report, quiet: false }), 'Checks on Dashboard: All 8 checks passed.')
 })
 
 test('a result is quiet only when it starts by itself, the panel is closed and the verdict is the same', async () => {

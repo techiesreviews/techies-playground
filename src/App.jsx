@@ -1901,6 +1901,7 @@ export default function App() {
   const checksGateRef = useRef(null)
   const runChecksRef = useRef(null)
   const checksRanOnRef = useRef(null)
+  const checksActiveRunRef = useRef(null)
   const checksPanelOpenRef = useRef(false)
   const checksEscapeRef = useRef(null)
   const launchAbortRef = useRef(null)
@@ -2343,17 +2344,25 @@ export default function App() {
       if (client !== clientRef.current) return
     }
     const page = checkedPagePath(currentPath)
-    if (checksQueueRef.current.request(client, page, { force: !auto }) !== 'start') return
+    if (checksQueueRef.current.request(client, page, { force: !auto }) !== 'start') {
+      // Run again on the page already being measured joins that run and shows it at once.
+      if (!auto && checksActiveRunRef.current?.page === page) checksActiveRunRef.current.join()
+      return
+    }
     checksRanOnRef.current = client
     const started = performance.now()
     // A run on a page change keeps the last result on screen for its first 0.6 s. Most take
     // about 0.3 s, so the bar and the panel do not blink on every page. Run again shows at once.
-    const showRunning = () => {
-      if (client === clientRef.current) setChecksRun((current) => ({ ...current, state: 'running', path: page, auto }))
-    }
+    let manual = !auto
     let runningTimer = 0
-    if (auto) runningTimer = window.setTimeout(showRunning, 600)
-    else showRunning()
+    const showRunning = () => {
+      window.clearTimeout(runningTimer)
+      if (client === clientRef.current) setChecksRun((current) => ({ ...current, state: 'running', path: page, auto: !manual }))
+    }
+    const active = { page, join: () => { manual = true; showRunning() } }
+    checksActiveRunRef.current = active
+    if (manual) showRunning()
+    else runningTimer = window.setTimeout(showRunning, 600)
     try {
       const measurement = await measurePage(client, page)
       if (client !== clientRef.current || checksQueueRef.current.waiting(client)) return
@@ -2365,13 +2374,14 @@ export default function App() {
         path: page,
         time: new Date(),
         took: (performance.now() - started) / 1000,
-        quiet: checksQuiet({ auto, panelOpen: checksPanelOpenRef.current, previous: current.report, report }),
+        quiet: checksQuiet({ auto: !manual, panelOpen: checksPanelOpenRef.current, previous: current.report, report }),
       }))
     } catch (caught) {
       if (client !== clientRef.current || checksQueueRef.current.waiting(client)) return
       setChecksRun({ state: 'error', path: page, message: caught instanceof Error ? caught.message : 'The checks could not measure this page.' })
     } finally {
       window.clearTimeout(runningTimer)
+      if (checksActiveRunRef.current === active) checksActiveRunRef.current = null
       const next = checksQueueRef.current.finish(client)
       if (next !== null && client === clientRef.current) runChecksRef.current(client, { auto: true, path: next })
     }

@@ -243,6 +243,9 @@ function techies_measure_query_monitor() {
 
 	$counts = array( 'error' => $GLOBALS['techies_measure']['counts']['error'], 'warning' => 0, 'notice' => 0, 'deprecated' => 0 );
 	$errors = array_values( array_filter( $GLOBALS['techies_measure']['errors'], function ( $entry ) { return 'error' === $entry['kind']; } ) );
+	// Query Monitor 4.x keeps each error once, keyed by a hash, as a QM_Data_PHP_Error object with
+	// level, count, suppressed and trace (collectors/php_errors.php, process_error). Version 3
+	// grouped them by type as arrays with calls, a shape 4.x no longer writes.
 	foreach ( isset( $collected['php_errors']->errors ) ? (array) $collected['php_errors']->errors : array() as $error ) {
 		if ( ! is_object( $error ) || ! empty( $error->suppressed ) ) {
 			continue;
@@ -532,7 +535,6 @@ export function createCheckQueue() {
   }
 }
 
-// The page the checks measure, as the panel shows it: see safePageUrl.
 // Open in reloads the frame with techies-check (checkResultsPath). That is the tool's screen,
 // not a page to check: Code Profiler's would otherwise replace the page that was checked.
 export function isCheckToolPage(path) {
@@ -557,6 +559,7 @@ export function watchCheckPages(client, { isCurrent, canRun, run, settle = 400 }
   })
 }
 
+// The page the checks measure, as the panel shows it: see safePageUrl.
 export function checkedPagePath(currentPath) {
   const url = safePageUrl(currentPath)
   url.searchParams.delete('techies-check')
