@@ -56,3 +56,62 @@ test('Run checks and Open in are at least 44 px tall wherever a touchscreen exis
   assert.ok(openClass.includes('any-pointer-coarse:min-h-11'), 'Open in: 44 px on any touchscreen')
   assert.doesNotMatch(openButton, /pointer-fine:hidden/, 'Open in: no tap area that a mouse-first touchscreen laptop hides')
 })
+
+test('below 384 px the bar is tighter, so Close stays on screen on a full bar from 320 px', () => {
+  // xs is a theme breakpoint in rem like sm and md, so larger text tightens the bar sooner.
+  // 384 px, not 360: at 360 px a full bar with two-digit counts put Close 3.3 px off screen.
+  const styles = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
+  assert.match(styles, /@theme \{[^}]*--breakpoint-xs: 24rem;/)
+  assert.match(barRowClass(), /\bmax-sm:gap-2\.5 \$\{confirmingPlaygroundClose \? '' : 'max-xs:gap-1'\}/)
+  const closeButton = app.slice(app.indexOf('aria-label="Close Playground"'), app.indexOf('</button>', app.indexOf('aria-label="Close Playground"')))
+  // Below 384 px every bar button is at least 40 px wide, so with the 4 px gap each tap area is
+  // at least 44 px. The room comes from tighter padding and inner gaps on buttons with a count.
+  const buttonClasses = [
+    bar.match(/ref=\{licenseButtonRef\}[\s\S]*?className="([^"]*)"/)[1],
+    bar.match(/onClick=\{exportSiteSnapshot\}\s*className="([^"]*)"/)[1],
+    updatesControl.match(/export const BAR_BUTTON_CLASS = '([^']*)'/)[1],
+  ]
+  for (const className of buttonClasses) assert.match(className, /\bmax-xs:min-w-10 max-xs:justify-center max-xs:gap-1 max-xs:px-1\.5\b/, className)
+  // Close holds only its 16 px icon: 0.75 rem padding a side makes it 40 px.
+  assert.match(closeButton.match(/className="([^"]*)"/)[1], /\bmax-xs:px-3\b/)
+  // Each tap area is as wide as its button plus the gap, so neighbours' tap areas meet and never
+  // overlap.
+  const tapAreas = [...`${bar}${closeButton}${updatesControl}`.matchAll(/max-sm:w-\[calc\(100%\+0\.625rem\)\]([^"]*)"/g)]
+  assert.equal(tapAreas.length, 4, 'Licenses, Export snapshot, Close and BarTapTarget')
+  for (const [, rest] of tapAreas) assert.match(rest, /^ max-xs:w-\[calc\(100%\+0\.25rem\)\]/)
+})
+
+// The className of the bar row that holds both the normal bar and the close confirmation.
+function barRowClass() {
+  const start = app.lastIndexOf('<div className=', app.indexOf('{confirmingPlaygroundClose ? ('))
+  return app.slice(start, app.indexOf('>', start))
+}
+
+test('below 384 px the close confirmation keeps its 10 px gap, so Keep open and Discard and close stay apart', () => {
+  // Only the normal bar needs the 4 px gap to fit Close; the confirmation fits at 320 px without it.
+  const rowClass = barRowClass()
+  assert.match(rowClass, /\bmax-sm:gap-2\.5\b/)
+  const withoutNormalBarGap = rowClass.replace("${confirmingPlaygroundClose ? '' : 'max-xs:gap-1'}", '')
+  assert.doesNotMatch(withoutNormalBarGap, /max-xs:gap-/, 'no tight gap applies while confirming')
+})
+
+test('the Checks numbers switch to two columns by the panel width in rem, so larger text never spills', () => {
+  const panel = checksPanel.slice(checksPanel.indexOf('<aside'), checksPanel.indexOf('</aside>'))
+  // The panel is the container: 25 rem wide at most, so four tiles only when it has its full
+  // width, whatever the text size.
+  assert.match(panel.match(/<aside[\s\S]*?className="([^"]*)"/)[1], /(^|\s)@container(\s|$)/)
+  const grid = panel.match(/<div className="(mt-3 grid [^"]*)">/)
+  assert.ok(grid, 'found the tiles grid')
+  assert.match(grid[1], /\bgrid-cols-4\b/)
+  assert.match(grid[1], /@max-\[25rem\]:grid-cols-2/)
+  assert.doesNotMatch(grid[1], /max-\[\d+px\]:/, 'no viewport pixel breakpoint: it ignores the text size')
+})
+
+test('the Checks numbers go to one column below 15 rem, so 200% text at 320 px keeps 1024 MB inside its box', () => {
+  // At 320 px with 200% text the panel is 10 rem wide: two columns put "1024 MB" about 50 px past
+  // its tile. Normal text at 320 px is 20 rem wide, so it keeps two columns.
+  const panel = checksPanel.slice(checksPanel.indexOf('<aside'), checksPanel.indexOf('</aside>'))
+  const grid = panel.match(/<div className="(mt-3 grid [^"]*)">/)
+  assert.ok(grid, 'found the tiles grid')
+  assert.match(grid[1], /@max-\[15rem\]:grid-cols-1/)
+})

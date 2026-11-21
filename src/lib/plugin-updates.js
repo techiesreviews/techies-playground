@@ -197,6 +197,17 @@ export function updatesLabel(updates) {
   return { label: 'Up to date', ...none, ready: true }
 }
 
+// The step ran, nothing was updated and something failed ("Update failed").
+export const updatesOnlyFailed = (updates) =>
+  updates.state === 'done' && !updates.result.updated.length && updates.result.failed.length > 0
+
+// The heading of the Updates note. When the step ran but every update failed, nothing was
+// updated, so it says so instead of "Updated at start".
+export function updatesNoteHeading(updates) {
+  if (updates.state !== 'done') return 'Updates at start'
+  return updatesOnlyFailed(updates) ? 'Updates failed at start' : 'Updated at start'
+}
+
 // What a screen reader hears from the bar while the updates run and when they finish.
 export function updatesAnnouncement(updates) {
   if (updates.state === 'running') return 'Updating plugins and themes.'

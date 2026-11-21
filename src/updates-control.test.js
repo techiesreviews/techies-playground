@@ -28,7 +28,8 @@ test('a failed or blocked update keeps an amber warning icon on the button at ev
   assert.match(source, /const notRun = updates\.state === 'error' \|\| updates\.state === 'skipped'/)
   // "Update failed" (the step ran, nothing updated, something failed) shows only its count up
   // to 1040 px and has no "N failed" mark, so without the icon it looks like a success.
-  assert.match(source, /const onlyFailed = Boolean\(result && !result\.updated\.length && result\.failed\.length\)/)
+  // The same rule as the note heading, from one helper in src/lib.
+  assert.match(source, /const onlyFailed = updatesOnlyFailed\(updates\)/)
   // Right after the label, before the words, like the Checks waiting note.
   assert.match(button, /\{label\}<\/span>\s*\{\/\*[^*]*\*\/\}\s*\{notRun && <ExclamationTriangleIcon className="size-3\.5 shrink-0 fill-amber-300" aria-hidden="true" \/>\}/)
   // For "Update failed" only up to 1040 px: wider, the words show and the colon follows the label.
@@ -84,6 +85,20 @@ test('the note can be reached and scrolled with the keyboard, and takes focus wh
   // Opening the note moves focus into it, so arrow keys scroll a long list; Escape returns focus
   // to Updates (App.jsx).
   assert.match(source, /useEffect\(\(\) => \{\s*if \(open\) noteRef\.current\?\.focus\(\)\s*\}, \[open\]\)/)
+})
+
+test('the note heading comes from the result, so every update failed does not say "Updated at start"', () => {
+  assert.match(source, /import \{ updatesLabel, updatesNoteHeading, updatesOnlyFailed \} from '\.\/lib\/plugin-updates'/)
+  const heading = source.slice(source.indexOf('<h3 id={titleId}'), source.indexOf('</h3>'))
+  assert.match(heading, /\{updatesNoteHeading\(updates\)\}/)
+  assert.doesNotMatch(heading, /'Updated at start'/)
+})
+
+test('with reduce motion on, the spinner stands still instead of turning slower', () => {
+  const spinner = source.slice(source.indexOf('export function Spinner('), source.indexOf('// From 1041 px'))
+  assert.match(spinner, /\banimate-spin\b/)
+  assert.match(spinner, /\bmotion-reduce:animate-none\b/)
+  assert.doesNotMatch(spinner, /motion-reduce:animate-\[/)
 })
 
 test('rows in the note are keyed by position, not by a name two items can share', () => {

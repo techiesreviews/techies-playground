@@ -1,15 +1,16 @@
 import { useEffect, useId, useRef } from 'react'
 import { ArrowPathIcon, ExclamationTriangleIcon } from '@heroicons/react/16/solid'
-import { updatesLabel } from './lib/plugin-updates'
+import { updatesLabel, updatesNoteHeading, updatesOnlyFailed } from './lib/plugin-updates'
 
-export const BAR_BUTTON_CLASS = 'relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white tabular-nums ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-md:px-2.5 disabled:cursor-not-allowed disabled:opacity-50 aria-expanded:bg-white/15'
+export const BAR_BUTTON_CLASS = 'relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white tabular-nums ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-md:px-2.5 max-xs:min-w-10 max-xs:justify-center max-xs:gap-1 max-xs:px-1.5 disabled:cursor-not-allowed disabled:opacity-50 aria-expanded:bg-white/15'
 
+// On a phone each tap area is the button plus the bar's gap, so neighbours' tap areas meet.
 export function BarTapTarget() {
-  return <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)]" aria-hidden="true" />
+  return <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)] max-xs:w-[calc(100%+0.25rem)]" aria-hidden="true" />
 }
 
 export function Spinner({ className = '' }) {
-  return <span className={`m-px size-3.5 shrink-0 animate-spin rounded-full border-[1.5px] border-current border-t-transparent motion-reduce:animate-[spin_2.4s_linear_infinite] ${className}`} aria-hidden="true" />
+  return <span className={`m-px size-3.5 shrink-0 animate-spin rounded-full border-[1.5px] border-current border-t-transparent motion-reduce:animate-none ${className}`} aria-hidden="true" />
 }
 
 // From 1041 px, where the note shows a name, Updates may shrink unlike the other bar
@@ -52,8 +53,7 @@ export function UpdatesControl({ updates, open, onOpenChange, buttonRef }) {
   const result = updates.state === 'done' ? updates.result : null
   // Nothing was updated because the step failed or networking is blocked.
   const notRun = updates.state === 'error' || updates.state === 'skipped'
-  // The step ran, nothing was updated and something failed ("Update failed").
-  const onlyFailed = Boolean(result && !result.updated.length && result.failed.length)
+  const onlyFailed = updatesOnlyFailed(updates)
   const title = !ready
     ? 'Available when setup finishes'
     : updates.state === 'error' || onlyFailed
@@ -115,7 +115,7 @@ export function UpdatesControl({ updates, open, onOpenChange, buttonRef }) {
           className="license-popover-enter focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 absolute top-full right-0 z-60 mt-2 max-h-[calc(100dvh-4rem)] w-[min(21rem,calc(100vw-2.5rem))] overflow-y-auto overscroll-contain rounded-[min(2vw,var(--radius-xl))] bg-white px-3.5 pt-3 pb-3.5 text-base/7 text-neutral-950 shadow-2xl ring-1 ring-neutral-950/10 max-sm:fixed max-sm:top-10 max-sm:right-2 sm:text-sm/6"
         >
           <h3 id={titleId} className="flex justify-between gap-3 font-semibold">
-            {result ? 'Updated at start' : 'Updates at start'}
+            {updatesNoteHeading(updates)}
             {updates.time && <span className="font-normal text-neutral-500 tabular-nums">{clockTime(updates.time)}</span>}
           </h3>
           {updates.state === 'skipped' && <p className="mt-2 text-pretty text-neutral-600">Updates need outbound networking. This setup blocks it.</p>}

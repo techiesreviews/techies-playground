@@ -149,6 +149,18 @@ const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-stora
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
   {
+    version: '0.11.1',
+    date: 'November 21, 2026',
+    title: 'Clearer update notes and a Close button that fits small phones',
+    summary: 'The Updates note says when every update failed, the top bar fits on the smallest phones, and the Checks numbers stay readable with larger text.',
+    changes: [
+      'When every plugin and theme update fails at start, the Updates note now says Updates failed at start instead of Updated at start.',
+      'On small phones (narrower than 384 px), the top bar is a little tighter, so the Close button is fully on screen and easy to tap.',
+      'In the Checks panel, the four numbers move to two columns when the panel is narrow or your text is larger, or to one column with very large text on a phone, so each number stays inside its box.',
+      'With reduce motion turned on in your system settings, the spinners for updates and checks stand still instead of turning slowly.',
+    ],
+  },
+  {
     version: '0.11.0',
     date: 'November 20, 2026',
     title: 'Automatic plugin updates and a new Checks panel',
@@ -3316,7 +3328,8 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
 
       <section className={showPlayground ? 'fixed inset-0 z-50 grid bg-white' : 'hidden'} aria-label="WordPress Playground">
         <div className="grid min-h-0 grid-rows-[2rem_1fr] overflow-hidden bg-white">
-          <div className="relative z-20 flex min-w-0 items-center gap-1.5 bg-[#1d2327] px-2 text-white max-sm:gap-2.5">
+          {/* Only the normal bar tightens below 384 px; the close confirmation keeps its buttons apart. */}
+          <div className={`relative z-20 flex min-w-0 items-center gap-1.5 bg-[#1d2327] px-2 text-white max-sm:gap-2.5 ${confirmingPlaygroundClose ? '' : 'max-xs:gap-1'}`}>
             {confirmingPlaygroundClose ? (
               <>
                 <p className="min-w-0 flex-1 truncate text-sm/5 font-medium">Discard this temporary site?</p>
@@ -3345,9 +3358,9 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
               aria-expanded={showLicenseManager}
               title="Licenses"
               onClick={() => setShowLicenseManager(true)}
-              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-md:px-2.5 [anchor-name:--license-trigger]"
+              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-md:px-2.5 max-xs:min-w-10 max-xs:justify-center max-xs:gap-1 max-xs:px-1.5 [anchor-name:--license-trigger]"
             >
-              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)]" aria-hidden="true" />
+              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)] max-xs:w-[calc(100%+0.25rem)]" aria-hidden="true" />
               <KeyIcon className="size-4 shrink-0 fill-neutral-300" />
               {/* Up to 767 px the bar buttons show their icons only, so Close stays on a full bar. */}
               <span className="max-md:sr-only">Licenses</span>
@@ -3373,9 +3386,9 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
               disabled={status.step < 4 || snapshotExporting}
               title={status.step < 4 ? 'Available when setup finishes' : 'Export snapshot'}
               onClick={exportSiteSnapshot}
-              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-md:px-2.5 disabled:cursor-not-allowed disabled:opacity-50"
+              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-md:px-2.5 max-xs:min-w-10 max-xs:justify-center max-xs:gap-1 max-xs:px-1.5 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)]" aria-hidden="true" />
+              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)] max-xs:w-[calc(100%+0.25rem)]" aria-hidden="true" />
               <ArrowDownTrayIcon className="size-4 shrink-0 fill-neutral-300" />
               <span className="max-md:sr-only">{snapshotExporting ? 'Exporting…' : 'Export snapshot'}</span>
             </button>
@@ -3388,9 +3401,9 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
               type="button"
               aria-label="Close Playground"
               onClick={requestPlaygroundClose}
-              className="relative shrink-0 rounded-md p-1.5 text-neutral-300 max-sm:px-2.5 hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
+              className="relative shrink-0 rounded-md p-1.5 text-neutral-300 max-sm:px-2.5 max-xs:px-3 hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
             >
-              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)]" aria-hidden="true" />
+              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)] max-xs:w-[calc(100%+0.25rem)]" aria-hidden="true" />
               <XMarkIcon className="size-4 shrink-0 fill-current" />
             </button>
               </>
