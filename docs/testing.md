@@ -1,5 +1,7 @@
 # Testing and verification
 
+The Checks spinner regression test verifies separate reveal wrappers for the bar, overview and detail spinners, so the spin animation cannot override the 200 ms reveal animation. This is source inspection, not browser timing evidence.
+
 ## Evidence rules
 
 “Tested” means a named command or manual procedure was actually run and its observed result was recorded. Source inspection, expectation, and a passing unit test are different kinds of evidence and must not be conflated.

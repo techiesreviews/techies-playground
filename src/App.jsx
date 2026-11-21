@@ -152,6 +152,13 @@ const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-stora
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
   {
+    version: '0.12.1',
+    date: 'November 21, 2026',
+    title: 'Quick checks no longer flash a spinner',
+    summary: 'The Checks spinner now waits 200 ms before appearing.',
+    changes: ['Fixed the spinner delay in the Checks button, overview and detail view.'],
+  },
+  {
     version: '0.12.0',
     date: 'November 21, 2026',
     title: 'Checks that follow the page you open, and explain their scores',

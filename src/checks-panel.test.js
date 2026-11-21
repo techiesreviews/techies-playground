@@ -122,7 +122,9 @@ test('the spinner waits a moment before it shows, so quick runs do not flash', (
   assert.match(styles, /\.checks-delay-in \{[^}]*animation: checks-delay-in \d+ms step-end/)
   assert.match(checksPanel, /checks-delay-in/)
   const button = checksPanel.slice(checksPanel.indexOf('export function ChecksButton('), checksPanel.indexOf('function CheckRow('))
-  assert.match(button, /<Spinner className="checks-delay-in/, 'the bar spinner waits too')
+  assert.match(button, /<span className="checks-delay-in inline-flex"><Spinner/, 'the bar spinner waits too')
+  assert.doesNotMatch(checksPanel, /<Spinner className="[^"]*checks-delay-in/, 'spin and reveal animations must use separate elements')
+  assert.equal((checksPanel.match(/<span className="checks-delay-in inline-flex"><Spinner/g) || []).length, 3, 'bar, overview and detail spinners each have a reveal wrapper')
 })
 
 test('at 320 px with 200% text the Checks title wraps above Run again and Close', () => {
