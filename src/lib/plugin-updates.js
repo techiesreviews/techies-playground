@@ -157,26 +157,26 @@ export async function runPluginUpdates(client) {
   return parsePluginUpdates(response.text)
 }
 
-// The first entry and how many more, so a long list never widens the bar.
-const firstAndMore = (list, describe) => (list.length ? `${describe(list[0])}${list.length > 1 ? ` +${list.length - 1}` : ''}` : '')
-
-// The note on the bar's Updated control: the first change and how many more.
-export function updatedNote(result) {
-  return firstAndMore(result.updated, (entry) => `${entry.name} ${entry.from} → ${entry.to}`)
-}
+// How many more entries follow the first one on the bar, so a long list never widens it.
+const more = (list) => (list.length > 1 ? ` +${list.length - 1}` : '')
 
 // What the bar's Updates control says: idle and running before the updates finish, then
-// what changed. failed counts failures next to updates; when nothing updated, the label
-// itself says so. ready is true once there is something to open.
+// what changed. The note is the first change (or failure) and how many more: note is the
+// name, which the bar may shorten, and noteEnd the versions and count, which it always
+// shows. failed counts failures next to updates; when nothing updated, the label itself
+// says so. ready is true once there is something to open.
 export function updatesLabel(updates) {
-  const none = { note: '', count: '', failed: '' }
+  const none = { note: '', noteEnd: '', count: '', failed: '' }
   if (updates.state === 'running') return { label: 'Updating…', ...none, ready: false }
   if (updates.state === 'skipped') return { label: 'Updates', ...none, note: 'networking blocked', ready: true }
   if (updates.state === 'error') return { label: 'Updates', ...none, note: 'failed', ready: true }
   if (updates.state !== 'done') return { label: 'Updates', ...none, ready: false }
   const { updated, failed } = updates.result
-  if (updated.length) return { label: 'Updated', note: updatedNote(updates.result), count: String(updated.length), failed: failed.length ? String(failed.length) : '', ready: true }
-  if (failed.length) return { label: 'Update failed', ...none, note: firstAndMore(failed, (entry) => entry.name), count: String(failed.length), ready: true }
+  if (updated.length) {
+    const [first] = updated
+    return { label: 'Updated', note: first.name, noteEnd: ` ${first.from} → ${first.to}${more(updated)}`, count: String(updated.length), failed: failed.length ? String(failed.length) : '', ready: true }
+  }
+  if (failed.length) return { label: 'Update failed', ...none, note: failed[0].name, noteEnd: more(failed), count: String(failed.length), ready: true }
   return { label: 'Up to date', ...none, ready: true }
 }
 

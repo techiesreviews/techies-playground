@@ -40,16 +40,26 @@ export function checkResultsPath(check, recipe, currentPath) {
     const proOnly = recipe.plugins.includes('code-profiler-pro') && !recipe.plugins.includes('code-profiler') && !recipe.repositoryPlugins.includes('code-profiler')
     return `/wp-admin/admin.php?page=${proOnly ? 'code-profiler-pro' : 'code-profiler'}&techies-check=code-profiler`
   }
-  const base = 'https://site.invalid'
-  let url
-  try {
-    url = new URL(currentPath || '/wp-admin/', base)
-  } catch {
-    url = new URL('/wp-admin/', base)
-  }
-  if (url.origin !== base) url = new URL('/wp-admin/', base)
+  const url = safePageUrl(currentPath)
   url.searchParams.set('techies-check', check.id)
   return `${url.pathname}${url.search}`
+}
+
+const PAGE_BASE = 'https://site.invalid'
+
+// The frame's current page as a URL to load again, or the dashboard when it belongs to
+// another site or cannot be read. A page whose address carries a nonce ran an action from it
+// (update.php?action=upgrade-plugin&_wpnonce=…), so loading it again would repeat that
+// action: the dashboard is used instead.
+function safePageUrl(currentPath) {
+  let url
+  try {
+    url = new URL(currentPath || '/wp-admin/', PAGE_BASE)
+  } catch {
+    url = new URL('/wp-admin/', PAGE_BASE)
+  }
+  const ranAction = [...url.searchParams.keys()].some((key) => /nonce$/i.test(key))
+  return url.origin !== PAGE_BASE || ranAction ? new URL('/wp-admin/', PAGE_BASE) : url
 }
 
 // Query Monitor opens its panel only from its admin-bar link, and it reopens the last
@@ -249,21 +259,10 @@ if ( isset( $_GET['techies-measure'] ) ) {
 }
 `
 
-const PAGE_BASE = 'https://site.invalid'
-
-// The page to measure: the frame's current page with techies-measure=1 (and without the
-// techies-check request that opens a tool there). A page whose address carries a nonce ran
-// an action from it (update.php?action=upgrade-plugin&_wpnonce=…), so loading it again would
-// repeat that action: the dashboard is measured instead.
+// The page to measure: the frame's current page (see safePageUrl) with techies-measure=1
+// (and without the techies-check request that opens a tool there).
 export function measurePath(currentPath) {
-  let url
-  try {
-    url = new URL(currentPath || '/wp-admin/', PAGE_BASE)
-  } catch {
-    url = new URL('/wp-admin/', PAGE_BASE)
-  }
-  const ranAction = [...url.searchParams.keys()].some((key) => /nonce$/i.test(key))
-  if (url.origin !== PAGE_BASE || ranAction) url = new URL('/wp-admin/', PAGE_BASE)
+  const url = safePageUrl(currentPath)
   url.searchParams.delete('techies-check')
   url.searchParams.set('techies-measure', '1')
   return `${url.pathname}${url.search}`

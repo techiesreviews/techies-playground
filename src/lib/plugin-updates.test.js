@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { PLUGIN_UPDATES_CODE, UPDATES_MARKER, parsePluginUpdates, runPluginUpdates, updatedNote } from './plugin-updates.js'
+import { PLUGIN_UPDATES_CODE, UPDATES_MARKER, parsePluginUpdates, runPluginUpdates } from './plugin-updates.js'
 
 const answer = (result) => `<p>noise</p>${UPDATES_MARKER}${JSON.stringify(result)}`
 
@@ -30,34 +30,31 @@ test('runs the update code once and reads its answer', async () => {
   assert.deepEqual(calls, [{ code: PLUGIN_UPDATES_CODE }])
 })
 
-test('the note names the first change and counts the rest', () => {
-  assert.equal(updatedNote({ updated: [] }), '')
-  assert.equal(updatedNote({ updated: [{ name: 'WP 2FA', from: '3.1', to: '3.2' }] }), 'WP 2FA 3.1 → 3.2')
-  assert.equal(updatedNote({ updated: [{ name: 'WP 2FA', from: '3.1', to: '3.2' }, { name: 'B', from: '1', to: '2' }, { name: 'C', from: '1', to: '2' }] }), 'WP 2FA 3.1 → 3.2 +2')
-})
-
 test('the bar control names each state of the updates at start', async () => {
   const { updatesLabel } = await import('./plugin-updates.js')
-  assert.deepEqual(updatesLabel({ state: 'idle' }), { label: 'Updates', note: '', count: '', failed: '', ready: false })
-  assert.deepEqual(updatesLabel({ state: 'running' }), { label: 'Updating…', note: '', count: '', failed: '', ready: false })
-  assert.deepEqual(updatesLabel({ state: 'skipped' }), { label: 'Updates', note: 'networking blocked', count: '', failed: '', ready: true })
-  assert.deepEqual(updatesLabel({ state: 'error', message: 'Boom' }), { label: 'Updates', note: 'failed', count: '', failed: '', ready: true })
-  const updated = { updated: [{ name: 'WP 2FA', from: '3.1', to: '3.2' }, { name: 'B', from: '1', to: '2' }], failed: [], current: [] }
-  assert.deepEqual(updatesLabel({ state: 'done', result: updated }), { label: 'Updated', note: 'WP 2FA 3.1 → 3.2 +1', count: '2', failed: '', ready: true })
-  assert.deepEqual(updatesLabel({ state: 'done', result: { updated: [], failed: [{ name: 'X', message: 'No' }], current: [] } }), { label: 'Update failed', note: 'X', count: '1', failed: '', ready: true })
-  assert.deepEqual(updatesLabel({ state: 'done', result: { updated: [], failed: [], current: [] } }), { label: 'Up to date', note: '', count: '', failed: '', ready: true })
+  const none = { note: '', noteEnd: '', count: '', failed: '' }
+  assert.deepEqual(updatesLabel({ state: 'idle' }), { label: 'Updates', ...none, ready: false })
+  assert.deepEqual(updatesLabel({ state: 'running' }), { label: 'Updating…', ...none, ready: false })
+  assert.deepEqual(updatesLabel({ state: 'skipped' }), { label: 'Updates', ...none, note: 'networking blocked', ready: true })
+  assert.deepEqual(updatesLabel({ state: 'error', message: 'Boom' }), { label: 'Updates', ...none, note: 'failed', ready: true })
+  const one = { updated: [{ name: 'WP 2FA', from: '3.1', to: '3.2' }], failed: [], current: [] }
+  assert.deepEqual(updatesLabel({ state: 'done', result: one }), { label: 'Updated', note: 'WP 2FA', noteEnd: ' 3.1 → 3.2', count: '1', failed: '', ready: true })
+  const three = { updated: [{ name: 'WP 2FA', from: '3.1', to: '3.2' }, { name: 'B', from: '1', to: '2' }, { name: 'C', from: '1', to: '2' }], failed: [], current: [] }
+  assert.deepEqual(updatesLabel({ state: 'done', result: three }), { label: 'Updated', note: 'WP 2FA', noteEnd: ' 3.1 → 3.2 +2', count: '3', failed: '', ready: true })
+  assert.deepEqual(updatesLabel({ state: 'done', result: { updated: [], failed: [{ name: 'X', message: 'No' }], current: [] } }), { label: 'Update failed', ...none, note: 'X', count: '1', ready: true })
+  assert.deepEqual(updatesLabel({ state: 'done', result: { updated: [], failed: [], current: [] } }), { label: 'Up to date', ...none, ready: true })
 })
 
 test('a long list of failures shortens to the first name and a count, like updates do', async () => {
   const { updatesLabel } = await import('./plugin-updates.js')
   const failed = ['Plugin update check', 'Theme update check', 'C', 'D', 'E', 'F'].map((name) => ({ name, message: 'No' }))
-  assert.deepEqual(updatesLabel({ state: 'done', result: { updated: [], failed, current: [] } }), { label: 'Update failed', note: 'Plugin update check +5', count: '6', failed: '', ready: true })
+  assert.deepEqual(updatesLabel({ state: 'done', result: { updated: [], failed, current: [] } }), { label: 'Update failed', note: 'Plugin update check', noteEnd: ' +5', count: '6', failed: '', ready: true })
 })
 
 test('failures still show on the button when something else updated', async () => {
   const { updatesLabel } = await import('./plugin-updates.js')
   const result = { updated: [{ name: 'WP 2FA', from: '3.1', to: '3.2' }], failed: [{ name: 'X', message: 'Updated, but WordPress could not switch it back on.' }, { name: 'Y', message: 'No' }], current: [] }
-  assert.deepEqual(updatesLabel({ state: 'done', result }), { label: 'Updated', note: 'WP 2FA 3.1 → 3.2', count: '1', failed: '2', ready: true })
+  assert.deepEqual(updatesLabel({ state: 'done', result }), { label: 'Updated', note: 'WP 2FA', noteEnd: ' 3.1 → 3.2', count: '1', failed: '2', ready: true })
 })
 
 test('screen readers hear what the updates at start changed', async () => {
