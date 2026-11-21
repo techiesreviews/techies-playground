@@ -95,6 +95,7 @@ Four small defects were left after 0.11.0:
 ### Release second look (`kit review --base origin/main --second gpt`)
 
 - Fixed (P2): the evidence row above said the Checks numbers stayed inside their tiles at 320 px with 200% text. That copy of the panel was 640 px wide. Measured at the real width, two columns did not fit, so the tiles now go to one column below 15rem.
+- Fixed (review of that fix, P3): the 0.11.1 changelog line and the comment above the tiles now mention the one-column case.
 
 | Environment | Procedure/command | Expected | Actual | Evidence |
 | --- | --- | --- | --- | --- |

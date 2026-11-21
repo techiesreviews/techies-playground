@@ -225,8 +225,9 @@ export function ChecksPanel({ checks, run, gate, onRun, onClose, onOpenCheck }) 
         <div className={`flex items-start gap-2.5 rounded-[0.625rem] p-3 ${VERDICT_BOX[running || !verdict ? (run.state === 'error' ? 'fail' : 'wait') : verdict.status]}`}>
           {verdictBody}
         </div>
-        {/* Four numbers only when the panel has its full 25 rem: measured in rem, larger
-            text gets two columns sooner instead of numbers spilling out of their boxes. */}
+        {/* Four numbers only when the panel has its full 25 rem, and one column below 15 rem:
+            measured in rem, larger text switches sooner instead of numbers spilling out of
+            their boxes. */}
         <div className="mt-3 grid grid-cols-4 gap-2 @max-[25rem]:grid-cols-2 @max-[15rem]:grid-cols-1">
           {(report ? report.tiles : TILE_LABELS.map((label) => ({ id: label, label, value: '–', status: 'wait' }))).map((tile) => (
             <div key={tile.id} className={`min-w-0 rounded-lg px-2.5 py-2 ring-1 ${tileClass(tile.status)}`}>
