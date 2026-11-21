@@ -18,7 +18,7 @@ The GPT second look on the 0.11.0 release (`dev` to `main`, PR #53) found four p
 
 ## Hypothesis and success criteria
 
-- Up to 767 px the four bar buttons show only their icons (their names stay for screen readers) and the licence summary shows as `N/M`. Close stays inside the bar at 641, 700, 767, 768, 1041 and 1280 px for every update result, and the bar stays one line.
+- Up to 767 px the four bar buttons show only their icons (their names stay for screen readers) and the licence summary shows as `N/M`. From 768 to 1040 px, where every name shows, the words after Updates (`networking blocked`, `failed`, `N failed`) are for screen readers only, like the Checks waiting note. Close stays inside the bar from 641 to 1280 px for every update result, also on a full bar (`· 10 of 12 active` and `12 warnings`), and the bar stays one line.
 - A plugin that was on for the whole network goes back on for the whole network after its update; a plugin on for one site still goes back on for that site.
 - On any device with a touchscreen (`any-pointer: coarse`) Run checks and Open in are at least 44 px tall, their own boxes with no overlay.
 - The note takes focus when it opens and shows a focus ring for keyboard users; Escape still closes it and returns focus to Updates.
@@ -32,7 +32,7 @@ The GPT second look on the 0.11.0 release (`dev` to `main`, PR #53) found four p
 
 ## Implementation or prototype
 
-- `src/App.jsx`, `src/ChecksPanel.jsx`, `src/UpdatesControl.jsx`: the bar labels and the compact paddings use `max-md:` (below 768 px) instead of `max-sm:`, and the compact licence summary uses `md:hidden` (768 px and up), so both sides switch at the same width; the existing icon-only `N failed` rule moved from `max-[767px]:` to `max-md:` too, because Tailwind reads `max-[767px]:` as "narrower than 767 px" and left a 1 px band where neither rule applied. The 1040/1041 pair had the same band (the Updates note and its count both showing, the button unable to shrink, and the Checks waiting note showing at exactly 1040 px), so its hide side moved from `max-[1040px]:` to `max-[1041px]:`. Close keeps its own phone padding and the tap overlays keep their phone geometry.
+- `src/App.jsx`, `src/ChecksPanel.jsx`, `src/UpdatesControl.jsx`: the bar labels and the compact paddings use `max-md:` (below 768 px) instead of `max-sm:`, and the compact licence summary uses `md:hidden` (768 px and up), so both sides switch at the same width; the existing icon-only `N failed` rule moved from `max-[767px]:` to `max-md:` too, because Tailwind reads `max-[767px]:` as "narrower than 767 px" and left a 1 px band where neither rule applied. The 1040/1041 pair had the same band (the Updates note and its count both showing, the button unable to shrink, and the Checks waiting note showing at exactly 1040 px), so its hide side moved from `max-[1040px]:` to `max-[1041px]:`. On a full bar from 768 px (all names showing, `· 10 of 12 active`, `12 warnings`) Close was still pushed off up to about 830 px, so the Updates words after the name (`· networking blocked`, `· failed`, `N failed`) are screen-reader only up to 1040 px, as the Checks waiting note already was. Close keeps its own phone padding and the tap overlays keep their phone geometry.
 - `src/lib/plugin-updates.js`: the update code remembers `is_plugin_active_for_network( $file )` before the update and passes it as the network flag to `activate_plugin()`.
 - `src/ChecksPanel.jsx`: Run checks uses `any-pointer-coarse:min-h-11`; Open in drops its fine-pointer-hidden overlay and uses the same class.
 - `src/UpdatesControl.jsx`: the note (`role=dialog`, named by its heading, so it says **Updates at start** when networking is blocked or the update failed) has `tabIndex=0`, a teal focus ring and takes focus when it opens.
@@ -45,9 +45,10 @@ The bar's own tap overlays (`BarTapTarget`) are unchanged: they already reach 48
 | --- | --- | --- | --- | --- |
 | Node 24, before the fix | `node --test src/bar-compact-labels.test.js src/updates-control.test.js src/lib/plugin-updates-php.test.js` on the test commit | The four new tests fail | 4 failed, 7 passed | `bar-compact-labels.test.js` (2), `updates-control.test.js` (note focus), `plugin-updates-php.test.js` (network plugin) |
 | Node 24, after the fix | Same command | All pass | 11 passed | Same files |
-| Node 24 | `scripts/agents/kit unit --affected`, `scripts/agents/kit build` | Pass | `ok unit 19/19 (4 files)`, `ok build finished` | Kit RESULT lines |
-| Headless Chrome, `dev` styles | The bar (real `UpdatesControl` and `ChecksButton`, a copy of the App bar) rendered with `dev`'s built CSS, networking blocked, at 641 and 700 px | Reproduces the finding | Close's right edge at 730 px on a 641 px and a 700 px bar | Render script measurements |
-| Headless Chrome, this branch | Six update results (networking blocked, six failures, one update and two failures, a long name, date versions, up to date) at 641, 700, 767, 768, 1041 and 1280 px | Close inside the bar, one line | Close inside the bar in all 36 renders, every bar one line | Render script measurements and screenshots at 700 px |
+| Node 24, review rounds | Tests added before each later fix: the pixel-breakpoint pair test (failed while 1040 and 1041 differed), and the two Updates note tests for 1040 px (failed while the words hid only up to 767 px) | Fail, then pass | Failed before, passed after | `bar-compact-labels.test.js` (3 tests), `updates-control.test.js` (6 tests) |
+| Node 24, final | `npm test` through `scripts/agents/kit go`, `scripts/agents/kit build` | Pass | 277 passed, `ok build finished` | Kit job log |
+| Headless Chrome, `dev` styles | The bar (real `UpdatesControl` and `ChecksButton`, a copy of the App bar) rendered with `dev`'s built CSS, networking blocked, at 641 and 700 px; then a full bar (`· 10 of 12 active`, `12 warnings`) at 768 px | Reproduces the finding | Close's right edge at 730 px on a 641 px and a 700 px bar; on the full bar at 768 px, at 831 px (networking blocked) and 782 px (one update, two failures) | Render script measurements |
+| Headless Chrome, this branch | Six update results (networking blocked, six failures, one update and two failures, a long name, date versions, up to date), each with the normal bar and the full bar, at 641, 700, 767, 768, 800, 900, 1040, 1041 and 1280 px | Close inside the bar, one line | Close inside the bar in all 108 renders, every bar one line | Render script measurements and screenshots at 700 px |
 
 The headless browser reports a fine pointer as absent, so the bar's 48 px tap overlays show there; at 641, 700 and 767 px the icon-only Updates button's overlay (networking blocked, up to date) is wider than the button. The overlay is invisible and its button keeps one line.
 
@@ -61,7 +62,7 @@ Kept. Each change is small, covered by a test that failed before it, and matches
 
 ## Documentation impact
 
-- [rebuild-spec.md](../rebuild-spec.md): the bar labels are icon-only up to 767 px, the note takes focus, network plugins go back on for the whole network, and the Checks panel's touch targets.
+- [rebuild-spec.md](../rebuild-spec.md): the bar labels are icon-only up to 767 px, the words after Updates are screen-reader only up to 1040 px, the note takes focus, network plugins go back on for the whole network, and the Checks panel's touch targets.
 - [testing.md](../testing.md): the new `bar-compact-labels.test.js` row and the extended Updates note and update code rows.
 - No changelog or version change: 0.11.0 is not yet released and its entry already says active plugins stay active.
 
