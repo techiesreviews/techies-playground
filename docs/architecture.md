@@ -20,7 +20,7 @@ There is no application server or shared data store.
 | `src/Preview.jsx` | Render a second-tab view of the active runtime and monitor its owner through BroadcastChannel. | `src/main.jsx` for `#preview=` URLs. |
 | `src/lib/playground-preview.js` | Validate preview URLs, answer session probes, and generate the WordPress mu-plugin that redirects new-tab actions. | App, Preview, regression tests. |
 | `src/App.jsx` | Most of the UI, application state, effects and the launch lifecycle. | `src/main.jsx`; calls every `src/lib` module and Playground packages. |
-| `src/ChecksPanel.jsx` | The bar's Checks button and the Checks panel (verdict, tiles, check rows, Open in tool). Presentational: App passes the run, the licence gate and the callbacks. | App. |
+| `src/ChecksPanel.jsx` | The bar's Checks button and the Checks panel (the page checked, verdict, the "i" table of limits, an overview of the checks and one check open at a time with its limits, what it found and Open in tool). Presentational: App passes the run, the licence gate and the callbacks; the panel keeps only which check is open. | App. |
 | `src/UpdatesControl.jsx` | The bar's Updates button and its note of what the update at start changed, plus the shared bar button class, tap target, spinner and clock time. | App, ChecksPanel. |
 | `src/lib/plugin-updates.js` | The PHP that updates every plugin and theme at start (and switches updated plugins back on), its result parsing, and the bar's label and announcement. | App launch, UpdatesControl, regression tests (which run the parser on real output shapes). |
 | `src/lib/recipe.js` | Recipe defaults, validation, stable package IDs, labels/version hints, Blueprint generation, recipe download. | App, saved recipes, history, persistence tests. |
@@ -38,7 +38,7 @@ There is no application server or shared data store.
 | `src/lib/spinup-history.js` | Safe history normalization, cap, and persisted-environment deduplication. | App. |
 | `src/lib/plugin-preferences.js` | Local-package search and recently-selected ordering. | App for plugins and themes. |
 | `src/lib/playground-persistence.js` | Unload warning rule, one-time default migration, site ID, history persistence label. | App and history. |
-| `src/styles.css` | Tailwind import/theme, body defaults, selection color, license-popover positioning/animation, Checks panel slide-in, reduced motion. | `src/main.jsx`. |
+| `src/styles.css` | Tailwind import/theme, body defaults, selection color, license-popover positioning/animation, Checks panel slide-in, its two views, the "i", rolling numbers and the delayed spinner, reduced motion. | `src/main.jsx`. |
 | `worker.js` | Serve `dist` through asset binding and add security headers. | Cloudflare Workers. |
 | `scripts/sync-wordpress-release.mjs` | Detect a new WordPress release branch and prepare fallback/version/changelog edits. | npm script and scheduled workflow. |
 | `scripts/configure-cloudflare-deploy.ps1` | Securely configure GitHub deployment secret/variables and trigger workflow. | One-time maintainer action. |

@@ -110,9 +110,13 @@ export const CHECK_LIMITS = Object.freeze({
 
 // The Checks panel measures a page by loading it once more with techies-measure=1. This
 // must-use plugin then logs queries, PHP errors, calls to other sites and each plugin's load
-// time, and appends the numbers to the page as one base64 JSON comment. It never returns a
-// query's SQL or a call's full address (either can hold a license key): only counts, times,
-// the host of each call, and error messages cut to 200 characters.
+// time, and appends the numbers to the page as one base64 JSON comment. When Query Monitor is
+// active, the query, error, call, memory and time numbers are read from Query Monitor's own
+// collectors instead (source 'query-monitor'). Code Profiler only profiles on its own screen,
+// so the plugin load times are always this plugin's. It never returns a query's SQL or a
+// call's full address (either can hold a license key): only counts, times, the host of each
+// call, the name of the function that repeated a query, and error messages cut to 200
+// characters.
 export const MEASURE_PLUGIN_PATH = '/wordpress/wp-content/mu-plugins/techies-measure.php'
 export const MEASURE_MARKER = 'TECHIES_MEASURE:'
 
@@ -135,17 +139,21 @@ function techies_measure_kind( $type ) {
 	return 'error';
 }
 
+function techies_measure_entry( $kind, $message, $file, $line ) {
+	return array(
+		'kind'    => $kind,
+		// An address in a message keeps its host and path; its query can hold a license key.
+		'message' => substr( preg_replace( '#(https?://[^\\s?\\'"]+)\\?[^\\s\\'")]*#', '$1?…', (string) $message ), 0, 200 ),
+		'file'    => str_replace( ABSPATH, '', (string) $file ),
+		'line'    => (int) $line,
+	);
+}
+
 function techies_measure_record( $type, $message, $file, $line ) {
 	$kind = techies_measure_kind( $type );
 	$GLOBALS['techies_measure']['counts'][ $kind ]++;
 	if ( count( $GLOBALS['techies_measure']['errors'] ) < 10 ) {
-		$GLOBALS['techies_measure']['errors'][] = array(
-			'kind'    => $kind,
-			// An address in a message keeps its host and path; its query can hold a license key.
-			'message' => substr( preg_replace( '#(https?://[^\\s?\\'"]+)\\?[^\\s\\'")]*#', '$1?…', (string) $message ), 0, 200 ),
-			'file'    => str_replace( ABSPATH, '', (string) $file ),
-			'line'    => (int) $line,
-		);
+		$GLOBALS['techies_measure']['errors'][] = techies_measure_entry( $kind, $message, $file, $line );
 	}
 }
 
@@ -183,6 +191,110 @@ function techies_measure_http( $response, $context, $class, $args, $url ) {
 	}
 }
 
+// The function that ran a query, without its arguments (they can hold an option's value).
+function techies_measure_caller( $stack ) {
+	$frame = is_array( $stack ) && $stack ? (string) reset( $stack ) : '';
+	return preg_replace( '/\\(.*$/s', '()', $frame );
+}
+
+// With Query Monitor active, the page's numbers come from its own collectors, so the panel
+// shows what Query Monitor shows for the same page. Fatal errors, which Query Monitor does not
+// record, still come from this plugin. Returns null without Query Monitor.
+function techies_measure_query_monitor() {
+	if ( ! class_exists( 'QM_Collectors' ) ) {
+		return null;
+	}
+	try {
+		QM_Collectors::init()->process();
+		$collected = array();
+		foreach ( array( 'overview', 'db_queries', 'php_errors', 'http' ) as $id ) {
+			$collector = QM_Collectors::get( $id );
+			if ( ! $collector ) {
+				return null;
+			}
+			$collected[ $id ] = $collector->get_data();
+		}
+	} catch ( Throwable $error ) {
+		return null;
+	}
+	$overview = $collected['overview'];
+	$db       = $collected['db_queries'];
+
+	$query_time = 0;
+	$groups     = array();
+	foreach ( isset( $db->rows ) ? (array) $db->rows : array() as $row ) {
+		$query_time += (float) $row['ltime'];
+		$key = md5( (string) $row['sql'] );
+		if ( ! isset( $groups[ $key ] ) ) {
+			$stack = isset( $row['trace'] ) ? $row['trace']->get_stack() : ( isset( $row['stack'] ) ? $row['stack'] : array() );
+			$groups[ $key ] = array( 'count' => 0, 'caller' => techies_measure_caller( $stack ) );
+		}
+		$groups[ $key ]['count']++;
+	}
+	$duplicates = 0;
+	$repeated   = array();
+	foreach ( $groups as $group ) {
+		if ( $group['count'] > 1 ) {
+			$duplicates += $group['count'] - 1;
+			$repeated[]  = $group;
+		}
+	}
+	usort( $repeated, function ( $a, $b ) { return $b['count'] <=> $a['count']; } );
+
+	$counts = array( 'error' => $GLOBALS['techies_measure']['counts']['error'], 'warning' => 0, 'notice' => 0, 'deprecated' => 0 );
+	$errors = array_values( array_filter( $GLOBALS['techies_measure']['errors'], function ( $entry ) { return 'error' === $entry['kind']; } ) );
+	foreach ( isset( $collected['php_errors']->errors ) ? (array) $collected['php_errors']->errors : array() as $error ) {
+		if ( ! is_object( $error ) || ! empty( $error->suppressed ) ) {
+			continue;
+		}
+		$kind = 'strict' === $error->level ? 'deprecated' : (string) $error->level;
+		if ( ! isset( $counts[ $kind ] ) ) {
+			continue;
+		}
+		$counts[ $kind ] += max( 1, (int) $error->count );
+		if ( count( $errors ) < 10 ) {
+			$callsite = isset( $error->trace ) && $error->trace ? $error->trace->get_callsite() : null;
+			$errors[] = techies_measure_entry( $kind, $error->message, $callsite ? $callsite->file : '', $callsite ? $callsite->line : 0 );
+		}
+	}
+
+	$calls  = 0;
+	$failed = 0;
+	$http   = array();
+	foreach ( isset( $collected['http']->http ) ? (array) $collected['http']->http : array() as $request ) {
+		if ( ! empty( $request->local ) ) {
+			continue;
+		}
+		// 0 is no answer; -1 is a call that waits for no answer, so it cannot fail.
+		$code = 'error' === $request->type ? 0 : ( preg_match( '/^HTTP (\\d+)/', (string) $request->type, $match ) ? (int) $match[1] : -1 );
+		$calls++;
+		if ( 0 === $code || $code >= 400 ) {
+			$failed++;
+		}
+		if ( count( $http ) < 40 ) {
+			$http[] = array( 'host' => (string) $request->host, 'code' => $code );
+		}
+	}
+
+	return array(
+		'source'      => 'query-monitor',
+		'qmVersion'   => defined( 'QM_VERSION' ) ? QM_VERSION : '',
+		'time'        => (float) $overview->time_taken,
+		'memory'      => (int) $overview->memory,
+		'memoryLimit' => (int) $overview->memory_limit,
+		'queries'     => (int) $db->total_qs,
+		'queryTime'   => $query_time,
+		'slowQueries' => isset( $db->expensive ) ? count( (array) $db->expensive ) : 0,
+		'duplicates'  => $duplicates,
+		'repeated'    => array_slice( $repeated, 0, 3 ),
+		'errorCounts' => $counts,
+		'errors'      => $errors,
+		'calls'       => $calls,
+		'failedCalls' => $failed,
+		'http'        => $http,
+	);
+}
+
 function techies_measure_report() {
 	global $wpdb;
 	$fatal = error_get_last();
@@ -216,6 +328,7 @@ function techies_measure_report() {
 	usort( $plugins, function ( $a, $b ) { return $b['time'] <=> $a['time']; } );
 	$title = is_admin() ? ( isset( $GLOBALS['title'] ) ? $GLOBALS['title'] : '' ) : wp_get_document_title();
 	$report = array(
+		'source'      => 'playground',
 		'title'       => html_entity_decode( wp_strip_all_tags( (string) $title ), ENT_QUOTES, 'UTF-8' ),
 		'time'        => timer_float(),
 		'memory'      => memory_get_peak_usage(),
@@ -231,6 +344,10 @@ function techies_measure_report() {
 		'http'        => $GLOBALS['techies_measure']['http'],
 		'plugins'     => array_slice( $plugins, 0, 5 ),
 	);
+	$query_monitor = techies_measure_query_monitor();
+	if ( $query_monitor ) {
+		$report = array_merge( $report, $query_monitor );
+	}
 	echo "\\n<!-- ${MEASURE_MARKER}" . base64_encode( wp_json_encode( $report ) ) . ' -->';
 }
 
@@ -277,6 +394,8 @@ export function parseMeasurement(responseText) {
   const counts = raw.errorCounts || {}
   const list = (value) => (Array.isArray(value) ? value.filter((entry) => entry && typeof entry === 'object') : [])
   return {
+    source: raw.source === 'query-monitor' ? 'query-monitor' : 'playground',
+    qmVersion: typeof raw.qmVersion === 'string' ? raw.qmVersion : '',
     title: typeof raw.title === 'string' ? raw.title : '',
     time: number(raw.time),
     memory: number(raw.memory),
@@ -285,6 +404,7 @@ export function parseMeasurement(responseText) {
     queryTime: number(raw.queryTime),
     slowQueries: number(raw.slowQueries),
     duplicates: number(raw.duplicates),
+    repeated: list(raw.repeated).map((entry) => ({ count: number(entry.count), caller: String(entry.caller || '') })),
     errorCounts: { error: number(counts.error), warning: number(counts.warning), notice: number(counts.notice), deprecated: number(counts.deprecated) },
     errors: list(raw.errors).map((entry) => ({ kind: String(entry.kind || 'error'), message: String(entry.message || ''), file: String(entry.file || ''), line: number(entry.line) })),
     calls: number(raw.calls),
@@ -313,10 +433,39 @@ export function checksGate(neededIds, licenseFill, activeIds = []) {
 
 const plural = (count, word, many = `${word}s`) => `${count} ${count === 1 ? word : many}`
 
-// The panel's headline and the bar's short form: failures first, then warnings.
+// The words for each status. Good, Medium and Bad appear only in the "i" table of limits.
+export const STATUS_LABEL = Object.freeze({ pass: 'Passed', warn: 'Warning', fail: 'Improve' })
+
+// The article that explains the scores, linked from the bottom of the "i".
+export const CHECKS_ARTICLE_URL = 'https://techies.review/articles/techies-playground-check-score/'
+
+const percent = (share) => `${Math.round(share * 100)}%`
+
+// Good (Passed), medium (Warning) and bad (Improve) for each check, in the order the "i" lists
+// them, written from CHECK_LIMITS so the table and the checks never disagree. An empty bad
+// means the check only ever warns.
+export const LIMIT_ROWS = Object.freeze([
+  { id: 'page-time', tool: 'query-monitor', name: 'Page time', good: `up to ${CHECK_LIMITS.pageTimeWarnSeconds} s`, medium: `over ${CHECK_LIMITS.pageTimeWarnSeconds} s`, bad: `over ${CHECK_LIMITS.pageTimeFailSeconds} s` },
+  { id: 'memory', tool: 'query-monitor', name: 'Memory', note: 'share of the site’s limit', good: `up to ${percent(CHECK_LIMITS.memoryWarnShare)}`, medium: `over ${percent(CHECK_LIMITS.memoryWarnShare)}`, bad: `over ${percent(CHECK_LIMITS.memoryFailShare)}` },
+  { id: 'queries', tool: 'query-monitor', name: 'Database queries', good: `up to ${CHECK_LIMITS.queriesWarn}`, medium: `over ${CHECK_LIMITS.queriesWarn}`, bad: '' },
+  { id: 'duplicate-queries', tool: 'query-monitor', name: 'Duplicate queries', good: `up to ${CHECK_LIMITS.duplicatesWarn}`, medium: `over ${CHECK_LIMITS.duplicatesWarn}`, bad: '' },
+  { id: 'slow-queries', tool: 'query-monitor', name: 'Slow queries', note: `longer than ${CHECK_LIMITS.slowQuerySeconds} s`, good: 'none', medium: '1 or more', bad: '' },
+  { id: 'php-errors', tool: 'query-monitor', name: 'PHP errors', good: 'none', medium: 'notices', bad: 'errors, warnings' },
+  { id: 'outside-calls', tool: 'query-monitor', name: 'Calls to other sites', good: 'none failed', medium: 'any failed', bad: '' },
+  { id: 'slowest-plugin', tool: 'code-profiler', name: 'Slowest plugin', good: `up to ${CHECK_LIMITS.pluginLoadWarnSeconds} s`, medium: `over ${CHECK_LIMITS.pluginLoadWarnSeconds} s`, bad: '' },
+].map((row) => Object.freeze(row)))
+
+const STATUS_ORDER = { fail: 0, warn: 1, pass: 2 }
+
+// What needs fixing first: Improve, then Warning, then Passed, each in its usual order.
+export function checksByStatus(checks) {
+  return [...checks].sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status])
+}
+
+// The panel's headline and the bar's short form: what to improve first, then warnings.
 export function checksVerdict(report) {
-  if (report.failed) return { status: 'fail', headline: `${plural(report.failed, 'check')} failed`, short: `${report.failed} failed` }
-  if (report.warnings) return { status: 'warn', headline: `${plural(report.warnings, 'check')} need${report.warnings === 1 ? 's' : ''} a look`, short: plural(report.warnings, 'warning') }
+  if (report.failed) return { status: 'fail', headline: `${plural(report.failed, 'check')} to improve`, short: `${report.failed} to improve` }
+  if (report.warnings) return { status: 'warn', headline: plural(report.warnings, 'warning'), short: plural(report.warnings, 'warning') }
   const total = report.checks.length
   return { status: 'pass', headline: total === 1 ? 'The check passed' : `All ${total} checks passed`, short: `${total} passed` }
 }
@@ -324,33 +473,77 @@ export function checksVerdict(report) {
 // What a screen reader hears from the bar when the checks start and finish.
 export function checksAnnouncement(run) {
   if (run.state === 'running') return 'Running checks.'
-  if (run.state === 'done') return `Checks: ${checksVerdict(run.report).headline}.`
+  if (run.state === 'done') return `Checks${run.title ? ` on ${run.title}` : ''}: ${checksVerdict(run.report).headline}.`
   if (run.state === 'error') return `The checks could not run. ${run.message}`
   return ''
 }
 
-// One measurement per site at a time. A run left over from an earlier launch cannot
-// unblock the site that replaced it.
-export function createRunGuard() {
+// Which page each site checks now and which waits. The checks run on every page that opens:
+// a page opened during a run waits, and only the latest one, so the panel ends on the page
+// that is open. A page is checked again by itself only after another page; Run again forces it.
+// A new site (a relaunch) starts at once, and the old site finishing changes nothing.
+export function createCheckQueue() {
+  let site = null
   let running = null
+  let waiting = null
+  let last = null
   return {
-    start(client) {
-      if (running === client) return false
-      running = client
-      return true
+    request(client, path, { force = false } = {}) {
+      if (client !== site) {
+        site = client
+        running = path
+        waiting = null
+        last = null
+        return 'start'
+      }
+      if (running !== null) {
+        if (path === running) {
+          waiting = null
+          return 'skip'
+        }
+        if (path === waiting) return 'skip'
+        waiting = path
+        return 'queued'
+      }
+      if (path === last && !force) return 'skip'
+      running = path
+      return 'start'
     },
+    // True while a newer page waits, so the result of this run is out of date.
+    waiting(client) {
+      return client === site && waiting !== null
+    },
+    // Ends this site's run and gives the page to check next, if one waits.
     finish(client) {
-      if (running === client) running = null
+      if (client !== site) return null
+      last = running
+      running = null
+      const next = waiting
+      waiting = null
+      return next
     },
   }
+}
+
+// The page the checks measure, as the panel shows it: see safePageUrl.
+export function checkedPagePath(currentPath) {
+  const url = safePageUrl(currentPath)
+  url.searchParams.delete('techies-check')
+  url.searchParams.delete('techies-measure')
+  return `${url.pathname}${url.search}`
 }
 
 export const formatSeconds = (seconds) => `${seconds < 10 ? seconds.toFixed(2) : seconds.toFixed(1)} s`
 const formatMegabytes = (bytes) => `${Math.round(bytes / 1048576)} MB`
 const ERROR_KINDS = [['error', 'error'], ['warning', 'warning'], ['notice', 'notice'], ['deprecated', 'deprecation notice']]
+const ERROR_WORDS = Object.fromEntries(ERROR_KINDS)
+
+// A "found" list only when there is something in it.
+const foundList = (title, total, entries) => (entries.length ? { type: 'list', title, total, entries } : undefined)
 
 // Turns one page's numbers into the panel's checks: Query Monitor's when it is in the setup,
-// Code Profiler's when it is. Each check passes, warns or fails against CHECK_LIMITS.
+// Code Profiler's when it is. Each check passes, warns or fails against CHECK_LIMITS, says
+// where its number came from and lists what it found.
 export function evaluateChecks(measurement, checkIds) {
   const limits = CHECK_LIMITS
   const m = measurement
@@ -363,78 +556,78 @@ export function evaluateChecks(measurement, checkIds) {
   const timeStatus = m.time > limits.pageTimeFailSeconds ? 'fail' : m.time > limits.pageTimeWarnSeconds ? 'warn' : 'pass'
 
   if (checkIds.includes('query-monitor')) {
+    const source = m.source === 'query-monitor'
+      ? `From Query Monitor${m.qmVersion ? ` ${m.qmVersion}` : ''} on this page.`
+      : 'Measured by the Playground: Query Monitor did not report on this page.'
     const listedFailures = m.http.filter((call) => call.code === 0 || call.code >= 400)
-    const failedHosts = [...new Set(listedFailures.map((call) => call.host).filter(Boolean))]
-    // The counts cover every call; the list is capped, so it gives only the host names.
+    // The counts cover every call; the list is capped at what the page sent back.
     const callCount = Math.max(m.calls || 0, m.http.length)
     const failedCount = Math.max(m.failedCalls || 0, listedFailures.length)
+    const repeated = m.repeated || []
     checks.push(
       {
-        id: 'php-errors', tool: 'query-monitor', name: 'PHP errors', status: errorStatus,
+        id: 'php-errors', tool: 'query-monitor', name: 'PHP errors', status: errorStatus, source,
         value: errorTotal ? errorParts.slice(0, 2).join(', ') : '0',
-        details: errorTotal ? `${errorParts.join(', ')} on this page. Errors and warnings fail; notices and deprecation notices warn.` : 'No errors, warnings or notices on this page.',
-        errors: m.errors,
+        details: errorTotal ? `${errorParts.join(', ')} on this page.` : 'No errors, warnings or notices on this page.',
+        found: foundList('Found on this page', errorTotal, m.errors.map((entry) => ({
+          status: entry.kind === 'error' || entry.kind === 'warning' ? 'fail' : 'warn',
+          kind: `PHP ${ERROR_WORDS[entry.kind] || 'error'}`,
+          message: entry.message,
+          where: entry.file ? `${entry.file}, line ${entry.line}` : '',
+        }))),
       },
       {
-        id: 'slow-queries', tool: 'query-monitor', name: 'Slow queries', status: m.slowQueries ? 'warn' : 'pass', value: String(m.slowQueries),
+        id: 'slow-queries', tool: 'query-monitor', name: 'Slow queries', status: m.slowQueries ? 'warn' : 'pass', value: String(m.slowQueries), source,
         details: m.slowQueries ? `${plural(m.slowQueries, 'database query', 'database queries')} took longer than ${limits.slowQuerySeconds} s.` : `No database query took longer than ${limits.slowQuerySeconds} s.`,
       },
       {
-        id: 'outside-calls', tool: 'query-monitor', name: 'Calls to other sites', status: failedCount ? 'warn' : 'pass', value: `${failedCount} failed`,
+        id: 'outside-calls', tool: 'query-monitor', name: 'Calls to other sites', status: failedCount ? 'warn' : 'pass', value: `${failedCount} failed`, source,
         details: !callCount
           ? 'This page made no call to another site.'
           : failedCount
-            ? `${failedCount} of ${plural(callCount, 'call')} to other sites failed${failedHosts.length ? `: ${failedHosts.join(', ')}` : ''}. Blocked networking makes every call fail.`
+            ? `${failedCount} of ${plural(callCount, 'call')} to other sites failed. Blocked networking makes every call fail.`
             : `${plural(callCount, 'call')} to other sites, all answered.`,
+        found: foundList('Failed calls', failedCount, listedFailures.map((call) => ({
+          status: 'warn', message: call.host, where: call.code > 0 ? `Answered HTTP ${call.code}` : 'No answer',
+        }))),
       },
       {
-        id: 'duplicate-queries', tool: 'query-monitor', name: 'Duplicate queries', status: m.duplicates > limits.duplicatesWarn ? 'warn' : 'pass', value: String(m.duplicates),
-        details: `${m.duplicates ? `${plural(m.duplicates, 'database query', 'database queries')} repeated an earlier one.` : 'No database query ran more than once.'} Warning above ${limits.duplicatesWarn}.`,
+        id: 'duplicate-queries', tool: 'query-monitor', name: 'Duplicate queries', status: m.duplicates > limits.duplicatesWarn ? 'warn' : 'pass', value: String(m.duplicates), source,
+        details: m.duplicates ? `${plural(m.duplicates, 'database query', 'database queries')} repeated an earlier one.` : 'No database query ran more than once.',
+        found: foundList('Repeated most', repeated.length, repeated.map((entry) => ({
+          status: 'warn', count: `${entry.count}×`, message: entry.caller || 'Unknown function', where: 'Function that ran it',
+        }))),
       },
       {
-        id: 'queries', tool: 'query-monitor', name: 'Database queries', status: m.queries > limits.queriesWarn ? 'warn' : 'pass', value: String(m.queries),
-        details: `${plural(m.queries, 'query', 'queries')}, ${m.queryTime.toFixed(3)} s together. Warning above ${limits.queriesWarn}.`,
+        id: 'queries', tool: 'query-monitor', name: 'Database queries', status: m.queries > limits.queriesWarn ? 'warn' : 'pass', value: String(m.queries), source,
+        details: `${plural(m.queries, 'query', 'queries')}, ${m.queryTime.toFixed(3)} s together.`,
       },
       {
-        id: 'memory', tool: 'query-monitor', name: 'Memory', status: memoryStatus, value: formatMegabytes(m.memory),
-        details: m.memoryLimit > 0
-          ? `${Math.round(memoryShare * 100)}% of the ${formatMegabytes(m.memoryLimit)} limit. Warning above ${limits.memoryWarnShare * 100}%, failure above ${limits.memoryFailShare * 100}%.`
-          : 'This site sets no memory limit.',
+        id: 'memory', tool: 'query-monitor', name: 'Memory', status: memoryStatus, value: formatMegabytes(m.memory), source,
+        details: m.memoryLimit > 0 ? `${Math.round(memoryShare * 100)}% of the site’s ${formatMegabytes(m.memoryLimit)} limit.` : 'This site sets no memory limit.',
       },
       {
-        id: 'page-time', tool: 'query-monitor', name: 'Page time', status: timeStatus, value: formatSeconds(m.time),
-        details: `Time WordPress took to build this page in the browser. Warning above ${limits.pageTimeWarnSeconds} s, failure above ${limits.pageTimeFailSeconds} s.`,
+        id: 'page-time', tool: 'query-monitor', name: 'Page time', status: timeStatus, value: formatSeconds(m.time), source,
+        details: 'Time WordPress took to build this page in the browser.',
       },
     )
   }
 
   if (checkIds.includes('code-profiler')) {
     const [slowest] = m.plugins
-    const others = m.plugins.slice(1, 3).map((plugin) => `${plugin.name} ${formatSeconds(plugin.time)}`)
+    const pluginStatus = (plugin) => (plugin.time > limits.pluginLoadWarnSeconds ? 'warn' : 'pass')
     checks.push({
       id: 'slowest-plugin', tool: 'code-profiler', name: 'Slowest plugin',
-      status: slowest && slowest.time > limits.pluginLoadWarnSeconds ? 'warn' : 'pass',
+      status: slowest ? pluginStatus(slowest) : 'pass',
       value: slowest ? formatSeconds(slowest.time) : '–',
-      details: slowest
-        ? `${slowest.name} took ${formatSeconds(slowest.time)} to load${others.length ? `, ${others.join(', ')}` : ''}. Warning when one plugin takes more than ${limits.pluginLoadWarnSeconds} s. Code Profiler shows the full profile.`
-        : 'No plugin loaded on this page.',
+      source: 'Timed by the Playground as each plugin loaded. Code Profiler shows the full profile.',
+      details: slowest ? `${slowest.name} took the longest to load.` : 'No plugin loaded on this page.',
+      found: slowest
+        ? { type: 'table', title: 'Load time per plugin', rows: m.plugins.map((plugin) => ({ name: plugin.name, value: formatSeconds(plugin.time), status: pluginStatus(plugin) })) }
+        : undefined,
     })
   }
 
   const count = (status) => checks.filter((check) => check.status === status).length
-  // The tiles use Query Monitor's limits; without it they show the numbers uncoloured.
-  const judged = checkIds.includes('query-monitor')
-  const tileStatus = (status) => (judged ? status : 'pass')
-  return {
-    checks,
-    passed: count('pass'),
-    warnings: count('warn'),
-    failed: count('fail'),
-    tiles: [
-      { id: 'page-time', label: 'Page time', value: formatSeconds(m.time), status: tileStatus(timeStatus) },
-      { id: 'memory', label: 'Memory', value: formatMegabytes(m.memory), status: tileStatus(memoryStatus) },
-      { id: 'queries', label: 'Queries', value: String(m.queries), status: tileStatus(m.queries > limits.queriesWarn ? 'warn' : 'pass') },
-      { id: 'php-errors', label: 'PHP errors', value: String(errorTotal), status: tileStatus(errorStatus) },
-    ],
-  }
+  return { checks, passed: count('pass'), warnings: count('warn'), failed: count('fail') }
 }

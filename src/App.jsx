@@ -123,8 +123,9 @@ import {
   checkResultsPath,
   checksAnnouncement,
   checksGate,
+  checkedPagePath,
   checksInSetup,
-  createRunGuard,
+  createCheckQueue,
   evaluateChecks,
   measurePage,
 } from './lib/checks'
@@ -148,6 +149,21 @@ const PERSISTED_SITES_KEY = persistedSitesKey(PLAYGROUND_ORIGIN)
 const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-storage-default-v1'
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
+  {
+    version: '0.12.0',
+    date: 'November 21, 2026',
+    title: 'Checks that follow the page you open, and explain their scores',
+    summary: 'The Checks panel now checks whichever WordPress page you open, says which page it checked, explains what each score means, and shows what needs fixing first.',
+    changes: [
+      'Checks now run on the page you have open in WordPress, every time you go to another page, even with the Checks panel closed. The Checks button in the top bar always shows the result for the latest page.',
+      'The panel says which page it checked, when, and how long it took.',
+      'The panel opens on an overview of all eight checks, with what needs fixing first. Click a check to see its number, its limits, what it found and where the number came from; All checks takes you back. If you go to another page while a check is open, it stays open and updates.',
+      'The results now say Passed, Warning or Improve. Click the i next to the result to see the Good, Medium and Bad limits for every check, with a More information link to the article that explains them.',
+      'The numbers come from Query Monitor on the page you opened whenever it can report them, and the panel says so; when it cannot, the panel says the Playground measured them instead.',
+      'Numbers roll to their new value when a new result arrives, and stand still with reduce motion turned on. The spinner waits a moment, so quick checks do not flash it.',
+      'On a 320 px phone with 200% text, the Checks title no longer hides behind Run again, Close stays on screen, Keep open and Discard and close are easier to tap, and the start page no longer scrolls a few pixels sideways.',
+    ],
+  },
   {
     version: '0.11.1',
     date: 'November 21, 2026',
@@ -1875,9 +1891,15 @@ export default function App() {
   const checksButtonRef = useRef(null)
   const updatesButtonRef = useRef(null)
   const launchedRecipeRef = useRef(null)
-  // The client a check run is measuring now, so a second run never starts on top of it.
-  const checksRunGuardRef = useRef(null)
-  checksRunGuardRef.current ??= createRunGuard()
+  // The page each site measures now and the one that waits, so a site never measures twice at once.
+  const checksQueueRef = useRef(null)
+  checksQueueRef.current ??= createCheckQueue()
+  // For the page watcher, which outlives renders: the latest gate and runChecks, and the site
+  // the checks last ran on.
+  const checksGateRef = useRef(null)
+  const runChecksRef = useRef(null)
+  const checksRanOnRef = useRef(null)
+  const checksEscapeRef = useRef(null)
   const launchAbortRef = useRef(null)
   const savedKeyPackages = useMemo(() => packagesWithSavedKeys(licenseRecords || []), [licenseRecords])
   const keyCountsFor = (candidate) => ({
@@ -2284,8 +2306,8 @@ export default function App() {
     checksButtonRef.current?.focus()
   }, [])
 
-  // Escape closes the Updated note first, then the Checks panel. The Licenses manager
-  // handles its own Escape.
+  // Escape closes the Updated note first, then the scores info and the open check inside the
+  // Checks panel, then the panel. The Licenses manager handles its own Escape.
   useEffect(() => {
     if ((!showUpdates && !showChecksPanel) || showLicenseManager) return undefined
     function handleEscape(event) {
@@ -2293,7 +2315,7 @@ export default function App() {
       if (showUpdates) {
         setShowUpdates(false)
         updatesButtonRef.current?.focus()
-      } else {
+      } else if (!checksEscapeRef.current?.()) {
         closeChecksPanel()
       }
     }
@@ -2301,35 +2323,64 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleEscape)
   }, [showUpdates, showChecksPanel, showLicenseManager, closeChecksPanel])
 
-  // Measures the page open in WordPress. The result belongs to the client it ran on, so a
-  // run that finishes after the Playground closed or relaunched is dropped.
-  async function runChecks(client = clientRef.current) {
+  // Measures a page of the site: the one open in WordPress unless a path is given. The result
+  // belongs to the client it ran on, so a run that finishes after the Playground closed or
+  // relaunched is dropped, and so is one whose page was left while it ran: the page opened
+  // since is measured next. auto: a page that opened, which is not measured twice in a row.
+  async function runChecks(client = clientRef.current, { auto = false, path } = {}) {
     const checkIds = checksInSetup(launchedRecipeRef.current || recipe).map((check) => check.id)
-    if (!client || !checkIds.length || !checksRunGuardRef.current.start(client)) return
-    const started = performance.now()
-    setChecksRun((current) => ({ ...current, state: 'running' }))
-    try {
-      let currentPath = ''
+    if (!client || !checkIds.length) return
+    let currentPath = path
+    if (currentPath === undefined) {
       try {
         currentPath = await client.getCurrentURL()
       } catch {
         currentPath = ''
       }
-      const measurement = await measurePage(client, currentPath)
       if (client !== clientRef.current) return
+    }
+    const page = checkedPagePath(currentPath)
+    if (checksQueueRef.current.request(client, page, { force: !auto }) !== 'start') return
+    checksRanOnRef.current = client
+    const started = performance.now()
+    setChecksRun((current) => ({ ...current, state: 'running', path: page }))
+    try {
+      const measurement = await measurePage(client, page)
+      if (client !== clientRef.current || checksQueueRef.current.waiting(client)) return
       setChecksRun({
         state: 'done',
         report: evaluateChecks(measurement, checkIds),
         title: measurement.title,
+        path: page,
         time: new Date(),
         took: (performance.now() - started) / 1000,
       })
     } catch (caught) {
-      if (client !== clientRef.current) return
-      setChecksRun({ state: 'error', message: caught instanceof Error ? caught.message : 'The checks could not measure this page.' })
+      if (client !== clientRef.current || checksQueueRef.current.waiting(client)) return
+      setChecksRun({ state: 'error', path: page, message: caught instanceof Error ? caught.message : 'The checks could not measure this page.' })
     } finally {
-      checksRunGuardRef.current.finish(client)
+      const next = checksQueueRef.current.finish(client)
+      if (next !== null && client === clientRef.current) runChecksRef.current(client, { auto: true, path: next })
     }
+  }
+
+  useEffect(() => {
+    runChecksRef.current = runChecks
+    checksGateRef.current = checksLicenseGate
+  })
+
+  // Measures every page that opens in WordPress, also with the panel closed, once the licenses
+  // allow the checks (or they already ran on this site). A short wait lets redirects settle,
+  // so one visit is one run.
+  function watchPages(client) {
+    let timer = 0
+    client.onNavigation((path) => {
+      window.clearTimeout(timer)
+      timer = window.setTimeout(() => {
+        if (client !== clientRef.current) return
+        if (checksGateRef.current?.ready || checksRanOnRef.current === client) runChecksRef.current(client, { auto: true, path })
+      }, 400)
+    })
   }
 
   async function openCheck(check) {
@@ -2705,7 +2756,10 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
         ? { ...launchedRecipe, wordpress: launchedWordPressVersion }
         : launchedRecipe
       setSpinupHistory((current) => appendSpinup(current, { recipe: historyRecipe, plugins: installedPlugins, theme: installedTheme }))
-      if (checksInSetup(launchedRecipe).length && checksGate(checksLicenseIds, licenseResults, siteActiveIds).ready) runChecks(client)
+      if (checksInSetup(launchedRecipe).length) {
+        watchPages(client)
+        if (checksGate(checksLicenseIds, licenseResults, siteActiveIds).ready) runChecks(client, { auto: true })
+      }
     } catch (caught) {
       if (launchId !== launchIdRef.current) return
       stopPreviewSessionRef.current?.()
@@ -2769,7 +2823,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
               </p>
             </div>
 
-            <form className="grid gap-8 pt-10" onSubmit={(event) => { event.preventDefault(); launch() }}>
+            <form className="grid grid-cols-1 gap-8 pt-10" onSubmit={(event) => { event.preventDefault(); launch() }}>
               <section aria-labelledby="environment-heading" className="border-t border-neutral-950/10 pt-6">
                 <div className="flex items-baseline justify-between gap-4">
                   <h2 id="environment-heading" className="text-xl font-semibold text-balance">1. Environment</h2>
@@ -3338,6 +3392,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                   onClick={() => setConfirmingPlaygroundClose(false)}
                   className="relative shrink-0 rounded-md px-2 py-1 text-sm/5 font-medium text-neutral-200 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
                 >
+                  <span className="absolute top-1/2 left-1/2 h-[max(100%,2.75rem)] w-[max(100%,2.75rem)] -translate-1/2" aria-hidden="true" />
                   Keep open
                 </button>
                 <button
@@ -3345,6 +3400,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                   onClick={closePlayground}
                   className="relative shrink-0 rounded-md bg-red-500/15 px-2 py-1 text-sm/5 font-medium text-red-100 ring-1 ring-red-300/20 hover:bg-red-500/25 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
                 >
+                  <span className="absolute top-1/2 left-1/2 h-[max(100%,2.75rem)] w-[max(100%,2.75rem)] -translate-1/2" aria-hidden="true" />
                   Discard and close
                 </button>
               </>
@@ -3419,6 +3475,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                 onRun={() => runChecks()}
                 onClose={closeChecksPanel}
                 onOpenCheck={(toolId) => openCheck(CHECKS.find((check) => check.id === toolId))}
+                escapeRef={checksEscapeRef}
               />
             )}
             {unlockPending && <VaultUnlockPrompt

@@ -72,6 +72,115 @@
   }
 }
 
+@layer components {
+  /* Two views in one frame: the overview of the checks, and one check that pushes in from the
+     right. The hidden view stays put until the slide ends, then hides. */
+  .checks-views {
+    --checks-view-time: 220ms;
+
+    &[data-view="detail"] {
+      --checks-view-time: 300ms;
+    }
+  }
+
+  .checks-view {
+    transition:
+      transform var(--checks-view-time) cubic-bezier(0.32, 0.72, 0, 1),
+      opacity var(--checks-view-time) cubic-bezier(0.32, 0.72, 0, 1),
+      visibility 0s linear;
+
+    [data-view="list"] > &[data-checks-view="detail"] {
+      transform: translateX(100%);
+      visibility: hidden;
+      transition-delay: 0s, 0s, var(--checks-view-time);
+    }
+
+    [data-view="detail"] > &[data-checks-view="list"] {
+      transform: translateX(-25%);
+      opacity: 0;
+      visibility: hidden;
+      transition-delay: 0s, 0s, var(--checks-view-time);
+    }
+
+    /* Keyboard and Escape change the view at once. */
+    [data-instant] > & {
+      transition: none;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
+  }
+
+  /* The i: grows from its button at the top right, leaves a little faster. */
+  .checks-info {
+    transform-origin: top right;
+    opacity: 0;
+    transform: translateY(-0.25rem) scale(0.97);
+    visibility: hidden;
+    transition:
+      transform 130ms cubic-bezier(0.16, 1, 0.3, 1),
+      opacity 130ms cubic-bezier(0.16, 1, 0.3, 1),
+      visibility 0s linear 130ms;
+
+    &[data-open] {
+      opacity: 1;
+      transform: none;
+      visibility: visible;
+      transition-duration: 180ms, 180ms, 0s;
+      transition-delay: 0s;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
+  }
+
+  /* A rolling number: each digit is a window one line tall on a strip of 0 to 9. */
+  .checks-digit {
+    height: 1lh;
+    overflow: hidden;
+    mask-image: linear-gradient(transparent, #000 18%, #000 82%, transparent);
+  }
+
+  .checks-strip {
+    display: block;
+    white-space: pre;
+    text-align: center;
+    transition: transform 800ms cubic-bezier(0.19, 1, 0.22, 1) var(--checks-roll-delay, 0s);
+
+    [data-still] & {
+      transition: none;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
+  }
+
+  /* A spinner that waits a moment, so a quick run does not flash it; what it replaces stays
+     until then. */
+  .checks-delay-in {
+    animation: checks-delay-in 200ms step-end both;
+  }
+
+  .checks-delay-out {
+    animation: checks-delay-out 200ms step-end both;
+  }
+}
+
+@keyframes checks-delay-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes checks-delay-out {
+  to {
+    opacity: 0;
+  }
+}
+
 @utility license-popover-exit {
   transform-origin: top right;
   animation: license-popover-out 160ms ease-in both;
