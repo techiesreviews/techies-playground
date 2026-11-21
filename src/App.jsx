@@ -125,9 +125,11 @@ import {
   checksGate,
   checkedPagePath,
   checksInSetup,
+  checksQuiet,
   createCheckQueue,
   evaluateChecks,
   measurePage,
+  watchCheckPages,
 } from './lib/checks'
 import { runPluginUpdates, updatesAnnouncement } from './lib/plugin-updates'
 import { UpdatesControl } from './UpdatesControl'
@@ -1899,6 +1901,7 @@ export default function App() {
   const checksGateRef = useRef(null)
   const runChecksRef = useRef(null)
   const checksRanOnRef = useRef(null)
+  const checksPanelOpenRef = useRef(false)
   const checksEscapeRef = useRef(null)
   const launchAbortRef = useRef(null)
   const savedKeyPackages = useMemo(() => packagesWithSavedKeys(licenseRecords || []), [licenseRecords])
@@ -2343,22 +2346,32 @@ export default function App() {
     if (checksQueueRef.current.request(client, page, { force: !auto }) !== 'start') return
     checksRanOnRef.current = client
     const started = performance.now()
-    setChecksRun((current) => ({ ...current, state: 'running', path: page }))
+    // A run on a page change keeps the last result on screen for its first 0.6 s. Most take
+    // about 0.3 s, so the bar and the panel do not blink on every page. Run again shows at once.
+    const showRunning = () => {
+      if (client === clientRef.current) setChecksRun((current) => ({ ...current, state: 'running', path: page, auto }))
+    }
+    let runningTimer = 0
+    if (auto) runningTimer = window.setTimeout(showRunning, 600)
+    else showRunning()
     try {
       const measurement = await measurePage(client, page)
       if (client !== clientRef.current || checksQueueRef.current.waiting(client)) return
-      setChecksRun({
+      const report = evaluateChecks(measurement, checkIds)
+      setChecksRun((current) => ({
         state: 'done',
-        report: evaluateChecks(measurement, checkIds),
+        report,
         title: measurement.title,
         path: page,
         time: new Date(),
         took: (performance.now() - started) / 1000,
-      })
+        quiet: checksQuiet({ auto, panelOpen: checksPanelOpenRef.current, previous: current.report, report }),
+      }))
     } catch (caught) {
       if (client !== clientRef.current || checksQueueRef.current.waiting(client)) return
       setChecksRun({ state: 'error', path: page, message: caught instanceof Error ? caught.message : 'The checks could not measure this page.' })
     } finally {
+      window.clearTimeout(runningTimer)
       const next = checksQueueRef.current.finish(client)
       if (next !== null && client === clientRef.current) runChecksRef.current(client, { auto: true, path: next })
     }
@@ -2367,19 +2380,16 @@ export default function App() {
   useEffect(() => {
     runChecksRef.current = runChecks
     checksGateRef.current = checksLicenseGate
+    checksPanelOpenRef.current = showChecksPanel
   })
 
   // Measures every page that opens in WordPress, also with the panel closed, once the licenses
-  // allow the checks (or they already ran on this site). A short wait lets redirects settle,
-  // so one visit is one run.
+  // allow the checks (or they already ran on this site).
   function watchPages(client) {
-    let timer = 0
-    client.onNavigation((path) => {
-      window.clearTimeout(timer)
-      timer = window.setTimeout(() => {
-        if (client !== clientRef.current) return
-        if (checksGateRef.current?.ready || checksRanOnRef.current === client) runChecksRef.current(client, { auto: true, path })
-      }, 400)
+    watchCheckPages(client, {
+      isCurrent: () => client === clientRef.current,
+      canRun: () => Boolean(checksGateRef.current?.ready || checksRanOnRef.current === client),
+      run: (path) => runChecksRef.current(client, { auto: true, path }),
     })
   }
 

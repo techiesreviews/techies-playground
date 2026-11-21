@@ -109,12 +109,14 @@ function Figure({ value }) {
   )
 }
 
-// Rolls every number in the view from 0 to its value, row by row and digit by digit. Only for
-// new results, and never with reduced motion.
+// Rolls each number that just appeared in the view from 0 to its value, row by row and digit by
+// digit. A number already on screen rolls from its old value by the strip's own transition, so
+// a digit that did not change stays still. Only for new results, and never with reduced motion.
 function playFigures(root) {
   if (!root || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
-  const figures = [...root.querySelectorAll('[data-figure]')]
+  const figures = [...root.querySelectorAll('[data-figure]:not([data-rolled])')]
   for (const figure of figures) {
+    figure.dataset.rolled = ''
     figure.dataset.still = ''
     for (const strip of figure.querySelectorAll('[data-digit]')) strip.style.transform = 'translateY(0)'
   }
@@ -290,7 +292,7 @@ function Found({ found }) {
   return (
     <>
       <h5 className="mt-4.5 text-sm/5 font-semibold tabular-nums">
-        {found.title} <span className="font-normal text-neutral-500">{found.total}</span>
+        {found.title}{found.total !== undefined && <> <span className="font-normal text-neutral-500">{found.total}</span></>}
       </h5>
       <ul role="list" className="mt-1.5 grid gap-1.5 text-sm/5">
         {found.entries.map((entry, index) => {
@@ -362,15 +364,28 @@ export function ChecksPanel({ checks, run, gate, onRun, onClose, onOpenCheck, es
     if (report) playFigures(view === 'detail' ? detailRef.current : listRef.current)
   }, [run.time, report, view])
 
-  // A click outside the i closes it.
+  // A click outside the i closes it, and so does a click inside WordPress: the frame sends no
+  // pointerdown to this page, but the window loses focus.
   useEffect(() => {
     if (!info) return undefined
     function handlePointerDown(event) {
       if (!event.target.closest(`#${INFO_ID}`) && !infoButtonRef.current?.contains(event.target)) setInfo(false)
     }
+    const close = () => setInfo(false)
     document.addEventListener('pointerdown', handlePointerDown)
-    return () => document.removeEventListener('pointerdown', handlePointerDown)
+    window.addEventListener('blur', close)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      window.removeEventListener('blur', close)
+    }
   }, [info])
+
+  // A failed run has nothing to show in a check, so the overview takes over and stays.
+  useEffect(() => {
+    if (run.state !== 'error' || !openId) return
+    if (detailRef.current?.contains(document.activeElement)) focusAfterViewRef.current = openId
+    setOpenId(null)
+  }, [run.state, openId])
 
   function showView(id, instant) {
     if (instant) viewsRef.current.dataset.instant = ''
@@ -502,8 +517,8 @@ export function ChecksPanel({ checks, run, gate, onRun, onClose, onOpenCheck, es
             <p className="text-xs/5 text-neutral-500 tabular-nums">{pageLine.label}</p>
             {run.path && (
               <p className="flex min-w-0 items-baseline gap-2 text-sm/5">
-                {pageLine.title && <b className="max-w-3/5 shrink-0 truncate font-semibold">{pageLine.title}</b>}
-                <span className="min-w-0 truncate font-mono text-xs text-neutral-600">{run.path}</span>
+                {pageLine.title && <b className="max-w-3/5 shrink-0 truncate font-semibold" title={pageLine.title}>{pageLine.title}</b>}
+                <span className="min-w-0 truncate font-mono text-xs text-neutral-600" title={run.path}>{run.path}</span>
               </p>
             )}
           </div>

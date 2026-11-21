@@ -171,7 +171,8 @@ test('what each check found: PHP errors, the queries repeated most and the calls
     ],
   })
   assert.deepEqual(found('duplicate-queries'), {
-    type: 'list', title: 'Repeated most', total: 2,
+    // No count beside the title: the number of groups listed (at most 3) would read like a total.
+    type: 'list', title: 'Repeated most', total: undefined,
     entries: [
       { status: 'warn', count: '6×', message: 'get_option()', where: 'Function that ran it' },
       { status: 'warn', count: '5×', message: 'Unknown function', where: 'Function that ran it' },
@@ -198,7 +199,7 @@ test('the "i" lists good, medium and bad for every check, from the same limits t
     ['queries', 'Database queries', 'up to 100', 'over 100', ''],
     ['duplicate-queries', 'Duplicate queries', 'up to 10', 'over 10', ''],
     ['slow-queries', 'Slow queries', 'none', '1 or more', ''],
-    ['php-errors', 'PHP errors', 'none', 'notices', 'errors, warnings'],
+    ['php-errors', 'PHP errors', 'none', 'notices, deprecations', 'errors, warnings'],
     ['outside-calls', 'Calls to other sites', 'none failed', 'any failed', ''],
     ['slowest-plugin', 'Slowest plugin', 'up to 0.5 s', 'over 0.5 s', ''],
   ])
@@ -238,7 +239,9 @@ test('errors and warnings fail, notices warn, and each limit turns a check amber
   assert.equal(status({ plugins: [{ name: 'Heavy', time: 0.6 }] }, 'slowest-plugin'), 'warn')
   const failing = evaluateChecks({ ...MEASURED, ...counts({ warning: 1, notice: 2 }), http: [{ host: 'api.wordpress.org', code: 0 }, { host: 'api.wordpress.org', code: 0 }] }, ['query-monitor'])
   assert.deepEqual([failing.passed, failing.warnings, failing.failed], [5, 1, 1])
-  assert.equal(failing.checks[0].value, '1 warning, 2 notices')
+  // The number is the total, so a long breakdown never pushes the panel sideways; the details name each kind.
+  assert.equal(failing.checks[0].value, '3')
+  assert.equal(failing.checks[0].details, '1 warning, 2 notices on this page.')
   assert.match(failing.checks[2].details, /^2 of 2 calls to other sites failed\./)
   // Without Query Monitor its limits judge nothing, so nothing fails.
   const profilerOnly = evaluateChecks({ ...MEASURED, ...counts({ warning: 1 }), time: 4 }, ['code-profiler'])
@@ -263,6 +266,26 @@ test('screen readers hear when the checks start and what they found on which pag
   assert.equal(checksAnnouncement({ state: 'done', title: 'Plugins', report: { passed: 7, warnings: 0, failed: 1, checks: Array(8) } }), 'Checks on Plugins: 1 check to improve.')
   assert.equal(checksAnnouncement({ state: 'done', title: '', report: { passed: 8, warnings: 0, failed: 0, checks: Array(8) } }), 'Checks: All 8 checks passed.')
   assert.equal(checksAnnouncement({ state: 'error', message: 'This page did not return its numbers.' }), 'The checks could not run. This page did not return its numbers.')
+})
+
+test('a page change is not announced twice: no start, and the result only when it is news', async () => {
+  const { checksAnnouncement } = await import('./checks.js')
+  // The frame announces the new page itself; a run that starts by itself says nothing.
+  assert.equal(checksAnnouncement({ state: 'running', auto: true }), '')
+  const report = { passed: 8, warnings: 0, failed: 0, checks: Array(8) }
+  assert.equal(checksAnnouncement({ state: 'done', title: 'Dashboard', report, quiet: true }), '')
+  assert.equal(checksAnnouncement({ state: 'done', title: 'Dashboard', report, auto: true }), 'Checks on Dashboard: All 8 checks passed.')
+})
+
+test('a result is quiet only when it starts by itself, the panel is closed and the verdict is the same', async () => {
+  const { checksQuiet } = await import('./checks.js')
+  const pass = { passed: 8, warnings: 0, failed: 0, checks: Array(8) }
+  const fail = { passed: 7, warnings: 0, failed: 1, checks: Array(8) }
+  assert.equal(checksQuiet({ auto: true, panelOpen: false, previous: pass, report: pass }), true)
+  assert.equal(checksQuiet({ auto: true, panelOpen: false, previous: pass, report: fail }), false)
+  assert.equal(checksQuiet({ auto: true, panelOpen: true, previous: pass, report: pass }), false)
+  assert.equal(checksQuiet({ auto: false, panelOpen: false, previous: pass, report: pass }), false)
+  assert.equal(checksQuiet({ auto: true, panelOpen: false, previous: undefined, report: pass }), false)
 })
 
 test('a page opened during a run is checked next, and only the latest page waits', async () => {
@@ -327,4 +350,57 @@ test('the page that was checked is the one measured, without the Playground’s 
   // A page that ran an action is not loaded again: the dashboard is measured instead.
   assert.equal(checkedPagePath('/wp-admin/update.php?action=upgrade-plugin&_wpnonce=abc'), '/wp-admin/')
   assert.equal(checkedPagePath('https://elsewhere.example/'), '/wp-admin/')
+})
+
+test('each page that settles is checked once, and only while the site is current and allowed', async (t) => {
+  const { watchCheckPages } = await import('./checks.js')
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  let navigate
+  const client = { onNavigation: (callback) => { navigate = callback } }
+  const runs = []
+  let current = true
+  let allowed = true
+  watchCheckPages(client, { isCurrent: () => current, canRun: () => allowed, run: (path) => runs.push(path) })
+
+  // A redirect within 400 ms is one visit.
+  navigate('/wp-admin/')
+  t.mock.timers.tick(200)
+  navigate('/wp-admin/index.php')
+  t.mock.timers.tick(399)
+  assert.deepEqual(runs, [])
+  t.mock.timers.tick(1)
+  assert.deepEqual(runs, ['/wp-admin/index.php'])
+
+  // Open in Code Profiler neither runs nor cancels the page that is settling.
+  navigate('/wp-admin/plugins.php')
+  t.mock.timers.tick(100)
+  navigate('/wp-admin/admin.php?page=code-profiler&techies-check=code-profiler')
+  t.mock.timers.tick(400)
+  assert.deepEqual(runs, ['/wp-admin/index.php', '/wp-admin/plugins.php'])
+
+  // While the licenses are missing nothing runs by itself.
+  allowed = false
+  navigate('/wp-admin/options-general.php')
+  t.mock.timers.tick(400)
+  assert.equal(runs.length, 2)
+
+  // A site that was closed or relaunched has no say any more.
+  allowed = true
+  current = false
+  navigate('/wp-admin/tools.php')
+  t.mock.timers.tick(400)
+  assert.equal(runs.length, 2)
+})
+
+test('opening a check in its tool is not a new page to check', async () => {
+  const { isCheckToolPage } = await import('./checks.js')
+  const codeProfiler = CHECKS.find((check) => check.id === 'code-profiler')
+  const queryMonitor = CHECKS.find((check) => check.id === 'query-monitor')
+  const recipe = addCheckToSetup(DEFAULT_RECIPE, 'code-profiler')
+  // Code Profiler's own screen would otherwise be checked, and the panel would say "Checks on Code Profiler".
+  assert.equal(isCheckToolPage(checkResultsPath(codeProfiler, recipe, '/wp-admin/plugins.php')), true)
+  assert.equal(isCheckToolPage(checkResultsPath(queryMonitor, recipe, '/wp-admin/plugins.php')), true)
+  assert.equal(isCheckToolPage('/wp-admin/admin.php?page=code-profiler'), false)
+  assert.equal(isCheckToolPage('/wp-admin/plugins.php'), false)
+  assert.equal(isCheckToolPage(''), false)
 })
