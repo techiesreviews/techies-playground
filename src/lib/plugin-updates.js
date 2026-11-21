@@ -48,6 +48,21 @@ add_action( 'http_api_debug', function ( $response, $context, $class, $args, $ur
 	}
 }, 10, 5 );
 
+// An update this site's PHP or WordPress cannot run would break the plugin or theme, so it is
+// skipped with this reason. A plugin offer is an object, a theme offer an array.
+function techies_playground_incompatible( $offer ) {
+	$offer = (array) $offer;
+	$requires_php = ! empty( $offer['requires_php'] ) ? (string) $offer['requires_php'] : '';
+	$requires_wp = ! empty( $offer['requires'] ) ? (string) $offer['requires'] : '';
+	if ( $requires_php && ! is_php_version_compatible( $requires_php ) ) {
+		return substr( 'Needs PHP ' . $requires_php . ' or newer.', 0, 200 );
+	}
+	if ( $requires_wp && ! is_wp_version_compatible( $requires_wp ) ) {
+		return substr( 'Needs WordPress ' . $requires_wp . ' or newer.', 0, 200 );
+	}
+	return '';
+}
+
 function techies_playground_check_failed( $check, $name, $others ) {
 	return array( 'name' => $name, 'message' => substr( 'WordPress.org did not answer (' . $check['error'] . '), so ' . $others . ' may have updates.', 0, 200 ) );
 }
@@ -70,15 +85,9 @@ foreach ( get_plugins() as $file => $data ) {
 		continue;
 	}
 	// An update this site cannot run would leave the plugin switched off, so skip it.
-	$offer = $plugin_updates[ $file ];
-	$requires_php = is_object( $offer ) && ! empty( $offer->requires_php ) ? (string) $offer->requires_php : '';
-	$requires_wp = is_object( $offer ) && ! empty( $offer->requires ) ? (string) $offer->requires : '';
-	if ( $requires_php && ! is_php_version_compatible( $requires_php ) ) {
-		$result['failed'][] = array( 'name' => $data['Name'], 'message' => substr( 'Needs PHP ' . $requires_php . ' or newer.', 0, 200 ) );
-		continue;
-	}
-	if ( $requires_wp && ! is_wp_version_compatible( $requires_wp ) ) {
-		$result['failed'][] = array( 'name' => $data['Name'], 'message' => substr( 'Needs WordPress ' . $requires_wp . ' or newer.', 0, 200 ) );
+	$incompatible = techies_playground_incompatible( $plugin_updates[ $file ] );
+	if ( $incompatible ) {
+		$result['failed'][] = array( 'name' => $data['Name'], 'message' => $incompatible );
 		continue;
 	}
 	// On Multisite a plugin on for the whole network goes back on for the whole network.
@@ -125,6 +134,11 @@ foreach ( wp_get_themes() as $slug => $theme ) {
 		if ( $themes_checked && get_stylesheet() === $slug ) {
 			$result['current'][] = array( 'name' => $theme->get( 'Name' ), 'version' => $theme->get( 'Version' ) );
 		}
+		continue;
+	}
+	$incompatible = techies_playground_incompatible( $theme_updates[ $slug ] );
+	if ( $incompatible ) {
+		$result['failed'][] = array( 'name' => $theme->get( 'Name' ), 'message' => $incompatible );
 		continue;
 	}
 	$skin = new Automatic_Upgrader_Skin();

@@ -50,6 +50,8 @@ export function UpdatesControl({ updates, open, onOpenChange, buttonRef }) {
   }, [open, onOpenChange])
 
   const result = updates.state === 'done' ? updates.result : null
+  // Nothing was updated because the step failed or networking is blocked.
+  const notRun = updates.state === 'error' || updates.state === 'skipped'
 
   return (
     <span ref={wrapRef} className={`relative flex shrink-0 ${SHRINK_WITH_NAME}`}>
@@ -59,7 +61,7 @@ export function UpdatesControl({ updates, open, onOpenChange, buttonRef }) {
         aria-haspopup="dialog"
         aria-expanded={open}
         disabled={!ready}
-        title={ready ? 'Updated at start' : 'Available when setup finishes'}
+        title={!ready ? 'Available when setup finishes' : updates.state === 'error' ? 'Updates failed at start' : updates.state === 'skipped' ? 'Updates · networking blocked' : 'Updated at start'}
         onClick={() => onOpenChange(!open)}
         className={UPDATES_BUTTON_CLASS}
       >
@@ -78,6 +80,8 @@ export function UpdatesControl({ updates, open, onOpenChange, buttonRef }) {
             {noteEnd}
           </span>
         )}
+        {/* Those words are hidden up to 1040 px, so the icon shows the state at every width. */}
+        {notRun && <ExclamationTriangleIcon className="size-3.5 shrink-0 fill-amber-300" aria-hidden="true" />}
         {count && (
           <span className="font-normal whitespace-nowrap text-neutral-300 min-[1041px]:hidden">
             <span className="max-md:sr-only">· </span>{count}
