@@ -86,6 +86,20 @@ test('the note can be reached and scrolled with the keyboard, and takes focus wh
   assert.match(source, /useEffect\(\(\) => \{\s*if \(open\) noteRef\.current\?\.focus\(\)\s*\}, \[open\]\)/)
 })
 
+test('the note heading comes from the result, so every update failed does not say "Updated at start"', () => {
+  assert.match(source, /import \{ updatesLabel, updatesNoteHeading \} from '\.\/lib\/plugin-updates'/)
+  const heading = source.slice(source.indexOf('<h3 id={titleId}'), source.indexOf('</h3>'))
+  assert.match(heading, /\{updatesNoteHeading\(updates\)\}/)
+  assert.doesNotMatch(heading, /'Updated at start'/)
+})
+
+test('with reduce motion on, the spinner stands still instead of turning slower', () => {
+  const spinner = source.slice(source.indexOf('export function Spinner('), source.indexOf('// From 1041 px'))
+  assert.match(spinner, /\banimate-spin\b/)
+  assert.match(spinner, /\bmotion-reduce:animate-none\b/)
+  assert.doesNotMatch(spinner, /motion-reduce:animate-\[/)
+})
+
 test('rows in the note are keyed by position, not by a name two items can share', () => {
   assert.doesNotMatch(source, /key=\{entry\.name\}/)
   assert.equal(source.match(/\[overflow-wrap:anywhere\]/g).length, 3, 'updated names, failed rows and the Already current line wrap long names')
