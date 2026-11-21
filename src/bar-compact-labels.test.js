@@ -65,14 +65,16 @@ test('below 384 px the bar is tighter, so Close stays on screen on a full bar fr
   const barRow = app.slice(app.lastIndexOf('<div className="', app.indexOf('{confirmingPlaygroundClose ? (')))
   assert.match(barRow.match(/className="([^"]*)"/)[1], /\bmax-sm:gap-2\.5 max-xs:gap-1\b/)
   const closeButton = app.slice(app.indexOf('aria-label="Close Playground"'), app.indexOf('</button>', app.indexOf('aria-label="Close Playground"')))
-  // Every bar button: even 0.5 rem padding around its icon below 384 px.
+  // Below 384 px every bar button is at least 40 px wide, so with the 4 px gap each tap area is
+  // at least 44 px. The room comes from tighter padding and inner gaps on buttons with a count.
   const buttonClasses = [
     bar.match(/ref=\{licenseButtonRef\}[\s\S]*?className="([^"]*)"/)[1],
     bar.match(/onClick=\{exportSiteSnapshot\}\s*className="([^"]*)"/)[1],
-    closeButton.match(/className="([^"]*)"/)[1],
     updatesControl.match(/export const BAR_BUTTON_CLASS = '([^']*)'/)[1],
   ]
-  for (const className of buttonClasses) assert.match(className, /\bmax-xs:px-2\b/, className)
+  for (const className of buttonClasses) assert.match(className, /\bmax-xs:min-w-10 max-xs:justify-center max-xs:gap-1 max-xs:px-1\.5\b/, className)
+  // Close holds only its 16 px icon: 0.75 rem padding a side makes it 40 px.
+  assert.match(closeButton.match(/className="([^"]*)"/)[1], /\bmax-xs:px-3\b/)
   // Each tap area is as wide as its button plus the gap, so neighbours' tap areas meet and never
   // overlap.
   const tapAreas = [...`${bar}${closeButton}${updatesControl}`.matchAll(/max-sm:w-\[calc\(100%\+0\.625rem\)\]([^"]*)"/g)]
