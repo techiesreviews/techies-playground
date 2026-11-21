@@ -9,6 +9,8 @@ import {
   parseLicenseFillResult,
   pluginFolderFromAssetPath,
 } from './license-fill.js'
+import * as licenseFill from './license-fill.js'
+import { checksGate } from './checks.js'
 
 test('finds the plugin folder from the installed asset path', () => {
   assert.equal(pluginFolderFromAssetPath('/wordpress/wp-content/plugins/menu-image'), 'menu-image')
@@ -60,6 +62,59 @@ test('summarises how many keys went in', () => {
   assert.equal(licenseFillSummary([]), '')
   assert.equal(licenseFillSummary([{ status: 'activated' }, { status: 'active' }]), '2 of 2 active')
   assert.equal(licenseFillSummary([{ status: 'activated' }, { status: 'rejected' }, { status: 'not-freemius' }]), '1 of 3 active')
+})
+
+test('reads the Freemius licence status after the marker and keeps valid folder names only', () => {
+  const { parseFreemiusLicenses } = licenseFill
+  assert.deepEqual(
+    parseFreemiusLicenses('notice\nTECHIES_FREEMIUS_LICENSES:{"unlicensed":["wsal-premium","../x","",7],"licensed":["menu-image",".."]}\n'),
+    { unlicensed: ['wsal-premium'], licensed: ['menu-image'] },
+  )
+  assert.deepEqual(parseFreemiusLicenses('TECHIES_FREEMIUS_LICENSES:{}'), { unlicensed: [], licensed: [] })
+  assert.throws(() => parseFreemiusLicenses('no marker'), /did not report/)
+})
+
+test('the checks wait for saved-key plugins and for premium plugins without a licence', () => {
+  const { licensesNeeded } = licenseFill
+  const folders = new Map([['wsal', 'wsal-premium'], ['menu-image', 'menu-image'], ['free', 'free-plugin']])
+  const status = (unlicensed) => ({ unlicensed, licensed: [] })
+  assert.deepEqual(licensesNeeded(['menu-image'], status(['wsal-premium']), folders), ['menu-image', 'wsal'])
+  assert.deepEqual(licensesNeeded(['wsal'], status(['wsal-premium']), folders), ['wsal'])
+  assert.deepEqual(licensesNeeded([], status([]), folders), [])
+  assert.deepEqual(licensesNeeded([], status(['not-launched']), folders), [])
+  // Unknown status: every uploaded plugin waits, so the checks never start unconfirmed.
+  assert.deepEqual(licensesNeeded(['menu-image'], null, folders), ['menu-image', 'wsal', 'free'])
+})
+
+test('a licence WordPress reports as active counts even without a fill result', () => {
+  const { activeInSite } = licenseFill
+  const folders = new Map([['wsal', 'wsal-premium'], ['menu-image', 'menu-image']])
+  assert.deepEqual(activeInSite({ unlicensed: [], licensed: ['menu-image', 'not-launched'] }, folders), ['menu-image'])
+  assert.deepEqual(activeInSite(null, folders), [])
+})
+
+test('Start without keys: a licence the site reports as active opens the checks, an unknown status keeps them waiting', () => {
+  const { licensesNeeded, activeInSite } = licenseFill
+  const folders = new Map([['wsal', 'wsal-premium']])
+  // The key fill was skipped, so there are no fill results. The licensed list includes a
+  // licence that has expired but still unlocks the premium features (Lex, 2026-11-21).
+  const licensed = { unlicensed: [], licensed: ['wsal-premium'] }
+  assert.deepEqual(checksGate(licensesNeeded(['wsal'], licensed, folders), [], activeInSite(licensed, folders)), { ready: true, active: 1, total: 1 })
+  assert.deepEqual(checksGate(licensesNeeded(['wsal'], null, folders), [], activeInSite(null, folders)), { ready: false, active: 0, total: 1 })
+})
+
+test('reads the Freemius licence status through one PHP run, and reports unknown when that run fails', async () => {
+  const { readFreemiusLicenses, FREEMIUS_LICENSES_CODE } = licenseFill
+  const runs = []
+  const client = { async run(request) { runs.push(request); return { text: 'TECHIES_FREEMIUS_LICENSES:{"unlicensed":["wsal-premium"],"licensed":[]}' } } }
+  const signal = new AbortController().signal
+  assert.deepEqual(await readFreemiusLicenses({ client, signal }), { unlicensed: ['wsal-premium'], licensed: [] })
+  assert.deepEqual(runs, [{ code: FREEMIUS_LICENSES_CODE }])
+  assert.equal(await readFreemiusLicenses({ client: { async run() { throw new Error('PHP crashed') } }, signal }), null)
+  assert.equal(await readFreemiusLicenses({ client: { async run() { return { text: 'Fatal error' } } }, signal }), null)
+  const aborted = new AbortController()
+  aborted.abort()
+  await assert.rejects(readFreemiusLicenses({ client: { run: () => new Promise(() => {}) }, signal: aborted.signal }), { name: 'AbortError' })
 })
 
 test('names each fill result in plain words', () => {

@@ -145,6 +145,30 @@ OPFS contains the WordPress filesystem and SQLite-backed site state. It is disti
 
 `theme` may be `null`. No `file`, ciphertext, plaintext secret, WordPress database, or arbitrary runtime output belongs here.
 
+## Premium plugins without a licence
+
+When checks are in the setup, `FREEMIUS_LICENSES_CODE` (`src/lib/license-fill.js`) runs once per launch after the key fill and prints one line that starts with `TECHIES_FREEMIUS_LICENSES:` followed by JSON with two lists of plugin folder names, for example `{"unlicensed":["wsal-premium"],"licensed":["menu-image"]}`. `unlicensed` names each Freemius plugin whose premium build cannot use its premium code yet; `licensed` names each Freemius plugin whose licence is already active in the site (`can_use_premium_code()`, which includes an expired licence that still unlocks the premium features). It carries no key or licence data. The launcher keeps only names that are valid folder names; the lists live in memory for the launch (`licensedPackageIds`, `siteLicensedIds`) and are not stored. When the probe fails or its line is missing, the status is unknown and every launched uploaded plugin counts as needing a licence, so the checks wait.
+
+## Plugin updates at start
+
+`PLUGIN_UPDATES_CODE` (`src/lib/plugin-updates.js`) runs once per launch through `client.run` and prints one line that starts with `PLAYGROUND_UPDATES:` followed by JSON:
+
+```json
+{
+  "updated": [{ "name": "Plugin or theme name", "from": "1.0.0", "to": "1.1.0" }],
+  "failed": [{ "name": "Plugin or theme name", "message": "WordPress's last message, at most 200 characters" }],
+  "current": [{ "name": "Plugin or theme name", "version": "1.1.0" }]
+}
+```
+
+When WordPress.org does not answer the plugin or theme update check, `failed` holds an entry named `Plugin update check` or `Theme update check` whose message gives the error or HTTP status, and `current` lists nothing for that kind.
+
+The launcher keeps the parsed result only in memory (`pluginUpdates` state: `idle`, `running`, `skipped` when networking is off, `done` with the result, `error` with a message). It is not saved to localStorage, the spin-up record or the recipe.
+
+## Checks measurement
+
+When a page is loaded with `techies-measure=1`, the measure must-use plugin (`techies-measure.php`) appends one HTML comment `<!-- TECHIES_MEASURE:<base64 JSON> -->` with these fields: `title`, `time` (seconds), `memory` and `memoryLimit` (bytes), `queries`, `queryTime`, `slowQueries`, `duplicates`, `errorCounts` (`error`, `warning`, `notice`, `deprecated`), `errors` (`kind`, `message`, `file`, `line`), `calls` and `failedCalls` (every call to another site, and those that failed or answered 400 or higher), `http` (`host`, `code`: the first 20 calls plus up to 20 later failed ones, used only for host names), and `plugins` (the five slowest, `name` and `time`). It records no query text, no request bodies or headers, and no full outbound URLs (only the host). An error message keeps at most 200 characters, and any web address in it loses its query (`?…`), where licence checks usually carry the key. A vendor that puts the key in the address's path would still show it in the panel; the message lives only in memory and is never stored. The title is plain text, not HTML. `parseMeasurement` reads only these fields and treats anything else as missing. The result lives only in memory (`checksRun` state) and is replaced by the next run; a run that finishes after the site closed or relaunched is dropped.
+
 ## Security boundary
 
 The system protects secrets at rest from casual inspection and keeps them out of normal development artifacts. It does not protect an unlocked key from malicious code already executing in the page, an infected browser, clipboard readers, or a malicious WordPress package after the user pastes a license.

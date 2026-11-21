@@ -105,12 +105,32 @@ import {
 import {
   fillResultRecordId,
   fillSavedLicenseKeys,
+  readFreemiusLicenses,
   licenseFillLabel,
   licenseFillSummary,
+  licensesNeeded,
+  activeInSite,
   packagesWithSavedKeys,
   pluginFolderFromAssetPath,
 } from './lib/license-fill'
-import { CHECKS, CHECKS_PLUGIN, CHECKS_PLUGIN_PATH, addCheckToSetup, checkResultsPath, checksInSetup, nextMenuIndex } from './lib/checks'
+import {
+  CHECKS,
+  CHECKS_PLUGIN,
+  CHECKS_PLUGIN_PATH,
+  MEASURE_PLUGIN,
+  MEASURE_PLUGIN_PATH,
+  addCheckToSetup,
+  checkResultsPath,
+  checksAnnouncement,
+  checksGate,
+  checksInSetup,
+  createRunGuard,
+  evaluateChecks,
+  measurePage,
+} from './lib/checks'
+import { runPluginUpdates, updatesAnnouncement } from './lib/plugin-updates'
+import { UpdatesControl } from './UpdatesControl'
+import { ChecksButton, ChecksPanel } from './ChecksPanel'
 import {
   assertZipFile,
   getPlugin,
@@ -128,6 +148,57 @@ const PERSISTED_SITES_KEY = persistedSitesKey(PLAYGROUND_ORIGIN)
 const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-storage-default-v1'
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
+  {
+    version: '0.11.0',
+    date: 'November 20, 2026',
+    title: 'Automatic plugin updates and a new Checks panel',
+    summary: 'Test sites now update plugins and themes as they start, run checks automatically once ready, and show results in a Checks panel next to WordPress.',
+    changes: [
+      'Plugins and themes update automatically while your test site starts, and active plugins stay active afterward. The Updates button in the top bar shows what changed (from old to new version) and how many could not update; click it to see every update, anything that could not update or an update check that failed, and what was already up to date. Setups with networking turned off skip updates and say so on the button.',
+      'When your setup includes Query Monitor or Code Profiler, checks run automatically once the site is ready. If a plugin in your setup still needs its license activated, checks wait and the Checks button asks you to activate licenses first; once you activate them in WordPress, click Run checks in the panel.',
+      'Click Checks in the top bar to open the Checks panel beside WordPress. It shows one verdict and four numbers (page time, memory, database queries, and PHP errors). Failed checks and warnings appear first, while passed checks fold into one line.',
+      'Click any check row to see what it measured, then use Open in Query Monitor or Open in Code Profiler for full details. Click Run again to measure the page currently open in WordPress. When that page just ran an action, such as an update, Run again and Open in Query Monitor use the dashboard instead.',
+      'Automatic updates at start and the Checks panel replace the old Update all button and Checks menu.',
+    ],
+  },
+  {
+    version: '0.10.5',
+    date: 'November 20, 2026',
+    title: 'Plugin requests in Firefox keep their details',
+    summary: 'In Firefox, plugin requests sent to other sites now arrive with all their data intact, as they already did in Chrome.',
+    changes: [
+      'In Firefox, when a plugin sends data to another site through the proxy (such as a license activation or form submission), the request now arrives complete instead of empty. This fixes every plugin, not just Freemius ones.',
+    ],
+  },
+  {
+    version: '0.10.4',
+    date: 'November 18, 2026',
+    title: 'Easier-to-tap theme buttons and Add key',
+    summary: 'Uploaded theme buttons and the Add key button are bigger and easier to tap on phones and touchscreen laptops.',
+    changes: [
+      'In Choose themes, the replace and remove buttons for uploaded themes are larger and spaced apart on touchscreens so you will not tap the wrong one by mistake. They stay visible on touchscreen laptops and move onto their own line on narrow phones.',
+      'In Choose plugins, the Add key button is taller on touchscreens and responds only within its own edges. With only a mouse, both the theme buttons and Add key keep their smaller size.',
+    ],
+  },
+  {
+    version: '0.10.3',
+    date: 'November 18, 2026',
+    title: 'Easier-to-tap plugin replace and remove buttons',
+    summary: 'Uploaded plugin buttons are bigger and spaced apart on touchscreens so tapping replace will not accidentally remove a plugin.',
+    changes: [
+      'In Choose plugins, the replace and remove buttons on uploaded plugins have larger, separated tap targets on phones and touchscreen laptops.',
+      'On narrow phones, the buttons move onto their own line; with only a mouse, they keep their smaller size.',
+    ],
+  },
+  {
+    version: '0.10.2',
+    date: 'November 18, 2026',
+    title: 'Cleaner uploaded plugin rows',
+    summary: 'Saved license keys now appear as a small key icon next to the replace and remove buttons.',
+    changes: [
+      'In Choose plugins, the Key saved badge is now a compact key icon next to replace and remove. With a mouse, all three icons appear on hover or keyboard focus; on touchscreens, they stay visible.',
+    ],
+  },
   {
     version: '0.10.1',
     date: 'November 15, 2026',
@@ -1455,41 +1526,38 @@ function PluginRow({ plugin, selected, keySaved, addingKey, onToggle, onReplace,
           indicator="plugin"
         />
       </div>
-      {keySaved ? (
-        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white py-0.5 pr-2 pl-1.5 text-sm/5 font-medium text-teal-800 ring-1 ring-teal-700/20">
-          <KeyIcon className="size-3.5 shrink-0 fill-teal-700" />
-          Key saved
-        </span>
-      ) : !addingKey && (
+      {!keySaved && !addingKey && (
         <button
           id={`add-key-button-${plugin.id}`}
           type="button"
           onClick={() => onAddKey(plugin.id)}
           aria-label={`Add a license key for ${plugin.label}`}
-          className="relative inline-flex shrink-0 items-center gap-1 rounded-lg bg-white py-1 pr-2.5 pl-1.5 text-sm/5 font-medium text-neutral-800 ring-1 ring-neutral-950/10 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+          className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-white py-1 pr-2.5 pl-1.5 text-sm/5 font-medium text-neutral-800 ring-1 ring-neutral-950/10 any-pointer-coarse:min-h-11 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
         >
-          <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
           <PlusIcon className="size-4 shrink-0 fill-neutral-500" />
           Add key
         </button>
       )}
-      <div className="flex shrink-0 items-center gap-1 pointer-fine:pointer-events-none pointer-fine:opacity-0 pointer-fine:group-hover:pointer-events-auto pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:pointer-events-auto pointer-fine:group-focus-within:opacity-100">
+      <div className="flex shrink-0 items-center gap-1 pointer-fine:pointer-events-none pointer-fine:opacity-0 pointer-fine:group-hover:pointer-events-auto pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:pointer-events-auto pointer-fine:group-focus-within:opacity-100 any-pointer-coarse:pointer-events-auto any-pointer-coarse:opacity-100">
+        {keySaved && (
+          <span role="img" aria-label={`License key saved for ${plugin.label}`} title={`License key saved for ${plugin.label}`} className="shrink-0 p-1.5 text-teal-700">
+            <KeyIcon className="size-4 shrink-0 fill-current" />
+          </span>
+        )}
         <button
           type="button"
           aria-label={`Replace ${plugin.label} ZIP with a newer version`}
           onClick={() => onReplace(plugin.id)}
-          className="relative shrink-0 rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+          className="shrink-0 rounded-md p-1.5 text-neutral-500 any-pointer-coarse:p-3.5 hover:bg-neutral-100 hover:text-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
         >
-          <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
           <ArrowPathIcon className="size-4 shrink-0 fill-current" />
         </button>
         <button
           type="button"
           aria-label={`Remove ${plugin.label} from the vault`}
           onClick={() => onRemove(plugin.id)}
-          className="relative shrink-0 rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+          className="shrink-0 rounded-md p-1.5 text-neutral-500 any-pointer-coarse:p-3.5 hover:bg-neutral-100 hover:text-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
         >
-          <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
           <TrashIcon className="size-4 shrink-0 fill-current" />
         </button>
       </div>
@@ -1507,9 +1575,9 @@ function ThemeRow({ theme, selected, onSelect, onReplace, onRemove }) {
   const versionHint = theme.versionHint || extractVersionHint(theme.filename)
   const packageDetails = [versionHint && `version ${versionHint}`, size, 'stored only in this browser'].filter(Boolean).join(', ')
   return (
-    <div className="group flex min-w-0 items-start gap-3 border-t border-neutral-950/8 py-4 first:border-t-0 first:pt-0 last:pb-0">
+    <div className="group flex min-w-0 items-start gap-3 border-t border-neutral-950/8 py-4 first:border-t-0 first:pt-0 last:pb-0 any-pointer-coarse:flex-wrap">
       <PackageArtwork label={theme.label} kind="theme" />
-      <div className="min-w-0 flex-1 text-base/7 sm:text-sm/6">
+      <div className="min-w-0 flex-1 basis-40 text-base/7 sm:text-sm/6">
         <Radio
           id={`theme-${theme.id}`}
           name="premium-theme"
@@ -1520,23 +1588,21 @@ function ThemeRow({ theme, selected, onSelect, onReplace, onRemove }) {
         />
         <p className="truncate pl-8 font-mono text-base/7 text-neutral-500 sm:pl-7 sm:text-sm/6">{theme.id}</p>
       </div>
-      <div className="flex shrink-0 items-center gap-1 pointer-fine:pointer-events-none pointer-fine:opacity-0 pointer-fine:group-hover:pointer-events-auto pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:pointer-events-auto pointer-fine:group-focus-within:opacity-100">
+      <div className="flex shrink-0 items-center gap-1 pointer-fine:pointer-events-none pointer-fine:opacity-0 pointer-fine:group-hover:pointer-events-auto pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:pointer-events-auto pointer-fine:group-focus-within:opacity-100 any-pointer-coarse:pointer-events-auto any-pointer-coarse:opacity-100">
         <button
           type="button"
           aria-label={`Replace ${theme.label} theme ZIP with a newer version`}
           onClick={() => onReplace(theme.id)}
-          className="relative shrink-0 rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+          className="shrink-0 rounded-md p-1.5 text-neutral-500 any-pointer-coarse:p-3.5 hover:bg-neutral-100 hover:text-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
         >
-          <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
           <ArrowPathIcon className="size-4 shrink-0 fill-current" />
         </button>
         <button
           type="button"
           aria-label={`Remove ${theme.label} theme from the vault`}
           onClick={() => onRemove(theme.id)}
-          className="relative shrink-0 rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+          className="shrink-0 rounded-md p-1.5 text-neutral-500 any-pointer-coarse:p-3.5 hover:bg-neutral-100 hover:text-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
         >
-          <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
           <TrashIcon className="size-4 shrink-0 fill-current" />
         </button>
       </div>
@@ -1548,7 +1614,8 @@ function LaunchSummary({ recipe, selectedPackageLabel, selectedPluginLabels, key
   const stages = [
     ['Preparing WordPress', status.step > 0],
     ['Installing selected packages', status.step > 1],
-    ['Ready for license activation', status.step > 2],
+    ['Activating licenses', status.step > 2],
+    ['Updating plugins', status.step > 3],
   ]
 
   return (
@@ -1630,62 +1697,6 @@ function LaunchSummary({ recipe, selectedPackageLabel, selectedPluginLabels, key
         </div>
       </div>
     </aside>
-  )
-}
-
-function ChecksMenu({ checks, anchorRef, onOpenCheck, onClose }) {
-  const menuRef = useRef(null)
-
-  useEffect(() => {
-    menuRef.current?.querySelector('[role="menuitem"]')?.focus()
-    function handleKey(event) {
-      if (event.key === 'Escape') {
-        onClose()
-        anchorRef.current?.focus()
-        return
-      }
-      if (event.key === 'Tab') {
-        anchorRef.current?.focus()
-        onClose()
-        return
-      }
-      const items = [...(menuRef.current?.querySelectorAll('[role="menuitem"]') || [])]
-      const next = nextMenuIndex(event.key, items.indexOf(document.activeElement), items.length)
-      if (next === null) return
-      event.preventDefault()
-      items[next].focus()
-    }
-    function handleOutsidePointer(event) {
-      if (menuRef.current?.contains(event.target) || anchorRef.current?.contains(event.target)) return
-      onClose()
-    }
-    // A click inside the WordPress frame never reaches this document, but it moves focus
-    // into the frame, which blurs this window.
-    window.addEventListener('keydown', handleKey)
-    window.addEventListener('blur', onClose)
-    document.addEventListener('pointerdown', handleOutsidePointer)
-    return () => {
-      window.removeEventListener('keydown', handleKey)
-      window.removeEventListener('blur', onClose)
-      document.removeEventListener('pointerdown', handleOutsidePointer)
-    }
-  }, [anchorRef, onClose])
-
-  return (
-    <div ref={menuRef} role="menu" aria-label="Checks" className="license-popover-enter absolute top-full right-0 z-60 mt-1.5 grid w-[min(20rem,calc(100vw-1rem))] max-sm:fixed max-sm:top-9.5 max-sm:right-2 max-sm:mt-0 max-h-[calc(100dvh-3rem)] overflow-y-auto gap-1 rounded-[min(2vw,var(--radius-xl))] bg-white p-1.5 text-neutral-950 shadow-2xl ring-1 ring-neutral-950/10">
-      {checks.map((check) => (
-        <button
-          key={check.id}
-          type="button"
-          role="menuitem"
-          onClick={() => onOpenCheck(check)}
-          className="grid rounded-lg px-3 py-2 text-left text-base/7 hover:bg-neutral-100 focus-visible:bg-neutral-100 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-teal-600 sm:text-sm/6"
-        >
-          <span className="font-medium">{check.name}</span>
-          <span className="text-neutral-600">{check.summary}</span>
-        </button>
-      ))}
-    </div>
   )
 }
 
@@ -1826,7 +1837,7 @@ export default function App() {
   const [replacementPluginId, setReplacementPluginId] = useState('')
   const [replacementThemeId, setReplacementThemeId] = useState('')
   const [status, setStatus] = useState({ running: false, step: 0, message: '' })
-  const [updateCheck, setUpdateCheck] = useState({ checking: false, message: '' })
+  const [barMessage, setBarMessage] = useState('')
   const [showLicenseManager, setShowLicenseManager] = useState(false)
   const [showPlayground, setShowPlayground] = useState(false)
   const [confirmingPlaygroundClose, setConfirmingPlaygroundClose] = useState(false)
@@ -1840,9 +1851,21 @@ export default function App() {
   const unlockResolveRef = useRef(null)
   const [licenseFill, setLicenseFill] = useState([])
   const [launchedChecks, setLaunchedChecks] = useState([])
-  const [showChecksMenu, setShowChecksMenu] = useState(false)
+  // The launched plugins whose licences the checks wait for: saved-key plugins, then premium
+  // Freemius plugins that cannot use their premium code (every uploaded plugin when the
+  // licence probe failed). siteLicensedIds: those WordPress already reports as active.
+  const [licensedPackageIds, setLicensedPackageIds] = useState([])
+  const [siteLicensedIds, setSiteLicensedIds] = useState([])
+  const [pluginUpdates, setPluginUpdates] = useState({ state: 'idle' })
+  const [checksRun, setChecksRun] = useState({ state: 'idle' })
+  const [showUpdates, setShowUpdates] = useState(false)
+  const [showChecksPanel, setShowChecksPanel] = useState(false)
   const checksButtonRef = useRef(null)
+  const updatesButtonRef = useRef(null)
   const launchedRecipeRef = useRef(null)
+  // The client a check run is measuring now, so a second run never starts on top of it.
+  const checksRunGuardRef = useRef(null)
+  checksRunGuardRef.current ??= createRunGuard()
   const launchAbortRef = useRef(null)
   const savedKeyPackages = useMemo(() => packagesWithSavedKeys(licenseRecords || []), [licenseRecords])
   const keyCountsFor = (candidate) => ({
@@ -1851,6 +1874,7 @@ export default function App() {
   })
   const activeChecks = useMemo(() => checksInSetup(recipe), [recipe])
   const fillResults = useMemo(() => new Map(licenseFill.map((result) => [result.vaultId, result])), [licenseFill])
+  const checksLicenseGate = useMemo(() => checksGate(licensedPackageIds, licenseFill, siteLicensedIds), [licensedPackageIds, licenseFill, siteLicensedIds])
 
   const selectedCount = recipe.plugins.length + recipe.repositoryPlugins.length
   const selectedPackageCount = selectedCount + (recipe.theme || recipe.repositoryTheme ? 1 : 0)
@@ -2230,8 +2254,6 @@ export default function App() {
     setActiveSpinupId('')
   }
 
-  const closeChecksMenu = useCallback(() => setShowChecksMenu(false), [])
-
   function startSavedRecipe(record) {
     chooseSavedRecipe(record)
     launch(validateRecipe(record.recipe))
@@ -2245,9 +2267,63 @@ export default function App() {
     updateRecipe({ repositoryPlugins: addCheckToSetup(recipe, check.id).repositoryPlugins })
   }
 
-  async function openCheck(check) {
-    setShowChecksMenu(false)
+  const closeChecksPanel = useCallback(() => {
+    setShowChecksPanel(false)
     checksButtonRef.current?.focus()
+  }, [])
+
+  // Escape closes the Updated note first, then the Checks panel. The Licenses manager
+  // handles its own Escape.
+  useEffect(() => {
+    if ((!showUpdates && !showChecksPanel) || showLicenseManager) return undefined
+    function handleEscape(event) {
+      if (event.key !== 'Escape') return
+      if (showUpdates) {
+        setShowUpdates(false)
+        updatesButtonRef.current?.focus()
+      } else {
+        closeChecksPanel()
+      }
+    }
+    window.addEventListener('keydown', handleEscape)
+    return () => window.removeEventListener('keydown', handleEscape)
+  }, [showUpdates, showChecksPanel, showLicenseManager, closeChecksPanel])
+
+  // Measures the page open in WordPress. The result belongs to the client it ran on, so a
+  // run that finishes after the Playground closed or relaunched is dropped.
+  async function runChecks(client = clientRef.current) {
+    const checkIds = checksInSetup(launchedRecipeRef.current || recipe).map((check) => check.id)
+    if (!client || !checkIds.length || !checksRunGuardRef.current.start(client)) return
+    const started = performance.now()
+    setChecksRun((current) => ({ ...current, state: 'running' }))
+    try {
+      let currentPath = ''
+      try {
+        currentPath = await client.getCurrentURL()
+      } catch {
+        currentPath = ''
+      }
+      const measurement = await measurePage(client, currentPath)
+      if (client !== clientRef.current) return
+      setChecksRun({
+        state: 'done',
+        report: evaluateChecks(measurement, checkIds),
+        title: measurement.title,
+        time: new Date(),
+        took: (performance.now() - started) / 1000,
+      })
+    } catch (caught) {
+      if (client !== clientRef.current) return
+      setChecksRun({ state: 'error', message: caught instanceof Error ? caught.message : 'The checks could not measure this page.' })
+    } finally {
+      checksRunGuardRef.current.finish(client)
+    }
+  }
+
+  async function openCheck(check) {
+    if (!check) return
+    // On a phone the panel covers the frame, so it steps aside for the tool's own screen.
+    if (window.matchMedia('(max-width: 639px)').matches) closeChecksPanel()
     const client = clientRef.current
     if (!client || !launchedRecipeRef.current) return
     let currentPath = ''
@@ -2333,9 +2409,14 @@ export default function App() {
     unlockResolveRef.current = null
     setUnlockPending(false)
     launchAbortRef.current?.abort()
-    setShowChecksMenu(false)
+    setShowChecksPanel(false)
+    setShowUpdates(false)
     setLaunchedChecks([])
     setLicenseFill([])
+    setLicensedPackageIds([])
+    setSiteLicensedIds([])
+    setPluginUpdates({ state: 'idle' })
+    setChecksRun({ state: 'idle' })
     stopPreviewSessionRef.current?.()
     stopPreviewSessionRef.current = null
     launchIdRef.current += 1
@@ -2346,7 +2427,7 @@ export default function App() {
     if (iframeRef.current) iframeRef.current.src = 'about:blank'
     setPlaygroundFrameKey((key) => key + 1)
     setStatus({ running: false, step: 0, message: '' })
-    setUpdateCheck({ checking: false, message: '' })
+    setBarMessage('')
     window.requestAnimationFrame(() => launchButtonRef.current?.focus())
   }
 
@@ -2386,13 +2467,22 @@ export default function App() {
     setConfirmingPlaygroundClose(false)
     setShowPlayground(true)
     setLicenseFill([])
-    setShowChecksMenu(false)
+    setShowChecksPanel(false)
+    setShowUpdates(false)
+    setPluginUpdates({ state: 'idle' })
+    setChecksRun({ state: 'idle' })
+    setBarMessage('')
     setLaunchedChecks(checksInSetup(launchedRecipe))
     launchedRecipeRef.current = launchedRecipe
     launchAbortRef.current?.abort()
     const launchAbort = new AbortController()
     launchAbortRef.current = launchAbort
     let keyPackageIds = launchedRecipe.plugins.filter((id) => savedKeyPackages.has(`plugin:${id}`))
+    // Captured before a skip: a skipped unlock leaves these licenses inactive, and the
+    // checks wait for them.
+    const neededLicenseIds = keyPackageIds
+    setLicensedPackageIds(neededLicenseIds)
+    setSiteLicensedIds([])
     if (keyPackageIds.length && !isVaultSessionUnlocked()) {
       setStatus({ running: true, step: 0, message: 'Unlock the license vault to fill in saved keys.' })
       // 'unlocked' from the prompt or an unlock in the Licenses manager, 'skip' to start
@@ -2487,7 +2577,10 @@ echo 'PLAYGROUND_WORDPRESS_VERSION:' . $wp_version;
       clientRef.current = client
       await client.mkdir('/wordpress/wp-content/mu-plugins')
       await client.writeFile('/wordpress/wp-content/mu-plugins/techies-preview.php', buildPreviewPlugin(window.location.href, scope))
-      if (checksInSetup(launchedRecipe).length) await client.writeFile(CHECKS_PLUGIN_PATH, CHECKS_PLUGIN)
+      if (checksInSetup(launchedRecipe).length) {
+        await client.writeFile(CHECKS_PLUGIN_PATH, CHECKS_PLUGIN)
+        await client.writeFile(MEASURE_PLUGIN_PATH, MEASURE_PLUGIN)
+      }
       if (launchId !== launchIdRef.current) return
       stopPreviewSessionRef.current?.()
       stopPreviewSessionRef.current = hostPreviewSession(scope)
@@ -2548,9 +2641,10 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
         setStatus({ running: true, step: 2, message: 'Selected packages are installed.' })
       }
 
+      let licenseResults = []
       if (keyPackageIds.length) {
         setStatus({ running: true, step: 2, message: 'Filling in saved license keys…' })
-        const results = await fillSavedLicenseKeys({
+        licenseResults = await fillSavedLicenseKeys({
           client,
           getVaultKey: getVaultSessionKey,
           readKeys: readLicenseKeysForPackages,
@@ -2559,16 +2653,47 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
           signal: launchAbort.signal,
         })
         if (launchId !== launchIdRef.current) return
-        setLicenseFill(results)
+        setLicenseFill(licenseResults)
       }
 
-      setStatus({ running: true, step: 3, message: `Ready on WordPress ${launchedWordPressVersion}. Activate licenses inside WordPress when needed.` })
+      // A premium plugin without a saved key needs its licence before the checks too, and a
+      // licence already active in the site counts without a fill.
+      let checksLicenseIds = neededLicenseIds
+      let siteActiveIds = []
+      if (checksInSetup(launchedRecipe).length) {
+        const licenses = await readFreemiusLicenses({ client, signal: launchAbort.signal })
+        if (launchId !== launchIdRef.current) return
+        checksLicenseIds = licensesNeeded(neededLicenseIds, licenses, pluginFolders)
+        siteActiveIds = activeInSite(licenses, pluginFolders)
+        setLicensedPackageIds(checksLicenseIds)
+        setSiteLicensedIds(siteActiveIds)
+      }
+
+      // After the licenses, so premium plugins can reach their own update servers. A failed
+      // update never fails the launch: the bar shows it instead.
+      if (launchedRecipe.networking) {
+        setStatus({ running: true, step: 3, message: 'Updating plugins and themes…' })
+        setPluginUpdates({ state: 'running' })
+        try {
+          const result = await runPluginUpdates(client)
+          if (launchId !== launchIdRef.current) return
+          setPluginUpdates({ state: 'done', result, time: new Date() })
+        } catch (caught) {
+          if (launchId !== launchIdRef.current) return
+          setPluginUpdates({ state: 'error', message: caught instanceof Error ? caught.message : 'The updates failed.', time: new Date() })
+        }
+      } else {
+        setPluginUpdates({ state: 'skipped' })
+      }
+
+      setStatus({ running: true, step: 4, message: `Ready on WordPress ${launchedWordPressVersion}. Activate licenses inside WordPress when needed.` })
       await client.goTo(launchedRecipe.landingPage)
       if (launchId !== launchIdRef.current) return
       const historyRecipe = launchedRecipe.wordpress === 'latest'
         ? { ...launchedRecipe, wordpress: launchedWordPressVersion }
         : launchedRecipe
       setSpinupHistory((current) => appendSpinup(current, { recipe: historyRecipe, plugins: installedPlugins, theme: installedTheme }))
+      if (checksInSetup(launchedRecipe).length && checksGate(checksLicenseIds, licenseResults, siteActiveIds).ready) runChecks(client)
     } catch (caught) {
       if (launchId !== launchIdRef.current) return
       stopPreviewSessionRef.current?.()
@@ -2585,7 +2710,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
   async function exportSiteSnapshot() {
     if (!clientRef.current) return
     setSnapshotExporting(true)
-    setUpdateCheck({ checking: false, message: 'Preparing a browser-local site snapshot.' })
+    setBarMessage('Preparing a browser-local site snapshot.')
     try {
       const archive = await zipWpContent(clientRef.current)
       const blob = new Blob([archive], { type: 'application/zip' })
@@ -2595,107 +2720,11 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
       anchor.download = `${normalizePluginId(recipe.name) || 'playground'}-wp-content.zip`
       anchor.click()
       URL.revokeObjectURL(url)
-      setUpdateCheck({ checking: false, message: 'The wp-content snapshot was downloaded.' })
+      setBarMessage('The wp-content snapshot was downloaded.')
     } catch (caught) {
-      setUpdateCheck({ checking: false, message: caught instanceof Error ? caught.message : 'The site snapshot could not be exported.' })
+      setBarMessage(caught instanceof Error ? caught.message : 'The site snapshot could not be exported.')
     } finally {
       setSnapshotExporting(false)
-    }
-  }
-
-  async function updateAllPackages() {
-    if (!clientRef.current) return
-    setUpdateCheck({ checking: true, message: 'Checking for and installing every available plugin and theme update.' })
-    try {
-      const response = await clientRef.current.run({
-        code: `<?php
-define('WP_ADMIN', true);
-require '/wordpress/wp-load.php';
-require_once ABSPATH . 'wp-admin/includes/file.php';
-require_once ABSPATH . 'wp-admin/includes/plugin.php';
-require_once ABSPATH . 'wp-admin/includes/theme.php';
-require_once ABSPATH . 'wp-admin/includes/update.php';
-require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
-require_once ABSPATH . 'wp-admin/includes/class-plugin-upgrader.php';
-require_once ABSPATH . 'wp-admin/includes/class-theme-upgrader.php';
-require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader-skin.php';
-require_once ABSPATH . 'wp-admin/includes/class-automatic-upgrader-skin.php';
-
-delete_site_transient('update_plugins');
-wp_update_plugins();
-$state = get_site_transient('update_plugins');
-$result = array('available' => 0, 'updated' => array(), 'failed' => array());
-
-if (is_object($state) && !empty($state->response) && is_array($state->response)) {
-    $installed = get_plugins();
-    $result['available'] = count($state->response);
-
-    foreach (array_keys($state->response) as $plugin_file) {
-        $plugin_name = $installed[$plugin_file]['Name'] ?? $plugin_file;
-        $skin = new Automatic_Upgrader_Skin();
-        $upgrader = new Plugin_Upgrader($skin);
-        $upgrade_result = $upgrader->upgrade($plugin_file, array('clear_update_cache' => false));
-
-        if (is_wp_error($upgrade_result)) {
-            $result['failed'][] = array('item' => $plugin_name, 'message' => $upgrade_result->get_error_message());
-        } elseif ($upgrade_result === false || $upgrade_result === null) {
-            $messages = $skin->get_upgrade_messages();
-            $result['failed'][] = array('item' => $plugin_name, 'message' => $messages ? wp_strip_all_tags(end($messages)) : 'Update failed.');
-        } else {
-            $result['updated'][] = $plugin_name;
-        }
-    }
-
-    wp_clean_plugins_cache(true);
-}
-
-delete_site_transient('update_themes');
-wp_update_themes();
-$theme_state = get_site_transient('update_themes');
-
-if (is_object($theme_state) && !empty($theme_state->response) && is_array($theme_state->response)) {
-    $installed_themes = wp_get_themes();
-    $result['available'] += count($theme_state->response);
-
-    foreach (array_keys($theme_state->response) as $theme_slug) {
-        $theme_name = isset($installed_themes[$theme_slug]) ? $installed_themes[$theme_slug]->get('Name') : $theme_slug;
-        $skin = new Automatic_Upgrader_Skin();
-        $upgrader = new Theme_Upgrader($skin);
-        $upgrade_result = $upgrader->upgrade($theme_slug, array('clear_update_cache' => false));
-
-        if (is_wp_error($upgrade_result)) {
-            $result['failed'][] = array('item' => $theme_name, 'message' => $upgrade_result->get_error_message());
-        } elseif ($upgrade_result === false || $upgrade_result === null) {
-            $messages = $skin->get_upgrade_messages();
-            $result['failed'][] = array('item' => $theme_name, 'message' => $messages ? wp_strip_all_tags(end($messages)) : 'Update failed.');
-        } else {
-            $result['updated'][] = $theme_name;
-        }
-    }
-
-    wp_clean_themes_cache(true);
-}
-
-echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
-`,
-      })
-      const marker = 'PLAYGROUND_UPDATES:'
-      const markerIndex = response.text.lastIndexOf(marker)
-      if (markerIndex < 0) throw new Error('WordPress did not return an update result.')
-      const result = JSON.parse(response.text.slice(markerIndex + marker.length).trim())
-      if (result.failed.length) {
-        setUpdateCheck({
-          checking: false,
-          message: `${result.updated.length} updated. ${result.failed.length} failed: ${result.failed.map((failure) => failure.item).join(', ')}.`,
-        })
-      } else if (result.updated.length) {
-        setUpdateCheck({ checking: false, message: `${result.updated.length} package${result.updated.length === 1 ? '' : 's'} updated successfully.` })
-      } else {
-        setUpdateCheck({ checking: false, message: 'Every plugin and theme is already current, or its license has not enabled updates yet.' })
-      }
-      await clientRef.current.goTo('/wp-admin/plugins.php')
-    } catch (caught) {
-      setUpdateCheck({ checking: false, message: caught instanceof Error ? caught.message : 'The package updates failed.' })
     }
   }
 
@@ -3316,60 +3345,44 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
               aria-expanded={showLicenseManager}
               title="Licenses"
               onClick={() => setShowLicenseManager(true)}
-              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-sm:px-2.5 [anchor-name:--license-trigger]"
+              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-md:px-2.5 [anchor-name:--license-trigger]"
             >
               <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)]" aria-hidden="true" />
               <KeyIcon className="size-4 shrink-0 fill-neutral-300" />
-              <span className="max-sm:sr-only">Licenses</span>
+              {/* Up to 767 px the bar buttons show their icons only, so Close stays on a full bar. */}
+              <span className="max-md:sr-only">Licenses</span>
               {licenseFill.length > 0 && (
                 <span className="font-normal text-neutral-300">
-                  <span className="max-sm:sr-only">· {licenseFillSummary(licenseFill)}</span>
-                  <span className="sm:hidden" aria-hidden="true">{licenseFillSummary(licenseFill).replace(/ of (\d+) active$/, '/$1')}</span>
+                  <span className="max-md:sr-only">· {licenseFillSummary(licenseFill)}</span>
+                  <span className="md:hidden" aria-hidden="true">{licenseFillSummary(licenseFill).replace(/ of (\d+) active$/, '/$1')}</span>
                 </span>
               )}
             </button>
             {launchedChecks.length > 0 && (
-              <span className="relative shrink-0">
-                <button
-                  ref={checksButtonRef}
-                  type="button"
-                  aria-haspopup="menu"
-                  aria-expanded={showChecksMenu}
-                  disabled={status.step <= 2}
-                  title={status.step <= 2 ? 'Available when setup finishes' : 'Checks'}
-                  onClick={() => setShowChecksMenu((open) => !open)}
-                  className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-sm:px-2.5 disabled:cursor-not-allowed disabled:opacity-50 aria-expanded:bg-white/15"
-                >
-                  <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)]" aria-hidden="true" />
-                  <ChartBarIcon className="size-4 shrink-0 fill-neutral-300" />
-                  <span className="max-sm:sr-only">Checks</span>
-                </button>
-                {showChecksMenu && <ChecksMenu checks={launchedChecks} anchorRef={checksButtonRef} onOpenCheck={openCheck} onClose={closeChecksMenu} />}
-              </span>
+              <ChecksButton
+                siteReady={status.step >= 4}
+                run={checksRun}
+                gate={checksLicenseGate}
+                open={showChecksPanel}
+                onToggle={() => (showChecksPanel ? closeChecksPanel() : setShowChecksPanel(true))}
+                buttonRef={checksButtonRef}
+              />
             )}
             <button
               type="button"
-              disabled={status.step <= 2 || snapshotExporting}
-              title={status.step <= 2 ? 'Available when setup finishes' : 'Export snapshot'}
+              disabled={status.step < 4 || snapshotExporting}
+              title={status.step < 4 ? 'Available when setup finishes' : 'Export snapshot'}
               onClick={exportSiteSnapshot}
-              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-sm:px-2.5 disabled:cursor-not-allowed disabled:opacity-50"
+              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-md:px-2.5 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)]" aria-hidden="true" />
               <ArrowDownTrayIcon className="size-4 shrink-0 fill-neutral-300" />
-              <span className="max-sm:sr-only">{snapshotExporting ? 'Exporting…' : 'Export snapshot'}</span>
+              <span className="max-md:sr-only">{snapshotExporting ? 'Exporting…' : 'Export snapshot'}</span>
             </button>
-            <button
-              type="button"
-              disabled={status.step <= 2 || updateCheck.checking}
-              title={status.step <= 2 ? 'Available when setup finishes' : 'Update all'}
-              onClick={updateAllPackages}
-              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-sm:px-2.5 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)]" aria-hidden="true" />
-              <ArrowPathIcon className="size-4 shrink-0 fill-neutral-300" />
-              <span className="max-sm:sr-only">{updateCheck.checking ? 'Updating…' : 'Update all'}</span>
-            </button>
-            <span className="sr-only" aria-live="polite">{updateCheck.message}</span>
+            <UpdatesControl updates={pluginUpdates} open={showUpdates} onOpenChange={setShowUpdates} buttonRef={updatesButtonRef} />
+            <span className="sr-only" aria-live="polite">{barMessage}</span>
+            <span className="sr-only" aria-live="polite">{updatesAnnouncement(pluginUpdates)}</span>
+            <span className="sr-only" aria-live="polite">{checksAnnouncement(checksRun)}</span>
             <span className="sr-only" aria-live="polite">{licenseFill.length > 0 ? `Saved license keys: ${licenseFillSummary(licenseFill)}.` : ''}</span>
             <button
               type="button"
@@ -3385,6 +3398,16 @@ echo 'PLAYGROUND_UPDATES:' . wp_json_encode($result);
           </div>
           <div className="relative min-h-0">
             <iframe key={playgroundFrameKey} ref={iframeRef} title="WordPress Playground" className="size-full bg-white" />
+            {showChecksPanel && (
+              <ChecksPanel
+                checks={launchedChecks}
+                run={checksRun}
+                gate={checksLicenseGate}
+                onRun={() => runChecks()}
+                onClose={closeChecksPanel}
+                onOpenCheck={(toolId) => openCheck(CHECKS.find((check) => check.id === toolId))}
+              />
+            )}
             {unlockPending && <VaultUnlockPrompt
               onUnlocked={() => {
                 unlockResolveRef.current?.('unlocked')

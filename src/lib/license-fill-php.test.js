@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { getPHPLoaderModule } from '@php-wasm/node-8-3'
 import { loadPHPRuntime, PHP } from '@php-wasm/universal'
-import { LICENSE_FILL_CODE, licenseFillBody, parseLicenseFillResult } from './license-fill.js'
+import { FREEMIUS_LICENSES_CODE, LICENSE_FILL_CODE, licenseFillBody, parseFreemiusLicenses, parseLicenseFillResult } from './license-fill.js'
 
 // Runs the fill code in real PHP 8.3 against a stub wp-load.php: the WordPress helpers it
 // calls and a Freemius class whose instances record the keys they were given.
@@ -77,4 +77,58 @@ test('hands each key to the matching Freemius plugin only and reports the answer
     'thrower/thrower.php': 'sk_fake_four',
     'blocked/blocked.php': 'sk_fake_six',
   })
+})
+
+// Freemius instances as the premium probe sees them: a free build, a premium build without
+// a licence, a licensed premium build, a theme, and an old SDK without is_premium().
+const PREMIUM_WP_LOAD = `<?php
+function wp_set_current_user( $id ) {}
+function wp_json_encode( $value ) { return json_encode( $value ); }
+class Freemius {
+	public static $instances = array();
+	public function __construct( public $basename, public $premium, public $licensed, public $plugin = true ) {}
+	public static function _get_all_instances() { return self::$instances; }
+	public function is_plugin() { return $this->plugin; }
+	public function get_plugin_basename() { return $this->basename; }
+	public function is_premium() { return $this->premium; }
+	public function can_use_premium_code() { return $this->licensed; }
+}
+class OldSdk {
+	public function is_plugin() { return true; }
+	public function get_plugin_basename() { return 'old-sdk/old-sdk.php'; }
+}
+// An expired licence whose plan keeps its premium features: Freemius no longer calls it
+// active and valid, but the premium code still runs.
+class ExpiredFreemius extends Freemius {
+	public function has_active_valid_license() { return false; }
+}
+Freemius::$instances = array(
+	new Freemius( 'menu-image/menu-image.php', false, false ),
+	new Freemius( 'wsal-premium/wp-security-audit-log.php', true, false ),
+	new Freemius( 'licensed-premium/licensed-premium.php', true, true ),
+	new ExpiredFreemius( 'expired-premium/expired-premium.php', true, true ),
+	new Freemius( 'licensed-free/licensed-free.php', false, true ),
+	new Freemius( 'some-theme/functions.php', true, false, false ),
+	new OldSdk(),
+);
+`
+
+test('lists premium Freemius plugins that cannot use their premium code yet, and plugins whose licence is active', async () => {
+  const php = new PHP(await loadPHPRuntime(await getPHPLoaderModule()))
+  php.mkdir('/wordpress')
+  php.writeFile('/wordpress/wp-load.php', PREMIUM_WP_LOAD)
+  const response = await php.run({ code: FREEMIUS_LICENSES_CODE })
+  assert.equal(response.errors, '', response.errors)
+  // Lex, 2026-11-21: an expired licence that still unlocks the premium features counts as
+  // active, so the checks start.
+  assert.deepEqual(parseFreemiusLicenses(response.text), { unlicensed: ['wsal-premium'], licensed: ['licensed-premium', 'expired-premium', 'licensed-free'] })
+})
+
+test('a site without Freemius has no premium plugin waiting for a licence', async () => {
+  const php = new PHP(await loadPHPRuntime(await getPHPLoaderModule()))
+  php.mkdir('/wordpress')
+  php.writeFile('/wordpress/wp-load.php', '<?php function wp_set_current_user( $id ) {} function wp_json_encode( $value ) { return json_encode( $value ); }')
+  const response = await php.run({ code: FREEMIUS_LICENSES_CODE })
+  assert.equal(response.errors, '', response.errors)
+  assert.deepEqual(parseFreemiusLicenses(response.text), { unlicensed: [], licensed: [] })
 })

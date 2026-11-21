@@ -23,6 +23,11 @@ const ALLOWED_METHODS_HEADER = 'GET, HEAD, POST, OPTIONS'
 const LICENCE_API_METHODS = new Set(['PUT', 'PATCH', 'DELETE'])
 const LICENCE_API_HOSTS = new Set(['api.freemius.com', 'sandbox-api.freemius.com'])
 const MAX_RESPONSE_SIZE = 100 * 1024 * 1024
+// A range of a compressed or unsized file is cut from the whole decoded file held in
+// memory. The Worker's 128 MB is shared by every request the same isolate handles at that
+// moment, so this keeps a single range to a quarter of it; several such ranges at once can
+// still go over, and Cloudflare then ends the requests that isolate is handling.
+const MAX_DECODED_RANGE_SOURCE = 32 * 1024 * 1024
 const OWN_HOSTS = new Set(['wp.techies.tools', 'preview-wp.techies.tools'])
 
 const DROPPED_REQUEST_HEADERS = new Set([
@@ -117,6 +122,13 @@ function isSameOriginRequest(request, requestUrl) {
   return !origin || origin === requestUrl.origin
 }
 
+// Playground's own requests are fetch() calls, which send Sec-Fetch-Dest: empty. Any
+// other destination would load an outside file as a page, frame, script, worker or
+// image of the host origin; a service worker registered that way would outlive the site.
+function isFetchRequest(request) {
+  return request.headers.get('Sec-Fetch-Dest') === 'empty'
+}
+
 function forwardedHeaders(request) {
   const optedIn = new Set((request.headers.get('X-Cors-Proxy-Allowed-Request-Headers') || '')
     .split(',').map((name) => name.trim().toLowerCase()).filter(Boolean))
@@ -131,22 +143,159 @@ function forwardedHeaders(request) {
   if (contentType && !/[\r\n]/.test(contentType)) headers.set('Content-Type', contentType)
   const range = request.headers.get('X-Cors-Proxy-Range')?.trim()
   if (range && !/[\r\n]/.test(range)) headers.set('Range', range)
-  // Byte ranges and sizes must describe the file itself: a compressed slice cannot be
-  // decompressed on its own, and a compressed HEAD reports the compressed size.
+  // Sizes must describe the file itself: a compressed HEAD reports the compressed size.
+  // For a GET range this is only a hint: Cloudflare may replace it, so handleCorsProxy
+  // removes the Range and rangeAnswer cuts the range from the whole file.
   if (request.method === 'HEAD' || headers.has('Range')) headers.set('Accept-Encoding', 'identity')
   return headers
 }
 
 // Counts the bytes of a body without a declared size and fails it past the cap.
-function capped(body) {
+function capped(body, limit = MAX_RESPONSE_SIZE) {
   let total = 0
   return body.pipeThrough(new TransformStream({
     transform(chunk, controller) {
       total += chunk.byteLength
-      if (total > MAX_RESPONSE_SIZE) controller.error(new Error('Response too large'))
+      if (total > limit) controller.error(new Error('Response too large'))
       else controller.enqueue(chunk)
     },
   }))
+}
+
+// One range, "bytes=first-last", "bytes=first-" or "bytes=-suffix". Anything else
+// (several ranges, other units) gets the whole file, which HTTP allows.
+function parseRange(value) {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(value || '')
+  if (!match || (!match[1] && !match[2])) return null
+  const first = match[1] ? Number(match[1]) : null
+  const last = match[2] ? Number(match[2]) : null
+  if (first !== null && last !== null && last < first) return null
+  return { first, last }
+}
+
+// The first and last byte of the range within a file of `size` bytes, or null when the
+// range lies outside the file.
+function resolveRange({ first, last }, size) {
+  const start = first === null ? Math.max(0, size - last) : first
+  const end = first === null ? size - 1 : Math.min(last ?? size - 1, size - 1)
+  return start < size && start <= end ? { start, end } : null
+}
+
+// Passes on `length` bytes of `body` from `start`, then stops reading it.
+function byteSlice(body, start, length) {
+  const reader = body.getReader()
+  let skip = start
+  let left = length
+  return new ReadableStream({
+    async pull(controller) {
+      // Loop until a chunk is passed on: a pull that enqueues nothing is not called again.
+      for (;;) {
+        const { value, done } = await reader.read()
+        if (done) return controller.error(new Error('The target sent fewer bytes than it declared.'))
+        if (skip >= value.byteLength) {
+          skip -= value.byteLength
+          continue
+        }
+        const chunk = value.subarray(skip)
+        skip = 0
+        if (chunk.byteLength < left) {
+          left -= chunk.byteLength
+          return controller.enqueue(chunk)
+        }
+        controller.enqueue(chunk.subarray(0, left))
+        controller.close()
+        return reader.cancel().catch(() => {})
+      }
+    },
+    cancel(reason) {
+      return reader.cancel(reason)
+    },
+  }, { highWaterMark: 0 })
+}
+
+// The bytes of the file itself, read whole. The Workers runtime decodes a compressed
+// answer as it is read, though it keeps the Content-Encoding and the compressed
+// Content-Length headers.
+const wholeFile = (body) => new Response(capped(body, MAX_DECODED_RANGE_SOURCE)).arrayBuffer().then((buffer) => new Uint8Array(buffer))
+
+// The range straight from the target, so the Worker need not read every byte before it
+// (a ZIP reader asks for the end of the file first). Taken only when the target answers
+// with exactly the asked bytes of a file of the size the whole-file answer declared, not
+// compressed; otherwise null, and the range is cut from the whole file. Only a whole-file
+// answer with a strong ETag is asked about: the ETag goes along as If-Range, so a file
+// that changed in between comes back whole (200), and the range answer must carry the
+// same ETag. Without one (weak, or only Last-Modified) nothing proves it is the same file.
+async function targetSlice(askRange, { start, end }, size, upstream) {
+  const etag = upstream.headers.get('ETag')
+  if (!etag || etag.startsWith('W/')) return null
+  let response
+  try {
+    response = await askRange(`bytes=${start}-${end}`, etag)
+  } catch {
+    return null
+  }
+  const encoding = response.headers.get('Content-Encoding')
+  const declared = response.headers.get('Content-Length')
+  const exact = response.status === 206 && response.body
+    && response.headers.get('ETag') === etag
+    && (!encoding || encoding.toLowerCase() === 'identity')
+    && response.headers.get('Content-Range') === `bytes ${start}-${end}/${size}`
+    && (declared === null || Number(declared) === end - start + 1)
+  if (exact) return response.body
+  await response.body?.cancel().catch(() => {})
+  return null
+}
+
+// Cloudflare replaces the Worker's Accept-Encoding: identity, so a target that compresses
+// answers a range with a slice of the compressed stream, which cannot be decompressed on
+// its own and carries the compressed offsets and size. The proxy therefore fetches the
+// whole file and cuts the range itself. An uncompressed file of declared size is cut
+// while it streams, and reading stops at the end of the range; when the range starts
+// later in such a file, the target is also asked for the range itself (targetSlice), and
+// its answer replaces the whole file when it proves to be the same bytes. Anything else
+// (compressed, or without a declared size) is read whole, up to MAX_DECODED_RANGE_SOURCE.
+async function rangeAnswer(upstream, range, headers, askRange) {
+  // The target's checksums describe the whole answer, not the slice (RFC 9530).
+  for (const name of ['Content-Length', 'Content-Encoding', 'Content-Range', 'Content-Digest', 'Content-MD5']) headers.delete(name)
+  headers.set('Accept-Ranges', 'bytes')
+  // Cloudflare would otherwise compress the slice on its way to the browser.
+  headers.set('Cache-Control', 'no-store, no-transform')
+  const encoding = upstream.headers.get('Content-Encoding')
+  const declared = upstream.headers.get('Content-Length')
+  const streamable = (!encoding || encoding.toLowerCase() === 'identity') && /^\d+$/.test(declared || '')
+  let size
+  let file = null
+  if (streamable) {
+    size = Number(declared)
+  } else {
+    try {
+      file = await wholeFile(upstream.body)
+    } catch (error) {
+      if (error.message === 'Response too large') return answer(413, 'Response too large')
+      return answer(502, 'Bad gateway: the target\'s answer could not be read.')
+    }
+    size = file.byteLength
+  }
+  const slice = resolveRange(range, size)
+  if (!slice) {
+    await upstream.body.cancel().catch(() => {})
+    return answer(416, 'Range not satisfiable', { 'Content-Range': `bytes */${size}` })
+  }
+  const length = slice.end - slice.start + 1
+  // The 100 MB limit applies to the slice, as it did to the target's own 206.
+  if (length >= MAX_RESPONSE_SIZE) {
+    await upstream.body.cancel().catch(() => {})
+    return answer(413, 'Response too large')
+  }
+  headers.set('Content-Range', `bytes ${slice.start}-${slice.end}/${size}`)
+  headers.set('Content-Length', String(length))
+  if (file) return new Response(file.subarray(slice.start, slice.end + 1), { status: 206, headers })
+  const exact = slice.start > 0 && askRange ? await targetSlice(askRange, slice, size, upstream) : null
+  if (exact) await upstream.body.cancel().catch(() => {})
+  const sliced = exact ? byteSlice(exact, 0, length) : byteSlice(upstream.body, slice.start, length)
+  // FixedLengthStream (Workers only) keeps Content-Length instead of chunked encoding.
+  const body = typeof FixedLengthStream === 'function' ? sliced.pipeThrough(new FixedLengthStream(length)) : sliced
+  return new Response(body, { status: 206, headers })
 }
 
 const MAX_FOLLOWED_REDIRECTS = 5
@@ -182,7 +331,7 @@ async function followWithoutAuthorization(fetchImpl, response, from, headers, re
 
 export async function handleCorsProxy(request, { fetch: fetchImpl = fetch, limiter } = {}) {
   const requestUrl = new URL(request.url)
-  if (!isSameOriginRequest(request, requestUrl)) return answer(403, 'Forbidden')
+  if (!isSameOriginRequest(request, requestUrl) || !isFetchRequest(request)) return answer(403, 'Forbidden')
   // OPTIONS does not depend on the target, so it names only the methods every target takes.
   if (request.method === 'OPTIONS') return answer(204, null, { Allow: ALLOWED_METHODS_HEADER })
   const isLicenceApiMethod = LICENCE_API_METHODS.has(request.method)
@@ -212,7 +361,23 @@ export async function handleCorsProxy(request, { fetch: fetchImpl = fetch, limit
 
   const hasBody = request.method !== 'GET' && request.method !== 'HEAD'
   const outgoing = forwardedHeaders(request)
+  // A GET range is cut by the proxy from the whole file (rangeAnswer). With If-Range the
+  // whole file is the safe answer, since the proxy cannot tell whether the file changed.
+  let range = null
+  if (request.method === 'GET' && outgoing.has('Range')) {
+    range = outgoing.has('If-Range') ? null : parseRange(outgoing.get('Range'))
+    outgoing.delete('Range')
+  }
   let upstream
+  // Asks the target for one range of the file (rangeAnswer); not after a redirect the
+  // Worker followed itself, which keeps the whole-file cut.
+  let askRange = range && ((value, etag) => {
+    const ranged = new Headers(outgoing)
+    ranged.set('Range', value)
+    ranged.set('Accept-Encoding', 'identity')
+    ranged.set('If-Range', etag)
+    return fetchImpl(target.href, { method: 'GET', headers: ranged, redirect: 'manual' })
+  })
   try {
     upstream = await fetchImpl(target.href, {
       method: request.method,
@@ -224,15 +389,13 @@ export async function handleCorsProxy(request, { fetch: fetchImpl = fetch, limit
     if (outgoing.has('Authorization') && isRedirect(upstream)
       && new URL(upstream.headers.get('Location'), target).origin !== target.origin) {
       if (hasBody) throw new ProxyRefusal(502, `Bad gateway: an authorized ${request.method} was redirected to another origin.`)
+      askRange = null
       upstream = await followWithoutAuthorization(fetchImpl, upstream, target, outgoing, requestUrl, request.method)
     }
   } catch (error) {
     if (error instanceof ProxyRefusal) return answer(error.status, error.message)
     return answer(502, 'Bad gateway: the target could not be reached.')
   }
-
-  const length = Number(upstream.headers.get('Content-Length'))
-  if (request.method !== 'HEAD' && length >= MAX_RESPONSE_SIZE) return answer(413, 'Response too large')
 
   const headers = new Headers()
   for (const [name, value] of upstream.headers) {
@@ -244,6 +407,11 @@ export async function handleCorsProxy(request, { fetch: fetchImpl = fetch, limit
   }
   headers.set('X-Playground-Cors-Proxy', 'true')
   headers.set('Cache-Control', 'no-store')
+  // A range answer sets its own limits: a slice under 100 MB, read either from a stream
+  // that stops at the end of the range or from at most MAX_DECODED_RANGE_SOURCE in memory.
+  if (range && upstream.status === 200 && upstream.body) return rangeAnswer(upstream, range, headers, askRange)
+  const length = Number(upstream.headers.get('Content-Length'))
+  if (request.method !== 'HEAD' && length >= MAX_RESPONSE_SIZE) return answer(413, 'Response too large')
   const declaredSize = upstream.headers.has('Content-Length')
   const body = request.method === 'HEAD' || !upstream.body ? null : declaredSize ? upstream.body : capped(upstream.body)
   return new Response(body, {

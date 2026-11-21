@@ -1,0 +1,264 @@
+name: Sync WordPress Playground release
+
+# Opens one pull request into dev when WordPress Playground publishes a release. One
+# version moves the launcher's Playground packages, the Playground client and the
+# self-hosted Playground together (deploy-site.yml builds wp.techies.tools from the tag
+# that matches the @wp-playground/blueprints pin). Merging into dev updates the previews
+# only; releasing to main needs Lex's approval every time.
+on:
+  schedule:
+    - cron: '47 6 * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: sync-playground-release
+  cancel-in-progress: false
+
+jobs:
+  # Checks the new release's packages, so this job gets a read-only token and keeps no git
+  # credentials. On the runner itself it runs only this repository's scripts and the
+  # packages already locked on dev (the sync installs the new ones without their install
+  # scripts). Everything that runs new package code runs in a throwaway container that
+  # sees the working tree but not the runner, its action files, its tokens or .git, so
+  # that code cannot reach the Actions cache, the artifact or the patch. The job hands
+  # its changes to the next job as a patch saved before any new package code runs.
+  prepare:
+    name: Check Playground releases and prepare an update
+    if: github.repository == 'techiesreviews/techies-playground'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    outputs:
+      base: ${{ steps.base.outputs.sha }}
+      changed: ${{ steps.sync.outputs.changed }}
+      app_version: ${{ steps.sync.outputs.app_version }}
+      playground_version: ${{ steps.sync.outputs.playground_version }}
+      previous_version: ${{ steps.sync.outputs.previous_version }}
+      dropped_overrides: ${{ steps.sync.outputs.dropped_overrides }}
+    steps:
+      - name: Check out dev
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: dev
+          persist-credentials: false
+
+      - name: Note the dev commit
+        id: base
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # No npm cache here, because cache entries are shared with other runs.
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Synchronize the Playground release
+        id: sync
+        run: node scripts/sync-playground-release.mjs
+
+      - name: Save the update as a patch
+        if: steps.sync.outputs.changed == 'true'
+        run: |
+          git diff --check
+          git diff --binary -- package.json package-lock.json src/App.jsx > "$RUNNER_TEMP/playground-update.patch"
+
+      - name: Check Playground security advisories
+        if: steps.sync.outputs.changed == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/check-playground-advisories.mjs
+
+      # deploy-site.yml applies playground-host/playground-core.patch to the release tag and
+      # fails when it no longer applies, which would stop every preview deploy after this
+      # update merges. Plain git on the release's files, so no new package code runs.
+      - name: Check the Playground core patch applies to the new release
+        if: steps.sync.outputs.changed == 'true' && hashFiles('playground-host/playground-core.patch') != ''
+        env:
+          PLAYGROUND_VERSION: ${{ steps.sync.outputs.playground_version }}
+        run: |
+          git clone --branch "v${PLAYGROUND_VERSION}" --single-branch --depth 1 --filter=blob:none --sparse \
+            https://github.com/WordPress/wordpress-playground.git "$RUNNER_TEMP/wordpress-playground"
+          git -C "$RUNNER_TEMP/wordpress-playground" sparse-checkout set packages/php-wasm/web-service-worker packages/php-wasm/web
+          git -C "$RUNNER_TEMP/wordpress-playground" apply --check --verbose "$PWD/playground-host/playground-core.patch" || {
+            echo "::error::playground-host/playground-core.patch does not apply to Playground v${PLAYGROUND_VERSION}, so the preview deploy would fail after this update. If that release fixes request bodies in Firefox, remove the patch; otherwise update it. No pull request was opened."
+            exit 1
+          }
+
+      # Runs the new release's code: the unit tests and the launcher build load it, and the
+      # boot test installs @wp-playground/cli at the new version (with install scripts) and
+      # starts WordPress once with the launcher's default setup and WP-CLI.
+      - name: Verify the generated update in a throwaway container
+        if: steps.sync.outputs.changed == 'true'
+        run: |
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            --env HOME=/tmp/home \
+            --env CI=true \
+            --volume "$PWD:/work" \
+            --mount type=tmpfs,destination=/work/.git \
+            --workdir /work \
+            node:24-bookworm@sha256:9d266751ca3d7fdbe651c878ffd5ad0a42fed49a18c283509267c97f025b7496 \
+            bash -ec 'npm test; npm run build; npm audit --audit-level=high; node scripts/playground-boot-check.mjs'
+
+      - name: Upload the update
+        if: steps.sync.outputs.changed == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playground-update
+          path: ${{ runner.temp }}/playground-update.patch
+          if-no-files-found: error
+          retention-days: 3
+
+  # Writes to the repository, so it runs no package code: it applies the checked patch,
+  # pushes the update branch and opens or refreshes the pull request.
+  pull-request:
+    name: Open or refresh the update pull request
+    needs: prepare
+    if: needs.prepare.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Check out the checked dev commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.prepare.outputs.base }}
+
+      - name: Download the update
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: playground-update
+          path: ${{ runner.temp }}/update
+
+      - name: Open or refresh the update pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APP_VERSION: ${{ needs.prepare.outputs.app_version }}
+          PLAYGROUND_VERSION: ${{ needs.prepare.outputs.playground_version }}
+          PREVIOUS_VERSION: ${{ needs.prepare.outputs.previous_version }}
+          DROPPED_OVERRIDES: ${{ needs.prepare.outputs.dropped_overrides }}
+        run: |
+          bot_email="41898282+github-actions[bot]@users.noreply.github.com"
+          if ! [[ "$PLAYGROUND_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && "$APP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::The prepare job named no exact Playground or app version."
+            exit 1
+          fi
+          branch="automation/playground-${PLAYGROUND_VERSION}"
+          title="Update WordPress Playground to ${PLAYGROUND_VERSION}"
+
+          # gh pr list --head matches the branch name on forks too, so every lookup below
+          # keeps only pull requests from this repository.
+          own_pr='[.[] | select(.isCrossRepository | not)][0].number // empty'
+
+          # A closed update is a decision: it is not opened again for the same release.
+          closed_pr="$(gh pr list --head "$branch" --base dev --state closed --json number,isCrossRepository --jq "$own_pr")"
+          if [ -n "$closed_pr" ]; then
+            echo "::notice::The update to Playground ${PLAYGROUND_VERSION} (#${closed_pr}) was closed; it is not opened again."
+            exit 0
+          fi
+
+          git apply "$RUNNER_TEMP/update/playground-update.patch"
+          unexpected="$(git status --porcelain | grep -v -E '^ M (package\.json|package-lock\.json|src/App\.jsx)$' || true)"
+          if [ -n "$unexpected" ]; then
+            echo "$unexpected"
+            echo "::error::The update changes files other than package.json, package-lock.json and src/App.jsx."
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "$bot_email"
+          git switch -C "$branch"
+          git add package.json package-lock.json src/App.jsx
+          git commit -m "$title"
+
+          # A fetched branch counts as the bot's only when the bot both wrote and committed
+          # its newest commit: amending or rebasing the bot's commit keeps the bot as author
+          # but makes the person who did it the committer.
+          tip_is_bot() {
+            [ "$(git log -1 --format='%ae %ce' FETCH_HEAD)" = "${bot_email} ${bot_email}" ]
+          }
+
+          # Someone may have added a fix to the update branch (after a preview problem, for
+          # example); the daily run then leaves the branch and its pull request text alone.
+          # git ls-remote exits 2 when the branch does not exist; any other failure stops
+          # the job rather than risk overwriting someone's fix.
+          # The push replaces only the commit checked here (or creates the branch only if it
+          # still does not exist), so a fix pushed meanwhile makes the push fail instead.
+          left_alone=""
+          checked_tip=""
+          if git ls-remote --exit-code --heads origin "refs/heads/${branch}" > /dev/null; then
+            git fetch --no-tags origin "refs/heads/${branch}"
+            checked_tip="$(git rev-parse FETCH_HEAD)"
+            if ! tip_is_bot; then
+              left_alone="yes"
+              echo "::notice::${branch} has a commit written or changed by $(git log -1 --format='%ae / %ce' FETCH_HEAD); the branch and its pull request text are left as they are."
+            fi
+          else
+            status=$?
+            if [ "$status" -ne 2 ]; then
+              echo "::error::Could not read ${branch} on GitHub (git ls-remote exit ${status})."
+              exit 1
+            fi
+          fi
+          if [ -z "$left_alone" ]; then
+            if ! git push --force-with-lease="refs/heads/${branch}:${checked_tip}" origin "$branch"; then
+              echo "::error::${branch} changed on GitHub while this run was checking it, or the push failed; nothing was pushed. Run the workflow again."
+              exit 1
+            fi
+          fi
+
+          dropped=""
+          if [ -n "$DROPPED_OVERRIDES" ]; then
+            dropped="- Dropped package overrides that this release no longer needs: ${DROPPED_OVERRIDES}."
+          fi
+          unchecked=""
+          if [ -n "$left_alone" ]; then
+            unchecked="- The branch has commits this run did not push or check; review them before merging."
+          fi
+          body="$(cat <<EOF
+          Next step: merge into dev, check the previews (preview-play.techies.tools and preview-wp.techies.tools), then ask Lex before releasing to main. Going live needs Lex's approval every time; this update never goes live on its own.
+
+          Automated update to the official WordPress Playground release ${PLAYGROUND_VERSION} (from ${PREVIOUS_VERSION}):
+
+          - One version moves together: the launcher's Playground packages, the Playground client and the self-hosted Playground (deploy-site.yml builds it from tag v${PLAYGROUND_VERSION}).
+          - App version ${APP_VERSION}, with a changelog entry.
+          - Checked before this pull request opened: unit tests, the launcher build, npm audit (high and above), Playground security advisories, and one boot of Playground ${PLAYGROUND_VERSION} with the launcher's default setup and WP-CLI.
+          ${dropped}
+          ${unchecked}
+
+          Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          EOF
+          )"
+
+          existing_pr="$(gh pr list --head "$branch" --base dev --state open --json number,isCrossRepository --jq "$own_pr")"
+          if [ -z "$existing_pr" ]; then
+            gh pr create \
+              --base dev \
+              --head "$branch" \
+              --title "$title" \
+              --body "$body"
+          elif [ -z "$left_alone" ]; then
+            gh pr edit "$existing_pr" --body "$body"
+          fi
+
+          # One update pull request at a time: an older Playground update still open is
+          # replaced. Its branch is deleted only when nobody else has pushed to it. Pull
+          # requests from forks are never the bot's and are left alone.
+          gh pr list --base dev --state open --json number,headRefName,isCrossRepository \
+            --jq ".[] | select(.isCrossRepository | not) | select(.headRefName | startswith(\"automation/playground-\")) | select(.headRefName != \"${branch}\") | \"\(.number) \(.headRefName)\"" |
+            while read -r number old_branch; do
+              git fetch --no-tags origin "refs/heads/${old_branch}"
+              if tip_is_bot; then
+                gh pr close "$number" --delete-branch --comment "Replaced by the update to Playground ${PLAYGROUND_VERSION}."
+              else
+                gh pr close "$number" --comment "Replaced by the update to Playground ${PLAYGROUND_VERSION}. The branch is kept because it has commits by someone else."
+              fi
+            done

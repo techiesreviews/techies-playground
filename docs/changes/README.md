@@ -44,6 +44,7 @@ Prefer, in order:
 - [2026-11-14-cors-proxy-identity-ranges.md](2026-11-14-cors-proxy-identity-ranges.md) — the CORS proxy asks for uncompressed bytes on HEAD and range requests, so sizes and byte offsets describe the file.
 - [2026-11-14-cors-proxy-compressed-ranges-open.md](2026-11-14-cors-proxy-compressed-ranges-open.md) — on the deployed preview, Cloudflare still compresses ranged answers from compressing targets, so the identity header does not take effect; open, ZIP ranges unaffected.
 - [2026-11-14-cors-proxy-origin-headers-ranges.md](2026-11-14-cors-proxy-origin-headers-ranges.md) — proxied answers never carry `Clear-Site-Data`, `NEL`, `Report-To` or `Set-Login` (a guard for compressed ranges was dropped: Cloudflare hides their encoding).
+- [2026-11-20-cors-proxy-ranges-cut-from-whole-file.md](2026-11-20-cors-proxy-ranges-cut-from-whole-file.md) — the CORS proxy cuts GET ranges from the whole file itself, so ranges of files the target compresses come out right; answers the open compressed-ranges record (preview check pending).
 
 - [2026-10-30-shared-agent-kit.md](2026-10-30-shared-agent-kit.md) — the project-local kit copy replaced by the shared Agent Kit; `npm test` no longer runs kit tests; the built site is expected unchanged (post-merge check pending).
 
@@ -113,3 +114,6 @@ Prefer, in order:
 - [2026-08-28-release-0.6.0-deployment-blocked.md](2026-08-28-release-0.6.0-deployment-blocked.md) — deployment investigation showing the missing Cloudflare API token and unchanged live bundle.
 - [2026-08-28-release-0.6.0-deployed.md](2026-08-28-release-0.6.0-deployed.md) — successful pipeline rerun and live 0.6.0 bundle verification.
 - [2026-11-07-ci-node-24.md](2026-11-07-ci-node-24.md) — CI moved from Node 22 to Node 24; supersedes the 2026-08-28 Node 24.15.0 inconclusive result.
+- [2026-11-20-playground-release-sync-and-security-checks.md](2026-11-20-playground-release-sync-and-security-checks.md) — a daily job opens one verified PR into `dev` per Playground release (all Playground pins, client and host together, with a boot test); daily security checks run npm audit, Playground advisories and Dependabot alerts; WP-CLI comes from our own Playground host.
+- [2026-11-20-playground-sync-second-look-fixes.md](2026-11-20-playground-sync-second-look-fixes.md) — the update push only replaces the branch tip it checked, the advisory check also covers the packages the Playground host ships, and the boot script is renamed so a bare `node --test` does not run it.
+- [2026-11-20-deploy-security-gate-and-build-artifact.md](2026-11-20-deploy-security-gate-and-build-artifact.md) — a fresh audit of `dev` finds no high advisory; every deploy waits for the npm audit and the Playground advisory check, and the Playground build reaches the host deploy as an artifact of the same run instead of through the Actions cache.

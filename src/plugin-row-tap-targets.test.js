@@ -1,0 +1,71 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import test from 'node:test'
+
+// Source inspection of PluginRow in App.jsx: the Node runner cannot render JSX, so these tests read the
+// Replace and Delete buttons' classes. The real-browser geometry check is recorded in docs/changes.
+const source = readFileSync(new URL('./App.jsx', import.meta.url), 'utf8')
+const pluginRow = source.slice(source.indexOf('function PluginRow('), source.indexOf('function ThemeRow('))
+
+function actionButton(labelStart) {
+  const start = pluginRow.indexOf(`aria-label={\`${labelStart}`)
+  assert.ok(start > 0, `PluginRow has a button labelled "${labelStart}…"`)
+  const open = pluginRow.lastIndexOf('<button', start)
+  const close = pluginRow.indexOf('</button>', start)
+  return pluginRow.slice(open, close)
+}
+
+function classTokens(button) {
+  return button.match(/className="([^"]*)"/)[1].split(/\s+/)
+}
+
+// Box edge in px for a pointer variant: a 16 px icon (size-4) plus the padding on both sides (Tailwind: 1 unit = 4 px).
+function boxSize(tokens, variant) {
+  const padding = (prefix) => tokens.find((token) => token.startsWith(`${prefix}p-`) && /^\d+(\.\d+)?$/.test(token.slice(prefix.length + 2)))
+  const token = (variant && padding(`${variant}:`)) || padding('')
+  assert.ok(token, 'a padding token sets the box size')
+  return 16 + 2 * Number(token.split('p-').at(-1)) * 4
+}
+
+for (const label of ['Replace ', 'Remove ']) {
+  test(`${label.trim()} in a plugin row is a 44 px box on any touchscreen and 28 px with only a mouse`, () => {
+    const button = actionButton(label)
+    assert.match(button, /<\w+Icon className="size-4 /)
+    const tokens = classTokens(button)
+    assert.ok(boxSize(tokens, 'any-pointer-coarse') >= 44, 'tap box at least 44 px wherever a touchscreen exists')
+    assert.equal(boxSize(tokens, ''), 28, 'mouse-only size unchanged')
+  })
+
+  test(`${label.trim()} in a plugin row has no tap area wider than its own box, so it cannot overlap its neighbour`, () => {
+    const button = actionButton(label)
+    assert.doesNotMatch(button, /absolute/, 'no absolutely positioned tap overlay')
+    const margins = classTokens(button).filter((token) => /^-?m[xytrbls]?-/.test(token.split(':').at(-1)))
+    assert.deepEqual(margins, [], 'no margin pulls it under a neighbour')
+  })
+}
+
+test('Add key is at least 44 px tall on any touchscreen, 28 px with only a mouse, and has no tap area past its own box', () => {
+  const start = pluginRow.indexOf('aria-label={`Add a license key for')
+  assert.ok(start > 0, 'PluginRow has the Add key button')
+  const button = pluginRow.slice(pluginRow.lastIndexOf('<button', start), pluginRow.indexOf('</button>', start))
+  assert.doesNotMatch(button, /absolute/, 'no absolutely positioned tap overlay')
+  const tokens = classTokens(button)
+  // min-h-11 is 44 px (Tailwind: 1 unit = 4 px); with only a mouse the 20 px line (text-sm/5) plus py-1 gives 28 px.
+  assert.ok(tokens.includes('any-pointer-coarse:min-h-11'), 'at least 44 px tall wherever a touchscreen exists')
+  assert.ok(tokens.includes('inline-flex') && tokens.includes('items-center'), 'icon and label stay centred in the taller box')
+  assert.ok(tokens.includes('text-sm/5') && tokens.includes('py-1'), 'mouse-only height unchanged')
+  assert.ok(!tokens.some((token) => token.startsWith('min-h-')), 'no mouse-only minimum height')
+  const margins = tokens.filter((token) => /^-?m[xytrbls]?-/.test(token.split(':').at(-1)))
+  assert.deepEqual(margins, [], 'no margin pulls it under a neighbour')
+})
+
+test('the key-saved icon keeps its 28 px box and the group keeps its 4 px gap', () => {
+  const start = pluginRow.indexOf('aria-label={`License key saved for')
+  assert.ok(start > 0, 'PluginRow has the key-saved icon')
+  const icon = pluginRow.slice(pluginRow.lastIndexOf('<span', start), pluginRow.indexOf('</span>', start))
+  const tokens = classTokens(icon)
+  assert.equal(boxSize(tokens, ''), 28)
+  assert.ok(!tokens.some((token) => token.includes(':p-')), 'no pointer-specific padding on the icon')
+  const group = pluginRow.slice(pluginRow.lastIndexOf('<div', start), start)
+  assert.ok(classTokens(group).includes('gap-1'), 'the icon group keeps gap-1 between its boxes')
+})

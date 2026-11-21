@@ -16,8 +16,9 @@
       "custom_domain": true
     }
   ],
+  // Off: Workers Logs add cost (Lex, 2026-11-19).
   "observability": {
-    "enabled": true
+    "enabled": false
   },
   "env": {
     "preview": {

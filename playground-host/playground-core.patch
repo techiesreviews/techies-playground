@@ -1,0 +1,406 @@
+Playground core: keep request bodies when the browser cannot stream them (Firefox)
+
+Firefox does not expose Request.body and sends a ReadableStream request body as
+the text "[object ReadableStream]", yet it passes Playground's streaming probe.
+So a CORS-proxy retry from fetchWithCorsProxy() went out without its body, and
+so did a PHP request (curl or wp_remote_post) carried over the TCP-over-fetch
+bridge. This patch fixes the probe, reads the retry body with arrayBuffer() when
+the clone exposes no stream, and buffers the bridged body before the fetch.
+
+The deploy workflow (.github/workflows/deploy-site.yml, playground-build job)
+applies this file with `git apply` to the WordPress Playground release it builds.
+Record and upstream draft: docs/changes/2026-11-20-playground-core-request-body-firefox.md.
+Remove it once the pinned Playground release contains the fix; the build fails
+if it no longer applies.
+
+diff --git a/packages/php-wasm/web-service-worker/src/lib/fetch-with-cors-proxy.ts b/packages/php-wasm/web-service-worker/src/lib/fetch-with-cors-proxy.ts
+index 2aa09b9..f900ea0 100644
+--- a/packages/php-wasm/web-service-worker/src/lib/fetch-with-cors-proxy.ts
++++ b/packages/php-wasm/web-service-worker/src/lib/fetch-with-cors-proxy.ts
+@@ -113,11 +113,16 @@ export async function fetchWithCorsProxy(
+ 		// Chrome: pass the clone's ReadableStream directly (with duplex: 'half').
+ 		// Safari/Firefox: use clonedRequest.arrayBuffer() which works cross-browser.
+ 		// We cannot use `new Response(request.body).arrayBuffer()` because Firefox
+-		// does not expose request.body at all.
++		// does not expose request.body at all. Check the clone's body too: a
++		// browser that passes the streaming probe but leaves request.body unset
++		// would otherwise send the retry without its body.
+ 		let body: ArrayBuffer | ReadableStream<Uint8Array> | null = null;
+ 		const method = requestObject.method.toUpperCase();
+ 		if (method !== 'GET' && method !== 'HEAD') {
+-			if (await supportsReadableStreamBody()) {
++			if (
++				(await supportsReadableStreamBody()) &&
++				clonedRequest.body instanceof ReadableStream
++			) {
+ 				body = clonedRequest.body;
+ 			} else {
+ 				body = await clonedRequest.arrayBuffer();
+diff --git a/packages/php-wasm/web-service-worker/src/lib/utils.ts b/packages/php-wasm/web-service-worker/src/lib/utils.ts
+index 2c23f0d..9013824 100644
+--- a/packages/php-wasm/web-service-worker/src/lib/utils.ts
++++ b/packages/php-wasm/web-service-worker/src/lib/utils.ts
+@@ -306,7 +306,9 @@ export const __testing = {
+  *
+  * - Chrome: supported (with `duplex: 'half'`).
+  * - Safari: throws `NotSupportedError: ReadableStream uploading is not supported`.
+- * - Firefox: the probe fetch itself may fail; `request.body` is not even exposed.
++ * - Firefox: does not expose `request.body` and sends a ReadableStream body as
++ *   the text "[object ReadableStream]", so the probe fetch succeeds. A Request
++ *   built with a stream must also expose that stream as its body.
+  */
+ export async function supportsReadableStreamBody(): Promise<boolean> {
+ 	if (streamBodySupported !== undefined) {
+@@ -318,11 +320,16 @@ export async function supportsReadableStreamBody(): Promise<boolean> {
+ 				controller.close();
+ 			},
+ 		});
+-		await fetch('data:,', {
++		const request = new Request('data:,', {
+ 			method: 'POST',
+ 			body: stream,
+ 			duplex: 'half',
+ 		} as RequestInit);
++		if (!(request.body instanceof ReadableStream)) {
++			streamBodySupported = false;
++			return streamBodySupported;
++		}
++		await fetch(request);
+ 		streamBodySupported = true;
+ 	} catch {
+ 		streamBodySupported = false;
+diff --git a/packages/php-wasm/web-service-worker/src/test/fetch-with-cors-proxy.spec.ts b/packages/php-wasm/web-service-worker/src/test/fetch-with-cors-proxy.spec.ts
+index ccdb877..2bcd6c0 100644
+--- a/packages/php-wasm/web-service-worker/src/test/fetch-with-cors-proxy.spec.ts
++++ b/packages/php-wasm/web-service-worker/src/test/fetch-with-cors-proxy.spec.ts
+@@ -516,6 +516,45 @@ describe('fetchWithCorsProxy', () => {
+ 		expect(await response.text()).toBe('proxied');
+ 	});
+
++	it('reads the body for the CORS proxy retry when the clone exposes no body stream (Firefox)', async () => {
++		// Firefox leaves request.body unset even where the streaming probe
++		// passes, so the retry must not rely on the clone's body stream.
++		__testing.setStreamBodySupported(true);
++		try {
++			const corsProxyHeaders = new Headers();
++			corsProxyHeaders.set('X-Playground-Cors-Proxy', 'true');
++			const fetchMock = vi
++				.spyOn(globalThis, 'fetch')
++				.mockRejectedValueOnce(new Error('CORS'))
++				.mockResolvedValueOnce(
++					new Response('proxied', { headers: corsProxyHeaders })
++				);
++
++			const request = new Request('https://example.com/api', {
++				method: 'POST',
++				body: 'name=value',
++			});
++			const clone = request.clone.bind(request);
++			vi.spyOn(request, 'clone').mockImplementation(() => {
++				const cloned = clone();
++				Object.defineProperty(cloned, 'body', { value: undefined });
++				return cloned;
++			});
++
++			await fetchWithCorsProxy(
++				request,
++				undefined,
++				'https://proxy.test/?url='
++			);
++
++			expect(fetchMock).toHaveBeenCalledTimes(2);
++			const proxyRequest = fetchMock.mock.calls[1][0] as Request;
++			expect(await proxyRequest.text()).toBe('name=value');
++		} finally {
++			__testing.resetStreamBodySupported();
++		}
++	});
++
+ 	/**
+ 	 * These tests exercise the non-streaming fallback path (Safari/Firefox)
+ 	 * by forcing `supportsReadableStreamBody()` to return `false` in
+diff --git a/packages/php-wasm/web-service-worker/src/test/utils.spec.ts b/packages/php-wasm/web-service-worker/src/test/utils.spec.ts
+index 3b551c1..947ee10 100644
+--- a/packages/php-wasm/web-service-worker/src/test/utils.spec.ts
++++ b/packages/php-wasm/web-service-worker/src/test/utils.spec.ts
+@@ -1,10 +1,41 @@
+-import { describe, expect, it } from 'vitest';
++import { afterEach, describe, expect, it, vi } from 'vitest';
+ import {
++	__testing,
+ 	cloneRequest,
+ 	getRequestHeaders,
+ 	removeContentSecurityPolicyDirective,
++	supportsReadableStreamBody,
+ } from '../lib/utils';
+
++describe('supportsReadableStreamBody', () => {
++	afterEach(() => {
++		vi.restoreAllMocks();
++		__testing.resetStreamBodySupported();
++	});
++
++	it('reports no streamed uploads when a Request does not expose its stream body (Firefox)', async () => {
++		// Firefox sends a ReadableStream body as the text
++		// "[object ReadableStream]", so the probe fetch alone succeeds.
++		__testing.resetStreamBodySupported();
++		const fetchMock = vi
++			.spyOn(globalThis, 'fetch')
++			.mockResolvedValue(new Response(''));
++		vi.spyOn(Request.prototype, 'body', 'get').mockReturnValue(
++			undefined as unknown as ReadableStream
++		);
++
++		expect(await supportsReadableStreamBody()).toBe(false);
++		expect(fetchMock).not.toHaveBeenCalled();
++	});
++
++	it('reports streamed uploads when the Request exposes its stream body and the probe succeeds', async () => {
++		__testing.resetStreamBodySupported();
++		vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(''));
++
++		expect(await supportsReadableStreamBody()).toBe(true);
++	});
++});
++
+ describe('cloneRequest', () => {
+ 	it('keeps cancellation when rewriting a request URL for the proxy', async () => {
+ 		const controller = new AbortController();
+diff --git a/packages/php-wasm/web/src/lib/tcp-over-fetch-websocket.ts b/packages/php-wasm/web/src/lib/tcp-over-fetch-websocket.ts
+index 8ff4b5e..d591b09 100644
+--- a/packages/php-wasm/web/src/lib/tcp-over-fetch-websocket.ts
++++ b/packages/php-wasm/web/src/lib/tcp-over-fetch-websocket.ts
+@@ -43,7 +43,10 @@ import { TLS_1_2_Connection } from './tls/1_2/connection';
+ import type { GeneratedCertificate } from './tls/certificates';
+ import { generateCertificate } from './tls/certificates';
+ import { ContentTypes } from './tls/1_2/types';
+-import { fetchWithCorsProxy } from '@php-wasm/web-service-worker';
++import {
++	fetchWithCorsProxy,
++	supportsReadableStreamBody,
++} from '@php-wasm/web-service-worker';
+ import { ChunkedDecoderStream } from './chunked-decoder';
+ import type { EmscriptenOptions } from '@php-wasm/universal';
+ import { concatUint8Arrays } from '@php-wasm/util';
+@@ -325,7 +328,7 @@ export class TCPOverFetchWebsocket {
+ 		]);
+
+ 		// Connect the TLS server end to the fetch() request
+-		const { request, expectsContinue } =
++		const { request, expectsContinue, bodyToBuffer } =
+ 			await RawBytesFetch.parseHttpRequest(
+ 				tlsConnection.serverEnd.upstream.readable,
+ 				this.host,
+@@ -348,7 +351,8 @@ export class TCPOverFetchWebsocket {
+ 		try {
+ 			await RawBytesFetch.fetchRawResponseBytes(
+ 				request,
+-				this.corsProxyUrl
++				this.corsProxyUrl,
++				bodyToBuffer
+ 			).pipeTo(tlsConnection.serverEnd.downstream.writable);
+ 		} catch {
+ 			// Ignore errors from fetch()
+@@ -361,7 +365,7 @@ export class TCPOverFetchWebsocket {
+
+ 	async fetchOverHTTP() {
+ 		// Connect this WebSocket's client end to the fetch() request
+-		const { request, expectsContinue } =
++		const { request, expectsContinue, bodyToBuffer } =
+ 			await RawBytesFetch.parseHttpRequest(
+ 				this.clientUpstream.readable,
+ 				this.host,
+@@ -383,7 +387,8 @@ export class TCPOverFetchWebsocket {
+ 		try {
+ 			await RawBytesFetch.fetchRawResponseBytes(
+ 				request,
+-				this.corsProxyUrl
++				this.corsProxyUrl,
++				bodyToBuffer
+ 			).pipeTo(this.clientDownstream.writable);
+ 		} catch {
+ 			// Ignore errors from fetch()
+@@ -463,8 +468,15 @@ function guessProtocol(port: number, data: Uint8Array) {
+ export class RawBytesFetch {
+ 	/**
+ 	 * Streams a HTTP response including the status line and headers.
++	 *
++	 * @param bodyToBuffer - The request body, when parseHttpRequest() could
++	 * not stream it. It is read in full and sent as the request body.
+ 	 */
+-	static fetchRawResponseBytes(request: Request, corsProxyUrl?: string) {
++	static fetchRawResponseBytes(
++		request: Request,
++		corsProxyUrl?: string,
++		bodyToBuffer?: ReadableStream<Uint8Array>
++	) {
+ 		// This initially used a TransformStream and piped the response
+ 		// body to the writable side of the TransformStream.
+ 		//
+@@ -474,6 +486,13 @@ export class RawBytesFetch {
+ 			async start(controller) {
+ 				let response: Response;
+ 				try {
++					if (bodyToBuffer) {
++						request = new Request(request, {
++							body: await new Response(
++								bodyToBuffer
++							).arrayBuffer(),
++						});
++					}
+ 					response = await fetchWithCorsProxy(
+ 						request,
+ 						undefined,
+@@ -745,16 +764,28 @@ export class RawBytesFetch {
+ 			parsedHeaders.headers
+ 		);
+
++		/**
++		 * Firefox has no streamed uploads: it sends a ReadableStream body as
++		 * the text "[object ReadableStream]". There the request is built
++		 * without the stream, and the caller hands the stream to
++		 * fetchRawResponseBytes(), which buffers it. The body cannot be
++		 * buffered here: with "Expect: 100-continue", curl sends it only
++		 * after the caller has answered "100 Continue".
++		 */
++		const streamBody =
++			outboundBodyStream !== undefined &&
++			(await supportsReadableStreamBody());
+ 		const request = new Request(url.toString(), {
+ 			method: parsedHeaders.method,
+ 			headers: requestHeaders,
+-			body: outboundBodyStream,
++			body: streamBody ? outboundBodyStream : undefined,
+ 			// @ts-expect-error duplex is required for streaming request bodies
+-			duplex: outboundBodyStream ? 'half' : undefined,
++			duplex: streamBody ? 'half' : undefined,
+ 		});
+ 		return {
+ 			request,
+ 			expectsContinue,
++			bodyToBuffer: streamBody ? undefined : outboundBodyStream,
+ 		};
+ 	}
+
+diff --git a/packages/php-wasm/web/src/test/tcp-over-fetch-websocket.spec.ts b/packages/php-wasm/web/src/test/tcp-over-fetch-websocket.spec.ts
+index 152b5a8..9e8dac1 100644
+--- a/packages/php-wasm/web/src/test/tcp-over-fetch-websocket.spec.ts
++++ b/packages/php-wasm/web/src/test/tcp-over-fetch-websocket.spec.ts
+@@ -2,6 +2,7 @@ import {
+ 	TCPOverFetchWebsocket,
+ 	RawBytesFetch,
+ } from '../lib/tcp-over-fetch-websocket';
++import { __testing } from '@php-wasm/web-service-worker';
+ import express, { type Express } from 'express';
+ import http from 'http';
+ import https from 'https';
+@@ -1047,6 +1048,109 @@ describe('RawBytesFetch', () => {
+ 		const requestBody = await new Response(request.body).text();
+ 		expect(requestBody).toEqual(body);
+ 	});
++
++	/**
++	 * Firefox sends a ReadableStream request body as the text
++	 * "[object ReadableStream]". Without streamed uploads, the body
++	 * is handed back separately and buffered before the fetch.
++	 */
++	describe('without streamed uploads (Firefox)', () => {
++		beforeEach(() => {
++			__testing.setStreamBodySupported(false);
++		});
++		afterEach(() => {
++			__testing.resetStreamBodySupported();
++		});
++
++		it('parseHttpRequest leaves the body out of the request and returns it to buffer', async () => {
++			const body = 'hello=world&from=playground';
++			let sendBody: () => void = () => {};
++			const { request, bodyToBuffer } =
++				await RawBytesFetch.parseHttpRequest(
++					new ReadableStream({
++						start(controller) {
++							// Like curl with "Expect: 100-continue": the
++							// body arrives only after parseHttpRequest
++							// has returned.
++							controller.enqueue(
++								new TextEncoder().encode(
++									`POST /echo HTTP/1.1\r\nHost: example.com\r\nContent-Length: ${body.length}\r\nExpect: 100-continue\r\n\r\n`
++								)
++							);
++							sendBody = () =>
++								controller.enqueue(
++									new TextEncoder().encode(body)
++								);
++						},
++					}),
++					'example.com',
++					'https'
++				);
++			expect(request.method).toEqual('POST');
++			expect(request.body).toBeNull();
++			sendBody();
++			expect(await new Response(bodyToBuffer).text()).toEqual(body);
++		});
++
++		it('parseHttpRequest ends a chunked body to buffer at the last chunk while the socket stays open', async () => {
++			let sendChunks: () => void = () => {};
++			const { request, bodyToBuffer } =
++				await RawBytesFetch.parseHttpRequest(
++					new ReadableStream({
++						start(controller) {
++							controller.enqueue(
++								new TextEncoder().encode(
++									`POST /echo HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: chunked\r\nExpect: 100-continue\r\n\r\n`
++								)
++							);
++							// The socket is never closed: the body must end
++							// at the terminating zero-length chunk.
++							sendChunks = () =>
++								controller.enqueue(
++									new TextEncoder().encode(
++										'6\r\nhello=\r\n5\r\nworld\r\n0\r\n\r\n'
++									)
++								);
++						},
++					}),
++					'example.com',
++					'https'
++				);
++			expect(request.body).toBeNull();
++			sendChunks();
++			expect(await new Response(bodyToBuffer).text()).toEqual(
++				'hello=world'
++			);
++		});
++
++		it('fetchRawResponseBytes sends the buffered body', async () => {
++			const body = 'hello=world&from=playground';
++			const originalFetch = globalThis.fetch;
++			let sentBody: string | undefined;
++			globalThis.fetch = async (input: RequestInfo | URL) => {
++				sentBody = await (input as Request).text();
++				return new Response('ok');
++			};
++			try {
++				const stream = RawBytesFetch.fetchRawResponseBytes(
++					new Request('https://example.com/echo', {
++						method: 'POST',
++					}),
++					undefined,
++					new ReadableStream({
++						start(controller) {
++							controller.enqueue(new TextEncoder().encode(body));
++							controller.close();
++						},
++					})
++				);
++				expect(await new Response(stream).text()).toContain('ok');
++				expect(sentBody).toEqual(body);
++			} finally {
++				globalThis.fetch = originalFetch;
++			}
++		});
++	});
+ });
+
+ type MakeRequestOptions = {

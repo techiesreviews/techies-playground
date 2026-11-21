@@ -70,3 +70,13 @@ pipeline deploy the site to Cloudflare.
 - **WordPress sync:** `.github/workflows/sync-wordpress-release.yml` opens a daily
   `automation/wordpress-<version>` PR into `dev` when WordPress.org ships a new stable release; it
   goes live with the next release.
+- **Playground sync:** `.github/workflows/sync-playground-release.yml` opens one daily
+  `automation/playground-<version>` PR into `dev` when WordPress Playground releases. It moves
+  every Playground package, the client and the self-hosted build together, and passes tests,
+  build, npm audit, the Playground advisory check and a boot test first. It also checks that
+  `playground-host/playground-core.patch` still applies to the new release, because the preview
+  build applies that hash-checked patch and fails if it doesn't. Merging updates the
+  previews only; releasing it to `main` needs Lex's approval every time.
+- **Security checks:** `.github/workflows/security-checks.yml` runs npm audit, the Playground
+  advisory check (`scripts/check-playground-advisories.mjs`) and open Dependabot alerts daily and
+  on pushes to `dev` (Dependabot alerts not on pushes).
