@@ -57,14 +57,15 @@ test('Run checks and Open in are at least 44 px tall wherever a touchscreen exis
   assert.doesNotMatch(openButton, /pointer-fine:hidden/, 'Open in: no tap area that a mouse-first touchscreen laptop hides')
 })
 
-test('below 360 px the bar is tighter, so Close stays on screen at 320 px on a full bar', () => {
+test('below 384 px the bar is tighter, so Close stays on screen on a full bar from 320 px', () => {
   // xs is a theme breakpoint in rem like sm and md, so larger text tightens the bar sooner.
+  // 384 px, not 360: at 360 px a full bar with two-digit counts put Close 3.3 px off screen.
   const styles = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
-  assert.match(styles, /@theme \{[^}]*--breakpoint-xs: 22\.5rem;/)
+  assert.match(styles, /@theme \{[^}]*--breakpoint-xs: 24rem;/)
   const barRow = app.slice(app.lastIndexOf('<div className="', app.indexOf('{confirmingPlaygroundClose ? (')))
   assert.match(barRow.match(/className="([^"]*)"/)[1], /\bmax-sm:gap-2\.5 max-xs:gap-1\b/)
   const closeButton = app.slice(app.indexOf('aria-label="Close Playground"'), app.indexOf('</button>', app.indexOf('aria-label="Close Playground"')))
-  // Every bar button: even 0.5 rem padding around its icon below 360 px.
+  // Every bar button: even 0.5 rem padding around its icon below 384 px.
   const buttonClasses = [
     bar.match(/ref=\{licenseButtonRef\}[\s\S]*?className="([^"]*)"/)[1],
     bar.match(/onClick=\{exportSiteSnapshot\}\s*className="([^"]*)"/)[1],

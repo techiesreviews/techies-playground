@@ -155,7 +155,7 @@ const CHANGELOG_ENTRIES = [
     summary: 'The Updates note says when every update failed, the top bar fits on the smallest phones, and the Checks numbers stay readable with larger text.',
     changes: [
       'When every plugin and theme update fails at start, the Updates note now says Updates failed at start instead of Updated at start.',
-      'On phones narrower than 360 px, the top bar is a little tighter, so the Close button is always fully on screen and easy to tap.',
+      'On small phones (narrower than 384 px), the top bar is a little tighter, so the Close button is fully on screen and easy to tap.',
       'In the Checks panel, the four numbers switch to two columns when the panel is narrow or your text is larger, so each number stays inside its box.',
       'With reduce motion turned on in your system settings, the spinners for updates and checks stand still instead of turning slowly.',
     ],

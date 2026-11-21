@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef } from 'react'
 import { ArrowPathIcon, ExclamationTriangleIcon } from '@heroicons/react/16/solid'
-import { updatesLabel, updatesNoteHeading } from './lib/plugin-updates'
+import { updatesLabel, updatesNoteHeading, updatesOnlyFailed } from './lib/plugin-updates'
 
 export const BAR_BUTTON_CLASS = 'relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white tabular-nums ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-md:px-2.5 max-xs:px-2 disabled:cursor-not-allowed disabled:opacity-50 aria-expanded:bg-white/15'
 
@@ -53,8 +53,7 @@ export function UpdatesControl({ updates, open, onOpenChange, buttonRef }) {
   const result = updates.state === 'done' ? updates.result : null
   // Nothing was updated because the step failed or networking is blocked.
   const notRun = updates.state === 'error' || updates.state === 'skipped'
-  // The step ran, nothing was updated and something failed ("Update failed").
-  const onlyFailed = Boolean(result && !result.updated.length && result.failed.length)
+  const onlyFailed = updatesOnlyFailed(updates)
   const title = !ready
     ? 'Available when setup finishes'
     : updates.state === 'error' || onlyFailed
