@@ -12,8 +12,14 @@ test('the Updates button shows how many failed next to what updated', () => {
   assert.match(button, /\{failed && \(/)
   assert.match(button, /ExclamationTriangleIcon/)
   // The icon is hidden from screen readers, so a separator keeps the count apart from the note.
-  // Up to 767 px the mark is the icon alone, so the count-only bar still fits from 641 px.
-  assert.match(button, /<span className="sr-only">, <\/span>\s*<span className="max-md:sr-only">\{failed\} failed<\/span>/)
+  // Up to 1040 px the mark is the icon alone, like the bar's other notes, so a full bar with
+  // every label showing from 768 px still keeps Close on screen.
+  assert.match(button, /<span className="sr-only">, <\/span>\s*<span className="max-\[1041px\]:sr-only">\{failed\} failed<\/span>/)
+})
+
+test('up to 1040 px "networking blocked" and "failed" after Updates are for screen readers only', () => {
+  // The note without a count (skipped or error) is hidden visually, not removed.
+  assert.match(button, /\$\{count \? 'max-\[1041px\]:hidden' : 'max-\[1041px\]:sr-only'\}/)
 })
 
 test('only the name in the note is cut short, so the versions and +N always show', () => {

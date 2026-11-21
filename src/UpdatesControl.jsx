@@ -67,11 +67,12 @@ export function UpdatesControl({ updates, open, onOpenChange, buttonRef }) {
         {updates.state === 'running' ? <Spinner className="text-neutral-300" /> : <ArrowPathIcon className="size-4 shrink-0 fill-neutral-300" />}
         {/* Up to 767 px the bar buttons show their icons only, so Close stays on a full bar. */}
         <span className="shrink-0 whitespace-nowrap max-md:sr-only">{label}</span>
-        {/* Up to 1040 px a change list shortens to its count. Wider, a long name is cut short,
+        {/* Up to 1040 px a change list shortens to its count, and "networking blocked" or
+            "failed" is for screen readers only. Wider, a long name is cut short,
             down to nothing on a full bar, before its versions and +N; only very long
             versions are clipped as a last resort. */}
         {(note || noteEnd) && (
-          <span className={`flex min-w-0 overflow-hidden font-normal whitespace-pre text-neutral-300 ${count ? 'max-[1041px]:hidden' : 'max-md:sr-only'}`}>
+          <span className={`flex min-w-0 overflow-hidden font-normal whitespace-pre text-neutral-300 ${count ? 'max-[1041px]:hidden' : 'max-[1041px]:sr-only'}`}>
             {count ? (note ? ': ' : ':') : '· '}
             <span className="min-w-0 max-w-48 truncate" title={note}>{note}</span>
             {noteEnd}
@@ -86,7 +87,7 @@ export function UpdatesControl({ updates, open, onOpenChange, buttonRef }) {
           <span className="inline-flex items-center gap-1 font-normal whitespace-nowrap text-amber-300">
             <ExclamationTriangleIcon className="size-3.5 shrink-0 fill-amber-300" aria-hidden="true" />
             <span className="sr-only">, </span>
-            <span className="max-md:sr-only">{failed} failed</span>
+            <span className="max-[1041px]:sr-only">{failed} failed</span>
           </span>
         )}
       </button>

@@ -38,7 +38,7 @@ test('up to 767 px the bar buttons show their icons only, so Close stays on a fu
 test('each pixel breakpoint in the bar hides and shows at one width, so no window width gets both or neither', () => {
   // Tailwind reads max-[Npx] as "narrower than N px" and min-[Npx] as "N px and wider", so a
   // pair only meets when both name the same N.
-  const source = `${checksButton}${updatesControl}`
+  const source = `${bar}${checksButton}${updatesControl}`
   const below = new Set([...source.matchAll(/max-\[(\d+)px\]:/g)].map((match) => match[1]))
   const from = new Set([...source.matchAll(/min-\[(\d+)px\]:/g)].map((match) => match[1]))
   assert.ok(below.size && from.size, 'found the breakpoints')
