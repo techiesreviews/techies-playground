@@ -252,7 +252,9 @@ if ( isset( $_GET['techies-measure'] ) ) {
 const PAGE_BASE = 'https://site.invalid'
 
 // The page to measure: the frame's current page with techies-measure=1 (and without the
-// techies-check request that opens a tool there).
+// techies-check request that opens a tool there). A page whose address carries a nonce ran
+// an action from it (update.php?action=upgrade-plugin&_wpnonce=…), so loading it again would
+// repeat that action: the dashboard is measured instead.
 export function measurePath(currentPath) {
   let url
   try {
@@ -260,7 +262,8 @@ export function measurePath(currentPath) {
   } catch {
     url = new URL('/wp-admin/', PAGE_BASE)
   }
-  if (url.origin !== PAGE_BASE) url = new URL('/wp-admin/', PAGE_BASE)
+  const ranAction = [...url.searchParams.keys()].some((key) => /nonce$/i.test(key))
+  if (url.origin !== PAGE_BASE || ranAction) url = new URL('/wp-admin/', PAGE_BASE)
   url.searchParams.delete('techies-check')
   url.searchParams.set('techies-measure', '1')
   return `${url.pathname}${url.search}`

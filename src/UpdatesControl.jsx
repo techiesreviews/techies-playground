@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { ArrowPathIcon } from '@heroicons/react/16/solid'
+import { ArrowPathIcon, ExclamationTriangleIcon } from '@heroicons/react/16/solid'
 import { updatesLabel } from './lib/plugin-updates'
 
 export const BAR_BUTTON_CLASS = 'relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white tabular-nums ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-sm:px-2.5 disabled:cursor-not-allowed disabled:opacity-50 aria-expanded:bg-white/15'
@@ -18,7 +18,7 @@ export const clockTime = (date) => date.toLocaleTimeString([], { hour: '2-digit'
 // opens a note with every change, what failed, and what was already current.
 export function UpdatesControl({ updates, open, onOpenChange, buttonRef }) {
   const wrapRef = useRef(null)
-  const { label, note, count, ready } = updatesLabel(updates)
+  const { label, note, count, failed, ready } = updatesLabel(updates)
 
   useEffect(() => {
     if (!open) return undefined
@@ -54,10 +54,16 @@ export function UpdatesControl({ updates, open, onOpenChange, buttonRef }) {
         {updates.state === 'running' ? <Spinner className="text-neutral-300" /> : <ArrowPathIcon className="size-4 shrink-0 fill-neutral-300" />}
         <span className="max-sm:sr-only">{label}</span>
         {/* Where the bar runs out of room, a change list shortens to its count. */}
-        {note && <span className={`font-normal text-neutral-300 ${count ? 'max-[1040px]:hidden' : 'max-sm:sr-only'}`}>{count ? ': ' : ' · '}{note}</span>}
+        {note && <span className={`max-w-64 truncate font-normal text-neutral-300 ${count ? 'max-[1040px]:hidden' : 'max-sm:sr-only'}`}>{count ? ': ' : ' · '}{note}</span>}
         {count && (
           <span className="font-normal text-neutral-300 min-[1041px]:hidden">
             <span className="max-sm:sr-only">· </span>{count}
+          </span>
+        )}
+        {failed && (
+          <span className="inline-flex items-center gap-1 font-normal text-amber-300">
+            <ExclamationTriangleIcon className="size-3.5 shrink-0 fill-amber-300" aria-hidden="true" />
+            <span className="max-sm:sr-only">{failed} failed</span>
           </span>
         )}
       </button>
@@ -77,9 +83,9 @@ export function UpdatesControl({ updates, open, onOpenChange, buttonRef }) {
             <>
               {result.updated.length > 0 && (
                 <ul role="list" className="mt-2">
-                  {result.updated.map((entry) => (
-                    <li key={entry.name} className="flex justify-between gap-3 border-t border-neutral-950/10 py-1.5">
-                      <span className="min-w-0">{entry.name}</span>
+                  {result.updated.map((entry, index) => (
+                    <li key={index} className="flex justify-between gap-3 border-t border-neutral-950/10 py-1.5">
+                      <span className="min-w-0 [overflow-wrap:anywhere]">{entry.name}</span>
                       <span className="whitespace-nowrap text-neutral-600 tabular-nums">{entry.from} → <b className="font-semibold text-teal-800">{entry.to}</b></span>
                     </li>
                   ))}
@@ -87,8 +93,8 @@ export function UpdatesControl({ updates, open, onOpenChange, buttonRef }) {
               )}
               {result.failed.length > 0 && (
                 <ul role="list" className="mt-2">
-                  {result.failed.map((entry) => (
-                    <li key={entry.name} className="border-t border-neutral-950/10 py-1.5">
+                  {result.failed.map((entry, index) => (
+                    <li key={index} className="border-t border-neutral-950/10 py-1.5 [overflow-wrap:anywhere]">
                       <span className="font-medium">{entry.name}</span>
                       <span className="block text-red-700">Not updated: {entry.message}</span>
                     </li>
