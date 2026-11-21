@@ -57,11 +57,14 @@ function get_site_transient( $name ) {
 	return (object) array( 'response' => $GLOBALS['theme_offers'] );
 }
 function get_plugins() { return $GLOBALS['plugins']; }
-function is_plugin_active( $file ) { return in_array( $file, $GLOBALS['active'], true ); }
+// On Multisite a plugin can be on for the whole network; is_plugin_active() counts that too.
+$GLOBALS['network_active'] = array();
+function is_plugin_active_for_network( $file ) { return in_array( $file, $GLOBALS['network_active'], true ); }
+function is_plugin_active( $file ) { return in_array( $file, $GLOBALS['active'], true ) || is_plugin_active_for_network( $file ); }
 function activate_plugin( $file, $redirect, $network, $silent ) {
 	$GLOBALS['reactivated'][] = array( $file, $silent );
 	if ( 'broken/broken.php' === $file ) { return new WP_Error( 'incompatible', 'This plugin does not work with your version of PHP.' ); }
-	$GLOBALS['active'][] = $file;
+	if ( $network ) { $GLOBALS['network_active'][] = $file; } else { $GLOBALS['active'][] = $file; }
 	return null;
 }
 function wp_clean_plugins_cache( $clear ) {}
@@ -80,6 +83,7 @@ class Plugin_Upgrader {
 	public function __construct( public $skin ) {}
 	public function upgrade( $file, $args ) {
 		$GLOBALS['active'] = array_values( array_diff( $GLOBALS['active'], array( $file ) ) );
+		$GLOBALS['network_active'] = array_values( array_diff( $GLOBALS['network_active'], array( $file ) ) );
 		$package = $GLOBALS['offers'][ $file ]->package;
 		if ( 'refuse' === $package ) { return new WP_Error( 'no_package', 'Update package not available.' ); }
 		if ( 'silent' === $package ) { $this->skin->messages[] = '<p>Could not copy files.</p>'; return false; }
@@ -88,7 +92,7 @@ class Plugin_Upgrader {
 	}
 }
 class Theme_Upgrader { public function __construct( public $skin ) {} public function upgrade( $slug, $args ) { return true; } }
-register_shutdown_function( function () { echo "\\nSTATE:" . json_encode( array( 'active' => $GLOBALS['active'], 'reactivated' => $GLOBALS['reactivated'] ?? array(), 'deleted' => $GLOBALS['deleted'] ?? array() ) ); } );
+register_shutdown_function( function () { echo "\\nSTATE:" . json_encode( array( 'active' => $GLOBALS['active'], 'network_active' => $GLOBALS['network_active'], 'reactivated' => $GLOBALS['reactivated'] ?? array(), 'deleted' => $GLOBALS['deleted'] ?? array() ) ); } );
 `
 
 async function run(setup = '') {
@@ -149,4 +153,14 @@ $GLOBALS['answers']['plugins'] = array( new WP_Error( 'http_request_failed', 'SS
 `)
   assert.ok(!result.failed.some((entry) => entry.name === 'Plugin update check'), JSON.stringify(result.failed))
   assert.deepEqual(result.current, [{ name: 'Query Monitor', version: '4.1.1' }, { name: 'Current Theme', version: '1.3' }])
+})
+
+test('a plugin on for the whole network of a Multisite test site is on for the whole network again after its update', async () => {
+  const { result, state } = await run(`
+$GLOBALS['active'] = array_values( array_diff( $GLOBALS['active'], array( 'wp-2fa/wp-2fa.php' ) ) );
+$GLOBALS['network_active'] = array( 'wp-2fa/wp-2fa.php' );
+`)
+  assert.ok(result.updated.some((entry) => entry.name === 'WP 2FA'), JSON.stringify(result))
+  assert.deepEqual(state.network_active, ['wp-2fa/wp-2fa.php'])
+  assert.ok(!state.active.includes('wp-2fa/wp-2fa.php'), 'not switched on for one site only')
 })

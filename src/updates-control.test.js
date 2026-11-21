@@ -47,6 +47,18 @@ test('where a name shows, the Updates button shrinks instead of pushing Close of
   assert.match(button, /<span className="inline-flex [^"]*\bwhitespace-nowrap\b[^"]*text-amber-300">/)
 })
 
+test('the note can be reached and scrolled with the keyboard, and takes focus when it opens', () => {
+  const note = source.slice(source.indexOf('role="dialog"') - 200, source.indexOf('<h3'))
+  assert.match(note, /ref=\{noteRef\}/)
+  assert.match(note, /role="dialog"/)
+  assert.match(note, /aria-label="Updated at start"/)
+  assert.match(note, /tabIndex=\{0\}/)
+  assert.match(note, /focus-visible:outline-2/)
+  // Opening the note moves focus into it, so arrow keys scroll a long list; Escape returns focus
+  // to Updates (App.jsx).
+  assert.match(source, /useEffect\(\(\) => \{\s*if \(open\) noteRef\.current\?\.focus\(\)\s*\}, \[open\]\)/)
+})
+
 test('rows in the note are keyed by position, not by a name two items can share', () => {
   assert.doesNotMatch(source, /key=\{entry\.name\}/)
   assert.equal(source.match(/\[overflow-wrap:anywhere\]/g).length, 3, 'updated names, failed rows and the Already current line wrap long names')
