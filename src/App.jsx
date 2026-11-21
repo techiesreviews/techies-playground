@@ -154,21 +154,20 @@ const CHANGELOG_ENTRIES = [
     title: 'Automatic plugin updates and a new Checks panel',
     summary: 'Test sites now update plugins and themes as they start, run checks automatically once ready, and show results in a Checks panel next to WordPress.',
     changes: [
-      'Plugins and themes update automatically while your test site starts, and active plugins stay active afterward. Click Updates in the top bar to see old and new versions, anything that could not update (including if an update check failed), and what was already up to date. Setups with networking turned off skip updates and say so on the button.',
-      'When your setup includes Query Monitor or Code Profiler, checks run automatically once the site is ready. If a plugin in your setup still needs its license activated, checks wait and the Checks button prompts you to activate licenses first; once you activate them in WordPress, click Run checks in the panel.',
-      'Click Checks in the top bar to open the new Checks panel beside WordPress. It shows one clear verdict and four key numbers: page time, memory, database queries, and PHP errors. Failed checks and warnings appear right at the top, while passed checks stay neatly folded into one line.',
-      'Click any check row to see what was measured or jump straight to Query Monitor or Code Profiler for full details, and use Run again to measure whichever page you are viewing now.',
-      'Replaces the old manual Update all button and Checks dropdown menu.',
+      'Plugins and themes update automatically while your test site starts, and active plugins stay active afterward. The Updates button in the top bar shows what changed (from old to new version); click it to see every update, anything that could not update or an update check that failed, and what was already up to date. Setups with networking turned off skip updates and say so on the button.',
+      'When your setup includes Query Monitor or Code Profiler, checks run automatically once the site is ready. If a plugin in your setup still needs its license activated, checks wait and the Checks button asks you to activate licenses first; once you activate them in WordPress, click Run checks in the panel.',
+      'Click Checks in the top bar to open the Checks panel beside WordPress. It shows one verdict and four numbers (page time, memory, database queries, and PHP errors). Failed checks and warnings appear first, while passed checks fold into one line.',
+      'Click any check row to see what it measured, then use Open in Query Monitor or Open in Code Profiler for full details. Click Run again to measure the page currently open in WordPress.',
+      'Automatic updates at start and the Checks panel replace the old Update all button and Checks menu.',
     ],
   },
   {
     version: '0.10.5',
     date: 'November 20, 2026',
-    title: 'Reliable plugin requests in Firefox and cleaner file downloads',
-    summary: 'Plugin requests sent from Firefox now arrive with all their data intact, and partial downloads of large or compressed files come through cleanly.',
+    title: 'Plugin requests in Firefox keep their details',
+    summary: 'In Firefox, plugin requests sent to other sites now arrive with all their data intact, as they already did in Chrome.',
     changes: [
       'In Firefox, when a plugin sends data to another site through the proxy (such as a license activation or form submission), the request now arrives complete instead of empty. This fixes every plugin, not just Freemius ones.',
-      'Partial file downloads through the proxy now come through cleanly even when a server compresses files, and large partial downloads are handled safely instead of failing or returning corrupted data.',
     ],
   },
   {
@@ -178,24 +177,24 @@ const CHANGELOG_ENTRIES = [
     summary: 'Uploaded theme buttons and the Add key button are bigger and easier to tap on phones and touchscreen laptops.',
     changes: [
       'In Choose themes, the replace and remove buttons for uploaded themes are larger and spaced apart on touchscreens so you will not tap the wrong one by mistake. They stay visible on touchscreen laptops and move onto their own line on narrow phones.',
-      'In Choose plugins, the Add key button is taller on touchscreens and responds only within its own edges. On mouse-only devices, both keep their compact layout.',
+      'In Choose plugins, the Add key button is taller on touchscreens and responds only within its own edges. With only a mouse, both the theme buttons and Add key keep their smaller size.',
     ],
   },
   {
     version: '0.10.3',
     date: 'November 18, 2026',
     title: 'Easier-to-tap plugin replace and remove buttons',
-    summary: 'Uploaded plugin buttons are bigger and better spaced on touchscreens so tapping replace will not accidentally remove a plugin.',
+    summary: 'Uploaded plugin buttons are bigger and spaced apart on touchscreens so tapping replace will not accidentally remove a plugin.',
     changes: [
-      'In Choose plugins, the replace and remove buttons on uploaded plugins have larger, clearly separated tap targets on phones and touchscreen laptops.',
-      'On narrow phones, the buttons move cleanly onto their own line; with only a mouse, they stay compact.',
+      'In Choose plugins, the replace and remove buttons on uploaded plugins have larger, separated tap targets on phones and touchscreen laptops.',
+      'On narrow phones, the buttons move onto their own line; with only a mouse, they keep their smaller size.',
     ],
   },
   {
     version: '0.10.2',
     date: 'November 18, 2026',
     title: 'Cleaner uploaded plugin rows',
-    summary: 'Saved license keys now appear as a small key icon alongside the replace and remove buttons.',
+    summary: 'Saved license keys now appear as a small key icon next to the replace and remove buttons.',
     changes: [
       'In Choose plugins, the Key saved badge is now a compact key icon next to replace and remove. With a mouse, all three icons appear on hover or keyboard focus; on touchscreens, they stay visible.',
     ],
