@@ -156,7 +156,7 @@ const CHANGELOG_ENTRIES = [
     changes: [
       'When every plugin and theme update fails at start, the Updates note now says Updates failed at start instead of Updated at start.',
       'On small phones (narrower than 384 px), the top bar is a little tighter, so the Close button is fully on screen and easy to tap.',
-      'In the Checks panel, the four numbers switch to two columns when the panel is narrow or your text is larger, so each number stays inside its box.',
+      'In the Checks panel, the four numbers move to two columns when the panel is narrow or your text is larger, or to one column with very large text on a phone, so each number stays inside its box.',
       'With reduce motion turned on in your system settings, the spinners for updates and checks stand still instead of turning slowly.',
     ],
   },
