@@ -147,7 +147,7 @@ OPFS contains the WordPress filesystem and SQLite-backed site state. It is disti
 
 ## Premium plugins without a licence
 
-When checks are in the setup, `FREEMIUS_LICENSES_CODE` (`src/lib/license-fill.js`) runs once per launch after the key fill and prints one line that starts with `TECHIES_FREEMIUS_LICENSES:` followed by JSON with two lists of plugin folder names, for example `{"unlicensed":["wsal-premium"],"licensed":["menu-image"]}`. `unlicensed` names each Freemius plugin whose premium build cannot use its premium code yet; `licensed` names each Freemius plugin whose licence is already active in the site (`can_use_premium_code()`). It carries no key or licence data. The launcher keeps only names that are valid folder names; the lists live in memory for the launch (`licensedPackageIds`, `siteLicensedIds`) and are not stored. When the probe fails or its line is missing, the status is unknown and every launched uploaded plugin counts as needing a licence, so the checks wait.
+When checks are in the setup, `FREEMIUS_LICENSES_CODE` (`src/lib/license-fill.js`) runs once per launch after the key fill and prints one line that starts with `TECHIES_FREEMIUS_LICENSES:` followed by JSON with two lists of plugin folder names, for example `{"unlicensed":["wsal-premium"],"licensed":["menu-image"]}`. `unlicensed` names each Freemius plugin whose premium build cannot use its premium code yet; `licensed` names each Freemius plugin whose licence is already active in the site (`can_use_premium_code()`, which includes an expired licence that still unlocks the premium features). It carries no key or licence data. The launcher keeps only names that are valid folder names; the lists live in memory for the launch (`licensedPackageIds`, `siteLicensedIds`) and are not stored. When the probe fails or its line is missing, the status is unknown and every launched uploaded plugin counts as needing a licence, so the checks wait.
 
 ## Plugin updates at start
 
@@ -160,6 +160,8 @@ When checks are in the setup, `FREEMIUS_LICENSES_CODE` (`src/lib/license-fill.js
   "current": [{ "name": "Plugin or theme name", "version": "1.1.0" }]
 }
 ```
+
+When WordPress.org does not answer the plugin or theme update check, `failed` holds an entry named `Plugin update check` or `Theme update check` whose message gives the error or HTTP status, and `current` lists nothing for that kind.
 
 The launcher keeps the parsed result only in memory (`pluginUpdates` state: `idle`, `running`, `skipped` when networking is off, `done` with the result, `error` with a message). It is not saved to localStorage, the spin-up record or the recipe.
 

@@ -10,6 +10,7 @@ import {
   pluginFolderFromAssetPath,
 } from './license-fill.js'
 import * as licenseFill from './license-fill.js'
+import { checksGate } from './checks.js'
 
 test('finds the plugin folder from the installed asset path', () => {
   assert.equal(pluginFolderFromAssetPath('/wordpress/wp-content/plugins/menu-image'), 'menu-image')
@@ -90,6 +91,16 @@ test('a licence WordPress reports as active counts even without a fill result', 
   const folders = new Map([['wsal', 'wsal-premium'], ['menu-image', 'menu-image']])
   assert.deepEqual(activeInSite({ unlicensed: [], licensed: ['menu-image', 'not-launched'] }, folders), ['menu-image'])
   assert.deepEqual(activeInSite(null, folders), [])
+})
+
+test('Start without keys: a licence the site reports as active opens the checks, an unknown status keeps them waiting', () => {
+  const { licensesNeeded, activeInSite } = licenseFill
+  const folders = new Map([['wsal', 'wsal-premium']])
+  // The key fill was skipped, so there are no fill results. The licensed list includes a
+  // licence that has expired but still unlocks the premium features (Lex, 2026-11-21).
+  const licensed = { unlicensed: [], licensed: ['wsal-premium'] }
+  assert.deepEqual(checksGate(licensesNeeded(['wsal'], licensed, folders), [], activeInSite(licensed, folders)), { ready: true, active: 1, total: 1 })
+  assert.deepEqual(checksGate(licensesNeeded(['wsal'], null, folders), [], activeInSite(null, folders)), { ready: false, active: 0, total: 1 })
 })
 
 test('reads the Freemius licence status through one PHP run, and reports unknown when that run fails', async () => {

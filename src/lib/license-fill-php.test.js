@@ -97,10 +97,16 @@ class OldSdk {
 	public function is_plugin() { return true; }
 	public function get_plugin_basename() { return 'old-sdk/old-sdk.php'; }
 }
+// An expired licence whose plan keeps its premium features: Freemius no longer calls it
+// active and valid, but the premium code still runs.
+class ExpiredFreemius extends Freemius {
+	public function has_active_valid_license() { return false; }
+}
 Freemius::$instances = array(
 	new Freemius( 'menu-image/menu-image.php', false, false ),
 	new Freemius( 'wsal-premium/wp-security-audit-log.php', true, false ),
 	new Freemius( 'licensed-premium/licensed-premium.php', true, true ),
+	new ExpiredFreemius( 'expired-premium/expired-premium.php', true, true ),
 	new Freemius( 'licensed-free/licensed-free.php', false, true ),
 	new Freemius( 'some-theme/functions.php', true, false, false ),
 	new OldSdk(),
@@ -113,7 +119,9 @@ test('lists premium Freemius plugins that cannot use their premium code yet, and
   php.writeFile('/wordpress/wp-load.php', PREMIUM_WP_LOAD)
   const response = await php.run({ code: FREEMIUS_LICENSES_CODE })
   assert.equal(response.errors, '', response.errors)
-  assert.deepEqual(parseFreemiusLicenses(response.text), { unlicensed: ['wsal-premium'], licensed: ['licensed-premium', 'licensed-free'] })
+  // Lex, 2026-11-21: an expired licence that still unlocks the premium features counts as
+  // active, so the checks start.
+  assert.deepEqual(parseFreemiusLicenses(response.text), { unlicensed: ['wsal-premium'], licensed: ['licensed-premium', 'expired-premium', 'licensed-free'] })
 })
 
 test('a site without Freemius has no premium plugin waiting for a licence', async () => {
