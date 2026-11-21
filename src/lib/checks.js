@@ -450,7 +450,7 @@ export const LIMIT_ROWS = Object.freeze([
   { id: 'queries', tool: 'query-monitor', name: 'Database queries', good: `up to ${CHECK_LIMITS.queriesWarn}`, medium: `over ${CHECK_LIMITS.queriesWarn}`, bad: '' },
   { id: 'duplicate-queries', tool: 'query-monitor', name: 'Duplicate queries', good: `up to ${CHECK_LIMITS.duplicatesWarn}`, medium: `over ${CHECK_LIMITS.duplicatesWarn}`, bad: '' },
   { id: 'slow-queries', tool: 'query-monitor', name: 'Slow queries', note: `longer than ${CHECK_LIMITS.slowQuerySeconds} s`, good: 'none', medium: '1 or more', bad: '' },
-  { id: 'php-errors', tool: 'query-monitor', name: 'PHP errors', good: 'none', medium: 'notices', bad: 'errors, warnings' },
+  { id: 'php-errors', tool: 'query-monitor', name: 'PHP errors', good: 'none', medium: 'notices, deprecations', bad: 'errors, warnings' },
   { id: 'outside-calls', tool: 'query-monitor', name: 'Calls to other sites', good: 'none failed', medium: 'any failed', bad: '' },
   { id: 'slowest-plugin', tool: 'code-profiler', name: 'Slowest plugin', good: `up to ${CHECK_LIMITS.pluginLoadWarnSeconds} s`, medium: `over ${CHECK_LIMITS.pluginLoadWarnSeconds} s`, bad: '' },
 ].map((row) => Object.freeze(row)))
@@ -470,12 +470,19 @@ export function checksVerdict(report) {
   return { status: 'pass', headline: total === 1 ? 'The check passed' : `All ${total} checks passed`, short: `${total} passed` }
 }
 
-// What a screen reader hears from the bar when the checks start and finish.
+// What a screen reader hears from the bar when the checks start and finish. The frame already
+// announces a page that opens, so a run that starts by itself (auto) says nothing, and its
+// result is heard only when it is news (see checksQuiet).
 export function checksAnnouncement(run) {
-  if (run.state === 'running') return 'Running checks.'
-  if (run.state === 'done') return `Checks${run.title ? ` on ${run.title}` : ''}: ${checksVerdict(run.report).headline}.`
+  if (run.state === 'running') return run.auto ? '' : 'Running checks.'
+  if (run.state === 'done') return run.quiet ? '' : `Checks${run.title ? ` on ${run.title}` : ''}: ${checksVerdict(run.report).headline}.`
   if (run.state === 'error') return `The checks could not run. ${run.message}`
   return ''
+}
+
+// A result that started by itself is news when the panel is open or the verdict changed.
+export function checksQuiet({ auto, panelOpen, previous, report }) {
+  return Boolean(auto && !panelOpen && previous && checksVerdict(previous).headline === checksVerdict(report).headline)
 }
 
 // Which page each site checks now and which waits. The checks run on every page that opens:
@@ -526,6 +533,30 @@ export function createCheckQueue() {
 }
 
 // The page the checks measure, as the panel shows it: see safePageUrl.
+// Open in reloads the frame with techies-check (checkResultsPath). That is the tool's screen,
+// not a page to check: Code Profiler's would otherwise replace the page that was checked.
+export function isCheckToolPage(path) {
+  try {
+    return new URL(path || '/', PAGE_BASE).searchParams.has('techies-check')
+  } catch {
+    return false
+  }
+}
+
+// Measures every page that opens in WordPress. A short wait lets redirects settle, so one visit
+// is one run. The client has no way to unsubscribe, so isCurrent drops a replaced site's pages;
+// canRun holds runs back until the licenses allow the checks.
+export function watchCheckPages(client, { isCurrent, canRun, run, settle = 400 }) {
+  let timer
+  client.onNavigation((path) => {
+    if (isCheckToolPage(path)) return
+    clearTimeout(timer)
+    timer = setTimeout(() => {
+      if (isCurrent() && canRun()) run(path)
+    }, settle)
+  })
+}
+
 export function checkedPagePath(currentPath) {
   const url = safePageUrl(currentPath)
   url.searchParams.delete('techies-check')
@@ -567,7 +598,7 @@ export function evaluateChecks(measurement, checkIds) {
     checks.push(
       {
         id: 'php-errors', tool: 'query-monitor', name: 'PHP errors', status: errorStatus, source,
-        value: errorTotal ? errorParts.slice(0, 2).join(', ') : '0',
+        value: String(errorTotal),
         details: errorTotal ? `${errorParts.join(', ')} on this page.` : 'No errors, warnings or notices on this page.',
         found: foundList('Found on this page', errorTotal, m.errors.map((entry) => ({
           status: entry.kind === 'error' || entry.kind === 'warning' ? 'fail' : 'warn',
@@ -594,7 +625,7 @@ export function evaluateChecks(measurement, checkIds) {
       {
         id: 'duplicate-queries', tool: 'query-monitor', name: 'Duplicate queries', status: m.duplicates > limits.duplicatesWarn ? 'warn' : 'pass', value: String(m.duplicates), source,
         details: m.duplicates ? `${plural(m.duplicates, 'database query', 'database queries')} repeated an earlier one.` : 'No database query ran more than once.',
-        found: foundList('Repeated most', repeated.length, repeated.map((entry) => ({
+        found: foundList('Repeated most', undefined, repeated.map((entry) => ({
           status: 'warn', count: `${entry.count}×`, message: entry.caller || 'Unknown function', where: 'Function that ran it',
         }))),
       },

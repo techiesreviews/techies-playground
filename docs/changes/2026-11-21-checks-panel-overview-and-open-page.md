@@ -97,15 +97,27 @@ Adds `.checks-views`, `.checks-view`, `.checks-info`, `.checks-digit`, `.checks-
 - Keep open and Discard and close each get a centred tap span of at least 2.75 rem.
 - The launcher form's grid column is `grid-cols-1` (`minmax(0, 1fr)`). The setup tabs scroll on their own, but they made a plain `auto` column 304 px wide inside the 280 px form, 4 px past a 320 px page.
 
+### Review round 1 changes
+
+- `watchCheckPages` (src/lib/checks.js) owns the page watcher: it waits 400 ms for the page to settle and skips any address with `techies-check`, so Open in Code Profiler, whose screen keeps the parameter in its address, is not checked as a new page.
+- The PHP errors number is the total; the kinds (`1 warning, 2 notices`) are in the details. A long value could push the panel sideways.
+- A run on a page change keeps the last result for its first 0.6 s, so most runs (about 0.3 s) do not blink the bar and the panel.
+- Screen readers hear no start for a run on a page change, and its result only when the panel is open or the verdict changed (`checksQuiet`). Run again still announces both.
+- A failed run with a check open goes back to the overview, and moves focus to the row only if focus was inside the check.
+- A number that stays on screen rolls from its old value; only a number that just appeared rolls up from 0.
+- The i closes when you click inside WordPress, cut titles and paths show in full on hover, and the medium PHP errors limit reads `notices, deprecations`.
+
 ## Tests and evidence
 
-Before: https://preview-play.techies.tools/ (dev at 9122075). After: a local build of this branch (`VITE_PLAYGROUND_ORIGIN=https://preview-wp.techies.tools npx vite build`, served by `vite preview`). Both were driven by Playwright (Chromium) with Query Monitor and Code Profiler from WordPress.org, a temporary site, networking on, and Plugins as the landing page. "200% text" is `html { font-size: 200% }`.
+Before: https://preview-play.techies.tools/ (dev at 9122075). After: a local build of this branch (`VITE_PLAYGROUND_ORIGIN=https://preview-wp.techies.tools npx vite build`, served by `vite preview`). Both were driven by Playwright (Chromium) with Query Monitor and Code Profiler from WordPress.org, a temporary site, networking on, and Plugins as the landing page. The setup asked for WordPress `latest` and PHP 8.3 (the WordPress release number was not recorded). "200% text" is `html { font-size: 200% }`. The script did not record browser console or network errors, so this record makes no claim about them.
+
+The screenshots were taken before review round 1. The round 1 changes (below) touch behaviour and text, not layout, except that the PHP errors number is now a single total, which is shorter than before; every screenshot here shows 0 errors, so it looks the same.
 
 The app has no dark mode (no dark styles or tokens anywhere), so there are no dark screenshots; light is the only theme.
 
 | Environment | Procedure/command | Expected | Actual | Evidence |
 | --- | --- | --- | --- | --- |
-| Node 24, PHP 8.3 wasm | `npm test` | All pass | 309 of 309 pass | New tests in `checks.test.js`, `checks-php.test.js` and `checks-panel.test.js`, plus a changed `bar-compact-labels.test.js`. Before the change, 11 of the library and PHP tests failed, 5 queue tests failed and 12 panel tests failed. The 320 px column test and the i-placement test each failed before their one-line fix |
+| Node 24, PHP 8.3 wasm | `npm test` | All pass | 316 of 316 pass (309 before review round 1) | New tests in `checks.test.js`, `checks-php.test.js` and `checks-panel.test.js`, plus a changed `bar-compact-labels.test.js`. Before the change, 11 of the library and PHP tests failed, 5 queue tests failed and 12 panel tests failed. The 320 px column test and the i-placement test each failed before their one-line fix |
 | Chromium, after, 1280 px | Launch, wait for the first result, open each of the 8 checks | Each number with its source | "Checks on Plugins: All 8 checks passed." Query Monitor 4.1.1: PHP errors 0, Slow queries 0, Calls to other sites 0 failed, Duplicate queries 0, Database queries 30 ("30 queries, 0.038 s together."), Memory 40 MB ("16% of the site's 256 MB limit."), Page time 0.32 s, each "From Query Monitor 4.1.1 on this page." Slowest plugin 0.01 s, "Query Monitor took the longest to load.", "Timed by the Playground as each plugin loaded. Code Profiler shows the full profile." | ![After, 1280, overview](assets/2026-11-21-tools-388-1280-panel-after.png) |
 | Chromium, after, 1280 px | Press the i, read the link, press Escape | Limits table and the article link; Escape closes it | The table shows the limits from `CHECK_LIMITS`; the link is `https://techies.review/articles/techies-playground-check-score/`; after Escape the i is closed | ![After, the i](assets/2026-11-21-tools-388-1280-info-after.png) |
 | Chromium, after, 1280 px | Open PHP errors, then go to the Dashboard inside WordPress | The check stays open and refreshes for the new page | "Checks on Dashboard: All 8 checks passed."; PHP errors still open; the page line reads "Page checked · 07:16 PM · took 0.33 s Dashboard /wp-admin/index.php" | ![After, check open after the page changed](assets/2026-11-21-tools-388-1280-detail-after-page-change-after.png) |

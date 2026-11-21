@@ -48,13 +48,39 @@ test('the panel uses the words Passed, Warning and Improve', () => {
 test('the panel says which page it checked, and when a check is running', () => {
   assert.match(checksPanel, /Page checked · \$\{clockTime\(run\.time\)\} · took \$\{formatSeconds\(run\.took\)\}/)
   assert.match(checksPanel, /Checking this page…/)
-  assert.match(checksPanel, /className="[^"]*\bfont-mono\b[^"]*">\{run\.path\}/, 'the path is in the code font')
+  assert.match(checksPanel, /className="[^"]*\bfont-mono\b[^"]*" title=\{run\.path\}>\{run\.path\}/, 'the path is in the code font, and a cut path can be read whole')
+  assert.match(checksPanel, /title=\{pageLine\.title\}>\{pageLine\.title\}/, 'a cut page title can be read whole')
 })
 
-test('a check that is open stays open when the page changes', () => {
+test('a check that is open stays open when the page changes, and a failed run goes back to the overview', () => {
   // The open check lives in the panel, not in the run: a new run only refreshes it.
   assert.match(checksPanel, /const \[openId, setOpenId\] = useState\(null\)/)
-  assert.doesNotMatch(checksPanel, /useEffect\(\(\) => \{[^}]*setOpenId\(null\)[^}]*\}, \[run/, 'a new run does not close the open check')
+  const closes = [...checksPanel.matchAll(/setOpenId\(null\)/g)].map((match) => checksPanel.slice(Math.max(0, match.index - 300), match.index))
+  const byRun = closes.filter((before) => /useEffect\(\(\) => \{(?![\s\S]*useEffect)/.test(before))
+  assert.equal(byRun.length, 1, 'one effect closes the check')
+  assert.match(byRun[0], /if \(run\.state !== 'error' \|\| !openId\) return/, 'only a failed run closes it')
+  // Focus follows to the row only when it was inside the check, never out of WordPress.
+  assert.match(byRun[0], /if \(detailRef\.current\?\.contains\(document\.activeElement\)\) focusAfterViewRef\.current = openId/)
+})
+
+test('the i closes on a click inside WordPress, as the Updates note does', () => {
+  const effect = checksPanel.slice(checksPanel.indexOf('// A click outside the i'), checksPanel.indexOf('function showView('))
+  assert.match(effect, /window\.addEventListener\('blur', close\)/)
+  assert.match(effect, /window\.removeEventListener\('blur', close\)/)
+})
+
+test('a new result rolls each number from the one shown before; a number that just appeared rolls from 0', () => {
+  // A number that stays on screen rolls by its own transition, so a digit that did not change stays still.
+  assert.match(checksPanel, /querySelectorAll\('\[data-figure\]:not\(\[data-rolled\]\)'\)/)
+  assert.match(checksPanel, /figure\.dataset\.rolled = ''/)
+})
+
+test('a run on a page change keeps the last result on screen at first, and says nothing new', () => {
+  const run = app.slice(app.indexOf('async function runChecks('), app.indexOf('function watchPages('))
+  assert.match(run, /if \(auto\) runningTimer = window\.setTimeout\(showRunning, 600\)\s+else showRunning\(\)/)
+  assert.match(run, /finally \{\s+window\.clearTimeout\(runningTimer\)/)
+  assert.match(run, /state: 'running', path: page, auto/)
+  assert.match(run, /quiet: checksQuiet\(\{ auto, panelOpen: checksPanelOpenRef\.current, previous: current\.report, report \}\)/)
 })
 
 test('the numbers roll only for new results, and never with reduced motion', () => {
@@ -113,6 +139,6 @@ test('the launcher column shrinks with the page, so 320 px has no 4 px sideways 
 test('the checks run on every page that opens, also with the panel closed', () => {
   assert.match(app, /createCheckQueue\(\)/)
   assert.doesNotMatch(app, /createRunGuard/)
-  assert.match(app, /client\.onNavigation\(/)
+  assert.match(app, /watchCheckPages\(client, \{/)
   assert.match(app, /checkedPagePath\(/)
 })
