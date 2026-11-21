@@ -3357,7 +3357,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
               aria-expanded={showLicenseManager}
               title="Licenses"
               onClick={() => setShowLicenseManager(true)}
-              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-md:px-2.5 max-xs:px-2 [anchor-name:--license-trigger]"
+              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-md:px-2.5 max-xs:min-w-10 max-xs:justify-center max-xs:gap-1 max-xs:px-1.5 [anchor-name:--license-trigger]"
             >
               <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)] max-xs:w-[calc(100%+0.25rem)]" aria-hidden="true" />
               <KeyIcon className="size-4 shrink-0 fill-neutral-300" />
@@ -3385,7 +3385,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
               disabled={status.step < 4 || snapshotExporting}
               title={status.step < 4 ? 'Available when setup finishes' : 'Export snapshot'}
               onClick={exportSiteSnapshot}
-              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-md:px-2.5 max-xs:px-2 disabled:cursor-not-allowed disabled:opacity-50"
+              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-md:px-2.5 max-xs:min-w-10 max-xs:justify-center max-xs:gap-1 max-xs:px-1.5 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)] max-xs:w-[calc(100%+0.25rem)]" aria-hidden="true" />
               <ArrowDownTrayIcon className="size-4 shrink-0 fill-neutral-300" />
@@ -3400,7 +3400,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
               type="button"
               aria-label="Close Playground"
               onClick={requestPlaygroundClose}
-              className="relative shrink-0 rounded-md p-1.5 text-neutral-300 max-sm:px-2.5 max-xs:px-2 hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
+              className="relative shrink-0 rounded-md p-1.5 text-neutral-300 max-sm:px-2.5 max-xs:px-3 hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
             >
               <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)] max-xs:w-[calc(100%+0.25rem)]" aria-hidden="true" />
               <XMarkIcon className="size-4 shrink-0 fill-current" />
