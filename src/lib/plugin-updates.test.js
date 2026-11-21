@@ -75,3 +75,15 @@ test('screen readers hear what the updates at start changed', async () => {
     'Updated at start: WP 2FA 3.1 to 3.2. Not updated: Example Pro.',
   )
 })
+
+test('the Updates note heading matches the result, also when every update failed', async () => {
+  const { updatesNoteHeading } = await import('./plugin-updates.js')
+  const failed = [{ name: 'Example Pro', message: 'No package.' }]
+  const updated = [{ name: 'WP 2FA', from: '3.1', to: '3.2' }]
+  assert.equal(updatesNoteHeading({ state: 'done', result: { updated: [], failed, current: [] } }), 'Updates failed at start')
+  assert.equal(updatesNoteHeading({ state: 'done', result: { updated, failed, current: [] } }), 'Updated at start')
+  assert.equal(updatesNoteHeading({ state: 'done', result: { updated, failed: [], current: [] } }), 'Updated at start')
+  assert.equal(updatesNoteHeading({ state: 'done', result: { updated: [], failed: [], current: [] } }), 'Updated at start')
+  assert.equal(updatesNoteHeading({ state: 'skipped' }), 'Updates at start')
+  assert.equal(updatesNoteHeading({ state: 'error', message: 'Timed out.' }), 'Updates at start')
+})
