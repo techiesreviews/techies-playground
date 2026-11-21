@@ -110,11 +110,18 @@ Adds `.checks-views`, `.checks-view`, `.checks-info`, `.checks-digit`, `.checks-
 ### Review round 2 changes
 
 - Run again pressed during the first 0.6 s of a page-change run on the same page joins that run: Running shows at once and the result is announced.
-- After a failed run, the view effect moves focus to the row that was open, when focus was in the check or on All checks (both gone). Focus in WordPress stays where it is.
+- After a failed run, the view effect moves the focus that was in the check or on All checks (both gone) back into the overview. Focus in WordPress stays where it is. (Review round 3 found the row it aimed at is not shown after a failed run; see below.)
 - Every number on screen is marked after each render, so numbers that showed without playing (a reopened panel, a check just opened, the view not shown) also roll from their value on the next result.
 - In a row, the value drops below the name when the name would get less than 6em, and the chevron hides below 15rem. At 320 px with 200% text, "Memory" broke as "Memor y" with the chevron; now each name has 5.4em.
 - The verdict counts use the space under the verdict icon below 15rem: "0 Improve" was 4 px past the box at 320 px with 200% text.
 - The Query Monitor reader has a note naming the 4.x data shape it reads (see the Declined line in the PR's findings ledger).
+
+### Review round 3 changes
+
+- A failed run shows the overview with no rows, so the focus that was in the check or on All checks goes to the panel itself (it can take focus, as it does when it opens). When the row is there, it still goes to the row.
+- Run again pressed for a page that waits behind a run on another page now starts that page as Run again: Running shows as soon as it starts, and the result is announced.
+- With Query Monitor active, the list of calls keeps the first 20 calls and up to 20 more failed ones, as the Playground's own list does. Before, the first 40 calls filled it, so a failure after them was counted but had no site name. The reader also has a note naming Query Monitor 4.x's call shape.
+- While licences wait, the panel says "Activate them in WordPress, then run the checks." again. The licence check is read only at launch, so the checks do not start by themselves once a licence is active.
 
 ## Tests and evidence
 
@@ -126,7 +133,7 @@ The app has no dark mode (no dark styles or tokens anywhere), so there are no da
 
 | Environment | Procedure/command | Expected | Actual | Evidence |
 | --- | --- | --- | --- | --- |
-| Node 24, PHP 8.3 wasm | `npm test` | All pass | 317 of 317 pass (309 before review round 1) | New tests in `checks.test.js`, `checks-php.test.js` and `checks-panel.test.js`, plus a changed `bar-compact-labels.test.js`. Before the change, 11 of the library and PHP tests failed, 5 queue tests failed and 12 panel tests failed. The 320 px column test and the i-placement test each failed before their one-line fix |
+| Node 24, PHP 8.3 wasm | `npm test` | All pass | 320 of 320 pass (309 before review round 1, 317 after round 2) | New tests in `checks.test.js`, `checks-php.test.js` and `checks-panel.test.js`, plus a changed `bar-compact-labels.test.js`. Before the change, 11 of the library and PHP tests failed, 5 queue tests failed and 12 panel tests failed. The 320 px column test and the i-placement test each failed before their one-line fix |
 | Chromium, after, 1280 px | Launch, wait for the first result, open each of the 8 checks | Each number with its source | "Checks on Plugins: All 8 checks passed." Query Monitor 4.1.1: PHP errors 0, Slow queries 0, Calls to other sites 0 failed, Duplicate queries 0, Database queries 30 ("30 queries, 0.038 s together."), Memory 40 MB ("16% of the site's 256 MB limit."), Page time 0.32 s, each "From Query Monitor 4.1.1 on this page." Slowest plugin 0.01 s, "Query Monitor took the longest to load.", "Timed by the Playground as each plugin loaded. Code Profiler shows the full profile." | ![After, 1280, overview](assets/2026-11-21-tools-388-1280-panel-after.png) |
 | Chromium, after, 1280 px | Press the i, read the link, press Escape | Limits table and the article link; Escape closes it | The table shows the limits from `CHECK_LIMITS`; the link is `https://techies.review/articles/techies-playground-check-score/`; after Escape the i is closed | ![After, the i](assets/2026-11-21-tools-388-1280-info-after.png) |
 | Chromium, after, 1280 px | Open PHP errors, then go to the Dashboard inside WordPress | The check stays open and refreshes for the new page | "Checks on Dashboard: All 8 checks passed."; PHP errors still open; the page line reads "Page checked · 07:16 PM · took 0.33 s Dashboard /wp-admin/index.php" | ![After, check open after the page changed](assets/2026-11-21-tools-388-1280-detail-after-page-change-after.png) |

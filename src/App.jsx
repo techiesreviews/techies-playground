@@ -1902,6 +1902,7 @@ export default function App() {
   const runChecksRef = useRef(null)
   const checksRanOnRef = useRef(null)
   const checksActiveRunRef = useRef(null)
+  const checksManualNextRef = useRef(null)
   const checksPanelOpenRef = useRef(false)
   const checksEscapeRef = useRef(null)
   const launchAbortRef = useRef(null)
@@ -2345,8 +2346,12 @@ export default function App() {
     }
     const page = checkedPagePath(currentPath)
     if (checksQueueRef.current.request(client, page, { force: !auto }) !== 'start') {
-      // Run again on the page already being measured joins that run and shows it at once.
-      if (!auto && checksActiveRunRef.current?.page === page) checksActiveRunRef.current.join()
+      // Run again on the page already being measured joins that run and shows it at once; on a
+      // page that waits behind another run, that page starts as Run again.
+      if (!auto) {
+        if (checksActiveRunRef.current?.page === page) checksActiveRunRef.current.join()
+        else checksManualNextRef.current = page
+      }
       return
     }
     checksRanOnRef.current = client
@@ -2383,7 +2388,9 @@ export default function App() {
       window.clearTimeout(runningTimer)
       if (checksActiveRunRef.current === active) checksActiveRunRef.current = null
       const next = checksQueueRef.current.finish(client)
-      if (next !== null && client === clientRef.current) runChecksRef.current(client, { auto: true, path: next })
+      const manualNext = next !== null && checksManualNextRef.current === next
+      checksManualNextRef.current = null
+      if (next !== null && client === clientRef.current) runChecksRef.current(client, { auto: !manualNext, path: next })
     }
   }
 

@@ -264,6 +264,8 @@ function techies_measure_query_monitor() {
 	$calls  = 0;
 	$failed = 0;
 	$http   = array();
+	// Query Monitor 4.x keeps each call as a QM_Data_HTTP_Request object with type ('error',
+	// 'non-blocking' or 'HTTP <code>'), host and local (collectors/http.php, process()).
 	foreach ( isset( $collected['http']->http ) ? (array) $collected['http']->http : array() as $request ) {
 		if ( ! empty( $request->local ) ) {
 			continue;
@@ -271,10 +273,12 @@ function techies_measure_query_monitor() {
 		// 0 is no answer; -1 is a call that waits for no answer, so it cannot fail.
 		$code = 'error' === $request->type ? 0 : ( preg_match( '/^HTTP (\\d+)/', (string) $request->type, $match ) ? (int) $match[1] : -1 );
 		$calls++;
-		if ( 0 === $code || $code >= 400 ) {
+		$is_failure = 0 === $code || $code >= 400;
+		if ( $is_failure ) {
 			$failed++;
 		}
-		if ( count( $http ) < 40 ) {
+		// As the Playground's own list: the first 20 calls and up to 20 more failed ones.
+		if ( count( $http ) < 20 || ( $is_failure && count( $http ) < 40 ) ) {
 			$http[] = array( 'host' => (string) $request->host, 'code' => $code );
 		}
 	}
