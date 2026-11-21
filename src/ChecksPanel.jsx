@@ -196,7 +196,7 @@ export function ChecksPanel({ checks, run, gate, onRun, onClose, onOpenCheck }) 
       id={CHECKS_PANEL_ID}
       aria-label="Checks"
       tabIndex={-1}
-      className="checks-panel-enter absolute inset-y-0 right-0 z-10 flex w-[min(25rem,100%)] flex-col bg-white text-base/7 text-neutral-950 shadow-[-1px_0_0_rgb(10_10_10/0.1),-12px_0_32px_rgb(0_0_0/0.08)] outline-none max-sm:shadow-none sm:text-sm/6"
+      className="checks-panel-enter @container absolute inset-y-0 right-0 z-10 flex w-[min(25rem,100%)] flex-col bg-white text-base/7 text-neutral-950 shadow-[-1px_0_0_rgb(10_10_10/0.1),-12px_0_32px_rgb(0_0_0/0.08)] outline-none max-sm:shadow-none sm:text-sm/6"
     >
       <div className="flex items-center gap-2 border-b border-neutral-950/10 py-2.5 pr-2.5 pl-4">
         <div className="min-w-0 flex-1">
@@ -225,7 +225,9 @@ export function ChecksPanel({ checks, run, gate, onRun, onClose, onOpenCheck }) 
         <div className={`flex items-start gap-2.5 rounded-[0.625rem] p-3 ${VERDICT_BOX[running || !verdict ? (run.state === 'error' ? 'fail' : 'wait') : verdict.status]}`}>
           {verdictBody}
         </div>
-        <div className="mt-3 grid grid-cols-4 gap-2 max-[399px]:grid-cols-2">
+        {/* Four numbers only when the panel has its full 25 rem: measured in rem, larger
+            text gets two columns sooner instead of numbers spilling out of their boxes. */}
+        <div className="mt-3 grid grid-cols-4 gap-2 @max-[25rem]:grid-cols-2">
           {(report ? report.tiles : TILE_LABELS.map((label) => ({ id: label, label, value: '–', status: 'wait' }))).map((tile) => (
             <div key={tile.id} className={`min-w-0 rounded-lg px-2.5 py-2 ring-1 ${tileClass(tile.status)}`}>
               <p className="truncate text-xs/5 text-neutral-500">{tile.label}</p>
