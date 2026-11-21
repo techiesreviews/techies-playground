@@ -141,10 +141,11 @@ foreach ( wp_get_themes() as $slug => $theme ) {
 		$result['failed'][] = array( 'name' => $theme->get( 'Name' ), 'message' => $incompatible );
 		continue;
 	}
+	$theme_offer = (array) $theme_updates[ $slug ];
 	$skin = new Automatic_Upgrader_Skin();
 	$outcome = techies_playground_upgrade( new Theme_Upgrader( $skin ), $skin, $slug );
 	if ( true === $outcome ) {
-		$result['updated'][] = array( 'name' => $theme->get( 'Name' ), 'from' => $theme->get( 'Version' ), 'to' => (string) ( $theme_updates[ $slug ]['new_version'] ?? '' ) );
+		$result['updated'][] = array( 'name' => $theme->get( 'Name' ), 'from' => $theme->get( 'Version' ), 'to' => (string) ( $theme_offer['new_version'] ?? '' ) );
 	} else {
 		$result['failed'][] = array( 'name' => $theme->get( 'Name' ), 'message' => substr( $outcome, 0, 200 ) );
 	}

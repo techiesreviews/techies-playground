@@ -26,10 +26,13 @@ test('a failed or blocked update keeps an amber warning icon on the button at ev
   // The words are screen-reader only up to 1040 px, so the icon is what shows the state there,
   // like the Checks waiting note. It has no responsive hide class.
   assert.match(source, /const notRun = updates\.state === 'error' \|\| updates\.state === 'skipped'/)
-  assert.match(button, /\{notRun && <ExclamationTriangleIcon className="size-3\.5 shrink-0 fill-amber-300" aria-hidden="true" \/>\}/)
-  // The tooltip names the state instead of saying "Updated at start".
-  assert.match(button, /updates\.state === 'error' \? 'Updates failed at start'/)
-  assert.match(button, /updates\.state === 'skipped' \? 'Updates · networking blocked'/)
+  // Right after the label, before the words, like the Checks waiting note.
+  assert.match(button, /\{label\}<\/span>\s*\{\/\*[^*]*\*\/\}\s*\{notRun && <ExclamationTriangleIcon className="size-3\.5 shrink-0 fill-amber-300" aria-hidden="true" \/>\}/)
+  // The tooltip names the state instead of saying "Updated at start", also when the step ran
+  // and only failures came back.
+  assert.match(button, /title=\{title\}/)
+  assert.match(source, /updates\.state === 'error' \|\| label === 'Update failed'\s*\? 'Updates failed at start'/)
+  assert.match(source, /updates\.state === 'skipped' \? 'Updates · networking blocked'/)
 })
 
 test('only the name in the note is cut short, so the versions and +N always show', () => {
