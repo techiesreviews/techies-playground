@@ -52,9 +52,11 @@ export function UpdatesControl({ updates, open, onOpenChange, buttonRef }) {
   const result = updates.state === 'done' ? updates.result : null
   // Nothing was updated because the step failed or networking is blocked.
   const notRun = updates.state === 'error' || updates.state === 'skipped'
+  // The step ran, nothing was updated and something failed ("Update failed").
+  const onlyFailed = Boolean(result && !result.updated.length && result.failed.length)
   const title = !ready
     ? 'Available when setup finishes'
-    : updates.state === 'error' || (result && !result.updated.length && result.failed.length)
+    : updates.state === 'error' || onlyFailed
       ? 'Updates failed at start'
       : updates.state === 'skipped' ? 'Updates · networking blocked' : 'Updated at start'
 
@@ -76,7 +78,7 @@ export function UpdatesControl({ updates, open, onOpenChange, buttonRef }) {
         <span className="shrink-0 whitespace-nowrap max-md:sr-only">{label}</span>
         {/* The words after Updates are hidden up to 1040 px, so the icon shows a failed or
             blocked update at every width, after the name like the Checks waiting note. */}
-        {notRun && <ExclamationTriangleIcon className="size-3.5 shrink-0 fill-amber-300" aria-hidden="true" />}
+        {(notRun || onlyFailed) && <ExclamationTriangleIcon className="size-3.5 shrink-0 fill-amber-300" aria-hidden="true" />}
         {/* Up to 1040 px a change list shortens to its count, and "networking blocked" or
             "failed" is for screen readers only. Wider, a long name is cut short,
             down to nothing on a full bar, before its versions and +N; only very long

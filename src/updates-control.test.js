@@ -26,12 +26,15 @@ test('a failed or blocked update keeps an amber warning icon on the button at ev
   // The words are screen-reader only up to 1040 px, so the icon is what shows the state there,
   // like the Checks waiting note. It has no responsive hide class.
   assert.match(source, /const notRun = updates\.state === 'error' \|\| updates\.state === 'skipped'/)
+  // "Update failed" (the step ran, nothing updated, something failed) shows only its count up
+  // to 1040 px and has no "N failed" mark, so without the icon it looks like a success.
+  assert.match(source, /const onlyFailed = Boolean\(result && !result\.updated\.length && result\.failed\.length\)/)
   // Right after the label, before the words, like the Checks waiting note.
-  assert.match(button, /\{label\}<\/span>\s*\{\/\*[^*]*\*\/\}\s*\{notRun && <ExclamationTriangleIcon className="size-3\.5 shrink-0 fill-amber-300" aria-hidden="true" \/>\}/)
+  assert.match(button, /\{label\}<\/span>\s*\{\/\*[^*]*\*\/\}\s*\{\(notRun \|\| onlyFailed\) && <ExclamationTriangleIcon className="size-3\.5 shrink-0 fill-amber-300" aria-hidden="true" \/>\}/)
   // The tooltip names the state instead of saying "Updated at start", also when the step ran
   // and only failures came back.
   assert.match(button, /title=\{title\}/)
-  assert.match(source, /updates\.state === 'error' \|\| \(result && !result\.updated\.length && result\.failed\.length\)\s*\? 'Updates failed at start'/)
+  assert.match(source, /updates\.state === 'error' \|\| onlyFailed\s*\? 'Updates failed at start'/)
   assert.match(source, /updates\.state === 'skipped' \? 'Updates · networking blocked'/)
 })
 
