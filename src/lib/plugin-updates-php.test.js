@@ -171,6 +171,17 @@ $GLOBALS['theme_offers'] = array(
   assert.deepEqual(state.themes_upgraded, [])
 })
 
+test('a theme update this site can run still goes to the theme upgrader', async () => {
+  const { result, state } = await run(`
+$GLOBALS['theme_offers'] = array(
+	'old-theme' => array( 'new_version' => '2.0', 'package' => 'install', 'requires_php' => '7.4', 'requires' => '6.0' ),
+);
+`)
+  assert.ok(result.updated.some((entry) => entry.name === 'Old Theme' && entry.to === '2.0'), JSON.stringify(result.updated))
+  assert.ok(!result.failed.some((entry) => entry.name === 'Old Theme'), JSON.stringify(result.failed))
+  assert.deepEqual(state.themes_upgraded, ['old-theme'])
+})
+
 test('a plugin on for the whole network of a Multisite test site is on for the whole network again after its update', async () => {
   const { result, state } = await run(`
 $GLOBALS['active'] = array_values( array_diff( $GLOBALS['active'], array( 'wp-2fa/wp-2fa.php' ) ) );
