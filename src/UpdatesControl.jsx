@@ -78,7 +78,10 @@ export function UpdatesControl({ updates, open, onOpenChange, buttonRef }) {
         <span className="shrink-0 whitespace-nowrap max-md:sr-only">{label}</span>
         {/* The words after Updates are hidden up to 1040 px, so the icon shows a failed or
             blocked update at every width, after the name like the Checks waiting note. */}
-        {(notRun || onlyFailed) && <ExclamationTriangleIcon className="size-3.5 shrink-0 fill-amber-300" aria-hidden="true" />}
+        {notRun && <ExclamationTriangleIcon className="size-3.5 shrink-0 fill-amber-300" aria-hidden="true" />}
+        {/* From 1041 px "Update failed: <name>" shows in words, so the icon would only split
+            the label from its colon. */}
+        {onlyFailed && <ExclamationTriangleIcon className="size-3.5 shrink-0 fill-amber-300 min-[1041px]:hidden" aria-hidden="true" />}
         {/* Up to 1040 px a change list shortens to its count, and "networking blocked" or
             "failed" is for screen readers only. Wider, a long name is cut short,
             down to nothing on a full bar, before its versions and +N; only very long
