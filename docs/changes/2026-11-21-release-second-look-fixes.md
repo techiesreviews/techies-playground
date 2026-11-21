@@ -5,7 +5,7 @@
 - Status: complete
 - Disposition: kept
 - Related version: 0.11.0 (not yet released; fixes before the release)
-- Related commit/issue: TOOLS-259; follows [Updates note: failures stay short and visible on the bar](2026-11-21-updates-note-failures-on-the-bar.md)
+- Related commit/issue: TOOLS-259; supersedes in part [Updates note: failures stay short and visible on the bar](2026-11-21-updates-note-failures-on-the-bar.md) (`N failed` shows as the icon alone up to 1040 px, and the words after Updates are screen-reader only there); superseded in part by [Theme updates check PHP and WordPress versions; a failed or blocked update keeps its icon](2026-11-21-theme-version-check-and-failed-updates-icon.md)
 
 ## Context
 
