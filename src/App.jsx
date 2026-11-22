@@ -162,7 +162,6 @@ const CHANGELOG_ENTRIES = [
     summary: 'Playground runs on its newest release.',
     changes: [
       'Playground is updated to 3.1.65.',
-      'The update was prepared automatically from the official Playground release.',
     ],
   },
   {
