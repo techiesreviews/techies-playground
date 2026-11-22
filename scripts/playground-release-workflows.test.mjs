@@ -14,7 +14,7 @@ function readSteps(source) {
   return steps
 }
 
-test('the Playground sync runs daily from dev and checks an update fully before it opens a pull request', async () => {
+test('the Playground sync has a daily schedule, checks out dev and checks an update before it opens a pull request', async () => {
   const source = await read('.github/workflows/sync-playground-release.yml')
   assert.match(source, /\n {2}schedule:\n {4}- cron: '[^']+'\n {2}workflow_dispatch:\n/)
   assert.match(source, /\n {10}ref: dev\n/)

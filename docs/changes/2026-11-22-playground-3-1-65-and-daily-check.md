@@ -1,9 +1,9 @@
 # Playground 3.1.65 and the daily release check
 
 - Date: 2026-11-22
-- Owner: fleet-lead (GPT Sol builder)
-- Status: complete
-- Disposition: kept
+- Owner: fleet-lead
+- Status: in-progress
+- Disposition: pending
 - Related version: 0.13.1
 - Related commit/issue: TOOLS-403; supersedes the dependency pin in [the release sync record](2026-11-20-playground-release-sync-and-security-checks.md).
 
@@ -21,7 +21,7 @@ Move the launcher packages and self-hosted build to 3.1.65 together, boot WordPr
 - Use the existing sync script locally, then dispatch the existing main workflow after landing: exercises the intended path without changing the release branch.
 - Change cron or repository settings without evidence: rejected because the workflow is active and had at most one scheduled slot.
 
-## Implementation
+## Implementation or prototype
 
 Ran `node scripts/sync-playground-release.mjs` through Agent Kit. It moved all three direct pins and all 12 locked Playground/PHP packages to 3.1.65, refreshed the lockfile, and generated the 0.13.1 changelog entry. The host and client version follow the Blueprints pin in the existing deployment workflow.
 
@@ -38,22 +38,32 @@ Ran `node scripts/sync-playground-release.mjs` through Agent Kit. It moved all t
 
 ## Tests and evidence
 
-- Before change: an exact-version assertion failed with `@wp-playground/blueprints: 3.1.64 !== 3.1.65`.
-- Sync output: `Prepared Playground 3.1.65 (from 3.1.64) as app 0.13.1.`
-- After change: exact-version assertions pass for all 12 locked Playground/PHP packages.
-- `kit doctor`: initial fresh-checkout failure for absent packages; `npm ci` resolved it; 17/17 passed.
-- `kit deps check`: 239 packages match, 98 absent optional packages skipped.
-- `kit unit --affected`: none affected (dependency and changelog changes). Full `kit unit` passed all 338 tests in 39 files.
-- `kit build`: production build passed; existing bundle-size warning remains.
-- `npm audit --audit-level=high`: zero vulnerabilities.
-- `node scripts/check-playground-advisories.mjs`: no published advisory covers the 24 installed/hosted Playground packages at 3.1.65.
-- Sparse clone of `WordPress/wordpress-playground` tag `v3.1.65` (commit `6285c299b865be3bed8e3c2990f535ec99e59ecc`): `git apply --check --verbose playground-host/playground-core.patch` passed for all six patch paths.
-- `node scripts/playground-boot-check.mjs`: Playground 3.1.65 booted WordPress 7.1.5 on PHP 8.3.36; WP-CLI and the launcher's mu-plugin worked.
-- Main workflow dispatch and hosted browser acceptance follow the dev merge; their actual results belong in the PR proof and lead report.
+Linux, Node 24.22.2, November 22, 2026. Source inspection and executed checks are separated below. Logs are in this worktree's `.scratch/tools-403/` and `.scratch/kit-jobs/tools-403-full/log`.
 
-## Result and disposition
+| Environment | Procedure/command | Expected | Actual | Evidence |
+| --- | --- | --- | --- | --- |
+| Before update | Assert every direct Playground/PHP pin is 3.1.65 | Fail on old pin | Failed: `@wp-playground/blueprints: 3.1.64 !== 3.1.65` | Executed Node assertion |
+| Local checkout | `kit go tools-403-update -- node scripts/sync-playground-release.mjs` | Prepare 3.1.65 together | `Prepared Playground 3.1.65 (from 3.1.64) as app 0.13.1.` | Executed sync; kit job log |
+| After update | Assert all locked Playground/PHP packages are 3.1.65 | Every pin agrees | All 12 packages agree | Executed Node assertion |
+| Fresh worktree | `kit doctor`, `npm ci`, `kit doctor` | Installed dependencies match | Initial missing-packages failure resolved; 17/17 passed | Executed checks; `.scratch/tools-403/doctor.log` |
+| Dependencies | `kit deps check` | Match lockfile | 239 packages match, 98 absent optional packages skipped | Executed check |
+| Unit suite | `kit unit --affected`; full `kit unit` | No regressions | None affected initially; full 338/338 tests in 39 files passed | Executed kit job log |
+| Production bundle | `kit build` | Build without deploy | Passed; existing bundle-size warning remains | Executed kit job log |
+| Security | `npm audit --audit-level=high`; `node scripts/check-playground-advisories.mjs` | No applicable high advisories | Zero npm vulnerabilities; no advisory covers 24 installed/hosted Playground packages at 3.1.65 | Executed kit job log |
+| Upstream v3.1.65 | Sparse clone then `git apply --check --verbose` of the core patch | Patch still applies | All six patch paths passed at `6285c299b865be3bed8e3c2990f535ec99e59ecc` | Executed clone and patch check |
+| Node WordPress | `node scripts/playground-boot-check.mjs` | New runtime boots default setup and WP-CLI | Playground 3.1.65 booted WordPress 7.1.5 on PHP 8.3.36; WP-CLI and launcher mu-plugin worked | Executed kit job log; does not prove browser/tester behavior |
+| GitHub configuration | Repository/workflow/run REST queries | Establish branch, state and run history | main default; workflow active since Nov 21; zero initial runs; current repository activity | Executed API queries |
+| Workflow source | Read `origin/main:.github/workflows/sync-playground-release.yml` | Schedule uses correct code/target | Daily schedule present, dev checkout and PR base, separate read/write job permissions | Source inspection only |
+| Repository settings | Query Actions permissions endpoints | Read administration settings | HTTP 403; setting remains unverified | Executed API requests |
+| Main workflow and hosted browser | Dispatch main after dev merge; launch a plugin with Query Monitor and Code Profiler on the new preview | Verify actual hosted path | Planned after merge; actual results will be recorded in the PR proof and lead report | Not yet executed |
 
-Kept: all package pins move together and the existing core patch and automated checks pass. The main workflow already has the correct schedule, active state and dev target; no speculative workflow-code change was made. No push to main, live release or npm publish is authorized by this work.
+## Result
+
+All package pins move together, the core patch applies, and local tests, build, advisory checks and CLI boot pass. The schedule evidence establishes no source-code defect: the workflow is new, active, correctly placed and has had at most one scheduled slot. Manual dispatch and hosted browser acceptance follow the dev merge.
+
+## Disposition and rationale
+
+Kept. Use the existing sync implementation and exercise main's workflow before changing a correct schedule speculatively. No push to main, live release or npm publish is authorized by this work.
 
 ## Documentation impact
 
