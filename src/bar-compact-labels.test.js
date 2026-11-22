@@ -105,3 +105,80 @@ test('the limits under one check stack below 15 rem, so 200% text at 320 px stay
   assert.match(scale[1], /@max-\[15rem\]:grid-flow-row/)
   assert.doesNotMatch(scale[1], /max-\[\d+px\]:/, 'no viewport pixel breakpoint: it ignores the text size')
 })
+
+test('below 20 rem (320 px with 200% text) the Playground bar wraps so Close stays on screen without overlapping tap areas', () => {
+  const shellStart = app.indexOf('aria-label="WordPress Playground"')
+  const shellGrid = app.slice(shellStart, app.indexOf('>', app.indexOf('<div', shellStart)) + 1)
+  assert.match(shellGrid, /(?:^|[\s"])@container\b/, 'the shell measures its width in rem so 200% text wraps the bar')
+  assert.match(shellGrid, /\bgrid-rows-\[minmax\(2rem,auto\)_1fr\]/, 'a wrapped bar grows instead of clipping')
+
+  const rowClass = barRowClass()
+  assert.match(rowClass, /@max-\[20rem\]:flex-wrap\b/)
+  assert.match(rowClass, /@max-\[20rem\]:py-1\b/)
+  assert.match(rowClass, /\$\{confirmingPlaygroundClose \? '' : '@max-\[20rem\]:gap-x-1 @max-\[20rem\]:gap-y-2'\}/)
+
+  const closeButton = app.slice(app.indexOf('aria-label="Close Playground"'), app.indexOf('</button>', app.indexOf('aria-label="Close Playground"')))
+  assert.match(closeButton.match(/className="([^"]*)"/)[1], /@max-\[20rem\]:ml-auto\b/)
+
+  const tapAreas = [...`${bar}${closeButton}${updatesControl}`.matchAll(/max-sm:w-\[calc\(100%\+0\.625rem\)\]([^"]*)"/g)]
+  assert.equal(tapAreas.length, 4)
+  for (const [, rest] of tapAreas) {
+    assert.match(rest, /@max-\[20rem\]:h-\[calc\(100%\+0\.5rem\)\]/)
+    assert.match(rest, /@max-\[20rem\]:w-\[calc\(100%\+0\.25rem\)\]/)
+  }
+})
+
+test('below 20 rem the close confirmation wraps Keep open and Discard and close without overflowing or overlapping tap areas', () => {
+  const confirmBlock = app.slice(app.indexOf('{confirmingPlaygroundClose ? ('), app.indexOf(') : (', app.indexOf('{confirmingPlaygroundClose ? (')))
+  assert.match(confirmBlock, /<p className="[^"]*@max-\[20rem\]:basis-full[^"]*@max-\[20rem\]:whitespace-normal[^"]*">Discard this temporary site\?<\/p>/)
+  for (const label of ['Keep open', 'Discard and close']) {
+    const end = confirmBlock.indexOf(`${label}\n`)
+    const button = confirmBlock.slice(confirmBlock.lastIndexOf('<button', end), end)
+    assert.match(button.match(/className="([^"]*)"/)[1], /\bmax-w-full\b/, `${label} cannot overflow a narrow bar`)
+    assert.match(button, /@max-\[20rem\]:h-\[max\(100%,44px\)\] @max-\[20rem\]:w-\[max\(100%,44px\)\]/, `${label} keeps a 44 px tap area without bloating past 56 px at 200% text`)
+  }
+})
+
+test('at 320 px with 200% text the launcher has no 20 rem body minimum or unwrapping rows that scroll sideways', () => {
+  const styles = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
+  const bodyRule = styles.slice(styles.indexOf('body {'), styles.indexOf('}', styles.indexOf('body {')) + 1)
+  assert.doesNotMatch(bodyRule, /min-width:\s*20rem/, 'body min-width: 20rem forces a 640 px page at 200% text')
+
+  const headerStart = app.indexOf('<header className=')
+  const header = app.slice(headerStart, app.indexOf('{showChangelog && (', headerStart))
+  assert.match(header, /<div className="relative mx-auto flex max-w-7xl flex-wrap items-center/)
+  assert.match(header, /<div className="flex min-w-0 flex-wrap items-center gap-3">/)
+
+  const envHeader = app.slice(app.lastIndexOf('<div className=', app.indexOf('id="environment-heading"')), app.indexOf('</div>', app.indexOf('id="environment-heading"')))
+  assert.match(envHeader, /\bflex-wrap\b/)
+
+  const featuredStart = app.indexOf('aria-labelledby="featured-plugins-heading"')
+  const featured = app.slice(featuredStart, app.indexOf('</section>', featuredStart))
+  assert.match(featured, /(?:^|[\s"])@container\b/)
+  assert.match(featured, /grid-cols-1 gap-3 @\[15rem\]:grid-cols-2 lg:grid-cols-4/)
+
+  const checksSectionStart = app.indexOf('aria-labelledby="checks-heading"')
+  const checksSection = app.slice(checksSectionStart, app.indexOf('</section>', checksSectionStart))
+  assert.match(checksSection, /<span className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full/)
+  assert.match(checksSection, /<span className="flex min-w-0 max-w-full flex-wrap items-center gap-2">/)
+
+  const nameSaveStart = app.indexOf('aria-labelledby="recipe-heading"')
+  const nameSave = app.slice(nameSaveStart, app.indexOf('</section>', nameSaveStart))
+  assert.match(nameSave, /<div className="grid grid-cols-1 gap-2">/)
+  assert.match(nameSave, /id="recipe-name"[\s\S]*?className="[^"]*\bmin-w-0\b[^"]*\bw-full\b/)
+
+  const selectFn = app.slice(app.indexOf('function Select('), app.indexOf('function TextField('))
+  assert.match(selectFn, /grid min-w-0 grid-cols-1/)
+  assert.match(selectFn, /grid-cols-\[minmax\(0,1fr\)_--spacing\(8\)\]/)
+  assert.match(selectFn, /<select[\s\S]*?\bmin-w-0 w-full\b/)
+
+  const textFieldFn = app.slice(app.indexOf('function TextField('), app.indexOf('function Checkbox('))
+  assert.match(textFieldFn, /grid min-w-0 grid-cols-1/)
+  assert.match(textFieldFn, /<input[\s\S]*?\bmin-w-0 w-full\b/)
+
+  assert.match(app, /<h1 className="[^"]*\[overflow-wrap:anywhere\][^"]*">Test premium WordPress tools with ease<\/h1>/)
+  const checkboxFn = app.slice(app.indexOf('function Checkbox('), app.indexOf('function Radio('))
+  assert.match(checkboxFn, /<span className="min-w-0 \[overflow-wrap:anywhere\]">/)
+  const radioFn = app.slice(app.indexOf('function Radio('), app.indexOf('function GitHubStarButton('))
+  assert.match(radioFn, /<span className="min-w-0 \[overflow-wrap:anywhere\]">/)
+})
