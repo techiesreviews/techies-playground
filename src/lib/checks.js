@@ -61,7 +61,7 @@ export function resolveCheckPlugins(recipe) {
 // A resumed site's old tester must be inactive before another edition is loaded.
 export function checkPluginSyncCode(recipe) {
   const selected = [...recipe.plugins, ...recipe.repositoryPlugins]
-  const disabled = CHECKS.flatMap((check) => check.packageIds).filter((id) => !selected.includes(id))
+  const disabled = CHECKS.filter((check) => hasCheck(recipe, check)).flatMap((check) => check.packageIds).filter((id) => !selected.includes(id))
   return `<?php
 require_once '/wordpress/wp-load.php';
 require_once '/wordpress/wp-admin/includes/plugin.php';
