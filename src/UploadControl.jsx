@@ -23,7 +23,7 @@ export function UploadControl({ upload, siteReady, onUpload }) {
     >
       <BarTapTarget />
       {busy ? <Spinner className="text-neutral-300" /> : <Icon className={`size-4 shrink-0 ${attention ? 'fill-amber-300' : 'fill-neutral-300'}`} />}
-      <span className={attention ? '' : upload.state === 'saved' ? 'max-[1041px]:sr-only' : 'max-md:sr-only'}>{label}</span>
+      <span className={attention ? '' : 'max-[1041px]:sr-only'}>{label}</span>
     </button>
     {attention && <span title={upload.message} className="min-w-0 flex-1 basis-24 truncate text-sm/5 text-amber-200">{upload.message}</span>}
     </div>

@@ -24,7 +24,7 @@ Keep the saved state icon-only below the existing 1041 px bar breakpoint. At 768
 
 ## Implementation or prototype
 
-Only the saved label uses `max-[1041px]:sr-only`; the existing clock remains visible. Upload and installation failures are separate from activation and post-install setup/navigation problems. The latter use Added with problems, an amber icon, and the existing inline reason. The bar can wrap in either attention state. The saved/progress title also retains its detail while startup is unfinished; only an idle unavailable control uses the availability title.
+All normal upload-state labels use `max-[1041px]:sr-only`; the upload arrow, spinner, check and clock remain visible. Attention states keep their text and wrap. Upload and installation failures are separate from activation and post-install setup/navigation problems. The latter use Added with problems, an amber icon, and the existing inline reason. The bar can wrap in either attention state. The saved/progress title also retains its detail while startup is unfinished; only an idle unavailable control uses the availability title.
 
 No installer behavior changed for the first tester-deactivation rejection. New tests establish that the lower-level promise rejects before installation/file writes and that the launcher catches it, preserves the failure message, and skips plugin-list navigation. The app version and changelog are 0.13.3. Busy spinners are documented as applying at every width.
 
@@ -60,3 +60,9 @@ Updated the 0.13.3 changelog/version, CONTEXT, runtime-upload architecture, rebu
 ## Follow-ups and open questions
 
 Dev landing only. The lead checks preview deployment and controls any live release. Other optional release-review nits remain outside this round.
+
+## Review follow-up
+
+The first review found that idle, uploading, installing and Added still used the 768 px label breakpoint. The same full bar reproduced the idle overflow at 768 px: Close ended at 806.125 px. The one breakpoint rule now applies to every non-attention state below 1041 px. The docs explicitly state that any actual upload/install failure in a mixed batch takes headline priority over post-install problems, while both reasons remain visible.
+
+Final full-bar rerun: idle, uploading, installing, Added and Saved for next start were each measured at both 768 and 900 px, root font 16 px. All ten cases passed. Close ended at 745/768 and 877/900 px; every normal upload control was 30 px wide and its hidden label measured 1 px. The captures and `.scratch/tools-403-mid-browser-proof.json` were refreshed for the final build. Full tests again passed 347/347, build passed, and the automatic UX command again reported the absent feature list. The requested saved-state evidence is included in this broader check.
