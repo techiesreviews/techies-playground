@@ -50,7 +50,9 @@ const MEASURE_HARNESS = `<?php
 define( 'ABSPATH', '/wordpress/' );
 $GLOBALS['actions'] = array();
 function add_action( $hook, $callback, $priority = 10, $args = 1 ) { $GLOBALS['actions'][ $hook ][] = $callback; }
-function do_action( $hook, ...$args ) { foreach ( $GLOBALS['actions'][ $hook ] ?? array() as $callback ) { $callback( ...$args ); } }
+$GLOBALS['done_actions'] = array();
+function do_action( $hook, ...$args ) { $GLOBALS['done_actions'][ $hook ] = ( $GLOBALS['done_actions'][ $hook ] ?? 0 ) + 1; foreach ( $GLOBALS['actions'][ $hook ] ?? array() as $callback ) { $callback( ...$args ); } }
+function did_action( $hook ) { return $GLOBALS['done_actions'][ $hook ] ?? 0; }
 function plugin_basename( $file ) { return str_replace( '/wordpress/wp-content/plugins/', '', $file ); }
 function wp_parse_url( $url, $part ) { return parse_url( $url, $part ); }
 function is_wp_error( $thing ) { return false; }
@@ -66,6 +68,7 @@ function wp_json_encode( $value ) { return json_encode( $value ); }
 $GLOBALS['previous'] = array();
 set_error_handler( function ( $type, $message ) { $GLOBALS['previous'][] = $message; return true; } );
 if ( getenv( 'MEASURE' ) ) { $_GET['techies-measure'] = '1'; }
+if ( getenv( 'QM' ) ) { require '/query-monitor.php'; }
 require '/measure.php';
 $GLOBALS['title'] = 'Plugins <b>page</b>';
 do_action( 'muplugins_loaded' );
@@ -88,18 +91,135 @@ echo "\\nHOOKS:" . implode( ',', array_keys( $GLOBALS['actions'] ) );
 echo "\\nPREVIOUS:" . json_encode( $GLOBALS['previous'] );
 `
 
-async function measure(on, { front = false, callsBefore = 0 } = {}) {
+// Query Monitor 4.1 as the measure plugin sees it: QM_Collectors with the overview, db_queries,
+// php_errors and http collectors, each holding the data shapes Query Monitor fills in. The
+// queries hold a license key in their SQL and in a caller's arguments; one error message holds
+// it in an address.
+const QUERY_MONITOR_STUB = `<?php
+define( 'QM_VERSION', '4.1.1' );
+class WP_Error {}
+class QM_Data_Callsite { public $file; public $line; }
+class QM_Backtrace {
+	private $callsite;
+	public function __construct( $callsite = null ) { $this->callsite = $callsite; }
+	public function get_callsite() { return $this->callsite; }
+	public function get_stack() { return array( "get_option('license_key')", 'Acme->boot()' ); }
+}
+class QM_Fake_Collector {
+	private $data;
+	public function __construct( $data ) { $this->data = $data; }
+	public function get_data() { return $this->data; }
+}
+class QM_Collectors {
+	public static $processed = 0;
+	public static function init() { return new self(); }
+	public function process() { self::$processed++; }
+	public static function get( $id ) { return isset( $GLOBALS['qm'][ $id ] ) ? new QM_Fake_Collector( $GLOBALS['qm'][ $id ] ) : null; }
+}
+function techies_qm_callsite( $file, $line ) { $callsite = new QM_Data_Callsite(); $callsite->file = $file; $callsite->line = $line; return $callsite; }
+$secret_sql = "SELECT option_value FROM wp_options WHERE option_name = 'license_key' AND option_value = 'SECRET-KEY-123'";
+$GLOBALS['qm'] = array(
+	'overview'   => (object) array( 'time_taken' => 1.25, 'memory' => 50331648, 'memory_limit' => 268435456 ),
+	'db_queries' => (object) array(
+		'rows'      => array(
+			array( 'sql' => $secret_sql, 'ltime' => 0.01, 'stack' => array( "get_option('SECRET-KEY-123')", 'Acme->boot()' ) ),
+			array( 'sql' => $secret_sql, 'ltime' => 0.06, 'stack' => array( "get_option('SECRET-KEY-123')", 'Acme->boot()' ) ),
+			array( 'sql' => $secret_sql, 'ltime' => 0.01, 'trace' => new QM_Backtrace() ),
+			array( 'sql' => 'SELECT 1', 'ltime' => 0.002, 'stack' => array( 'WP_Query->get_posts()' ) ),
+			array( 'sql' => 'SELECT 1', 'ltime' => 0.002, 'stack' => array() ),
+		),
+		'expensive' => array( 1 ),
+		'total_qs'  => 5,
+	),
+	'php_errors' => (object) array(
+		'errors' => array(
+			'a' => (object) array( 'errno' => E_WARNING, 'level' => 'warning', 'suppressed' => false, 'message' => 'Undefined array key "layout" near https://api.vendor.com/v1?license_key=SECRET-KEY-123', 'trace' => new QM_Backtrace( techies_qm_callsite( '/wordpress/wp-content/plugins/acme/render.php', 212 ) ), 'count' => 3 ),
+			'b' => (object) array( 'errno' => 2048, 'level' => 'strict', 'suppressed' => false, 'message' => 'Old style', 'trace' => null, 'count' => 1 ),
+			'c' => (object) array( 'errno' => E_NOTICE, 'level' => 'notice', 'suppressed' => true, 'message' => 'Silenced', 'trace' => null, 'count' => 1 ),
+		),
+	),
+	'http'       => (object) array(
+		'http' => array(
+			(object) array( 'host' => 'api.wordpress.org', 'type' => 'HTTP 200', 'local' => false ),
+			(object) array( 'host' => 'api.vendor.com', 'type' => 'HTTP 403', 'local' => false ),
+			(object) array( 'host' => 'api.other.com', 'type' => 'error', 'result' => new WP_Error(), 'local' => false ),
+			(object) array( 'host' => 'example.org', 'type' => 'non-blocking', 'local' => false ),
+			(object) array( 'host' => 'playground.local', 'type' => 'error', 'result' => new WP_Error(), 'local' => true ),
+		),
+	),
+);
+for ( $call = 0; $call < (int) getenv( 'CALLS_BEFORE' ); $call++ ) {
+	array_unshift( $GLOBALS['qm']['http']->http, (object) array( 'host' => 'api.wordpress.org', 'type' => 'HTTP 200', 'local' => false ) );
+}
+// Query Monitor stops collecting on pages it does not support (the Site Editor, a Customizer
+// preview): it fires qm/cease and each collector discards its data, but the collectors stay.
+// (The variable is not named QM_…: PHP's wasm runtime then empties QM.)
+if ( getenv( 'CEASED' ) ) {
+	foreach ( array_keys( $GLOBALS['qm'] ) as $id ) {
+		$GLOBALS['qm'][ $id ] = (object) array();
+	}
+	do_action( 'qm/cease' );
+}
+`
+
+async function measure(on, { front = false, callsBefore = 0, queryMonitor = false, queryMonitorCeased = false } = {}) {
   const php = new PHP(await loadPHPRuntime(await getPHPLoaderModule()))
   php.writeFile('/measure.php', MEASURE_PLUGIN)
+  php.writeFile('/query-monitor.php', QUERY_MONITOR_STUB)
   php.writeFile('/harness.php', MEASURE_HARNESS)
-  const response = await php.run({ scriptPath: '/harness.php', env: { MEASURE: on ? '1' : '', FRONT: front ? '1' : '', CALLS_BEFORE: String(callsBefore) } })
+  const response = await php.run({ scriptPath: '/harness.php', env: { MEASURE: on ? '1' : '', FRONT: front ? '1' : '', CALLS_BEFORE: String(callsBefore), QM: queryMonitor ? '1' : '', CEASED: queryMonitorCeased ? '1' : '' } })
   assert.equal(response.errors, '', response.errors)
   return response.text
 }
 
+test('with Query Monitor active, the numbers are the ones Query Monitor collected on the page', async () => {
+  const text = await measure(true, { queryMonitor: true })
+  const report = parseMeasurement(text)
+  assert.deepEqual([report.source, report.qmVersion], ['query-monitor', '4.1.1'])
+  assert.deepEqual([report.time, report.memory, report.memoryLimit], [1.25, 50331648, 268435456])
+  assert.deepEqual([report.queries, report.slowQueries, report.duplicates], [5, 1, 3])
+  assert.ok(Math.abs(report.queryTime - 0.084) < 1e-9)
+  // The queries repeated most, named by the function that ran them, without its arguments.
+  assert.deepEqual(report.repeated, [{ count: 3, caller: 'get_option()' }, { count: 2, caller: 'WP_Query->get_posts()' }])
+  // Query Monitor counts a repeated error once with a count; strict counts as deprecated; an
+  // @-silenced error is skipped. Errors this plugin saw itself are not counted twice.
+  assert.deepEqual(report.errorCounts, { error: 0, warning: 3, notice: 0, deprecated: 1 })
+  assert.deepEqual(report.errors.map((error) => [error.kind, error.message, error.file, error.line]), [
+    ['warning', 'Undefined array key "layout" near https://api.vendor.com/v1?…', 'wp-content/plugins/acme/render.php', 212],
+    ['deprecated', 'Old style', '', 0],
+  ])
+  // Calls to the site itself are not calls to other sites; a call that waits for no answer
+  // cannot fail.
+  assert.deepEqual([report.calls, report.failedCalls], [4, 2])
+  assert.deepEqual(report.http, [
+    { host: 'api.wordpress.org', code: 200 }, { host: 'api.vendor.com', code: 403 }, { host: 'api.other.com', code: 0 }, { host: 'example.org', code: -1 },
+  ])
+  // The plugin load times are still the Playground's own.
+  assert.deepEqual(report.plugins.map((plugin) => plugin.name).sort(), ['WP 2FA', 'other/other.php'])
+  const page = text.split('\nHOOKS:')[0]
+  assert.doesNotMatch(page, /SECRET-KEY-123/)
+  assert.doesNotMatch(atob(page.match(/TECHIES_MEASURE:([A-Za-z0-9+/=]+)/)[1]), /wp_options|SELECT/, 'no SQL leaves the page')
+})
+
+test('with Query Monitor active, failed calls after the first 40 still name their site', async () => {
+  const report = parseMeasurement(await measure(true, { queryMonitor: true, callsBefore: 40 }))
+  assert.deepEqual([report.calls, report.failedCalls], [44, 2])
+  assert.equal(report.http.length, 22, 'the first 20 calls and the later failed ones')
+  assert.deepEqual(report.http.slice(20), [{ host: 'api.vendor.com', code: 403 }, { host: 'api.other.com', code: 0 }])
+})
+
+test('on a page where Query Monitor stopped collecting, the numbers are the Playground\'s own', async () => {
+  const report = parseMeasurement(await measure(true, { queryMonitor: true, queryMonitorCeased: true }))
+  assert.equal(report.source, 'playground')
+  assert.deepEqual(report.errorCounts, { error: 0, warning: 2, notice: 0, deprecated: 1 })
+  assert.deepEqual([report.queries, report.time], [3, 0.5])
+})
+
 test('the measure plugin reports counts and times, never a query or an address with a key in it', async () => {
   const text = await measure(true)
   const report = parseMeasurement(text)
+  // Without Query Monitor the numbers are the Playground's own.
+  assert.equal(report.source, 'playground')
   assert.equal(report.title, 'Plugins page')
   assert.equal(report.time, 0.5)
   assert.equal(report.memoryLimit, 268435456)
@@ -134,7 +254,8 @@ test('a failed call after the first 20 still counts', async () => {
   assert.deepEqual(report.http.at(-1), { host: 'api.freemius.com', code: 403 })
   const calls = evaluateChecks(report, ['query-monitor']).checks.find((check) => check.id === 'outside-calls')
   assert.equal(calls.value, '1 failed')
-  assert.match(calls.details, /^1 of 21 calls to other sites failed: api\.freemius\.com\./)
+  assert.match(calls.details, /^1 of 21 calls to other sites failed\./)
+  assert.deepEqual(calls.found.entries, [{ status: 'warn', message: 'api.freemius.com', where: 'Answered HTTP 403' }])
 })
 
 test('the measure plugin does nothing on a normal page', async () => {

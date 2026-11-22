@@ -28,8 +28,9 @@ import {
   TrashIcon,
   XMarkIcon,
 } from '@heroicons/react/16/solid'
-import { installPlugin, installTheme, zipWpContent } from '@wp-playground/blueprints'
-import { detectPackageType, registerPackageDrop } from './lib/package-upload'
+import { installTheme, zipWpContent } from '@wp-playground/blueprints'
+import { createPackageUploadQueue, detectPackageType, liveUploadOutcome, registerPackageDrop, uploadControlLabel } from './lib/package-upload'
+import { installUploadedPlugin, uploadedPluginLicenses } from './lib/uploaded-plugins'
 import { buildPreviewPlugin, createLauncherScope, hostPreviewSession } from './lib/playground-preview'
 import { PLAYGROUND_ORIGIN, PLAYGROUND_READY_TIMEOUT_MS, PLAYGROUND_REMOTE_URL, startPlaygroundWithin } from './lib/playground-host'
 import {
@@ -111,7 +112,6 @@ import {
   licensesNeeded,
   activeInSite,
   packagesWithSavedKeys,
-  pluginFolderFromAssetPath,
 } from './lib/license-fill'
 import {
   CHECKS,
@@ -120,16 +120,24 @@ import {
   MEASURE_PLUGIN,
   MEASURE_PLUGIN_PATH,
   addCheckToSetup,
+  removeCheckFromSetup,
+  resolveCheckPlugins,
+  selectUploadedPlugin,
   checkResultsPath,
   checksAnnouncement,
   checksGate,
+  checkedPagePath,
   checksInSetup,
-  createRunGuard,
+  rememberCheckPluginsCode,
+  checksQuiet,
+  createCheckQueue,
   evaluateChecks,
   measurePage,
+  watchCheckPages,
 } from './lib/checks'
 import { runPluginUpdates, updatesAnnouncement } from './lib/plugin-updates'
 import { UpdatesControl } from './UpdatesControl'
+import { UploadControl } from './UploadControl'
 import { ChecksButton, ChecksPanel } from './ChecksPanel'
 import {
   assertZipFile,
@@ -148,6 +156,81 @@ const PERSISTED_SITES_KEY = persistedSitesKey(PLAYGROUND_ORIGIN)
 const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-storage-default-v1'
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
+  {
+    version: '0.13.3',
+    date: 'November 22, 2026',
+    title: 'Saved uploads leave room for Close',
+    summary: 'Saved uploads stay compact on medium-width bars. Problems after installation keep an accurate Added with problems headline.',
+    changes: [
+      'Upload controls show their icons without labels below 1041 px, so Close stays on screen in idle, busy, added and saved states.',
+      'When a plugin installs but activation, checks, licence setup or opening the plugin list has a problem, the control says Added with problems and keeps the reason beside it.',
+    ],
+  },
+  {
+    version: '0.13.2',
+    date: 'November 22, 2026',
+    title: 'ZIP uploads and tester selections',
+    summary: 'Both ZIP pickers detect plugins and themes. Upload progress keeps Close on screen on narrow bars.',
+    changes: [
+      'Both Add ZIPs pickers share the upload queue and detect plugins and themes from their headers.',
+      'Upload progress uses the existing spinner on narrow bars, and the upload button keeps keyboard focus while busy.',
+      'Starting a saved setup switches off competing editions and testers previously activated by the launcher that you turned off. Testers activated separately inside WordPress stay on.',
+      'Failures after installation keep the installed plugin status and report when checks or licence setup fails, or the plugin list cannot be opened.',
+    ],
+  },
+  {
+    version: '0.13.1',
+    date: 'November 22, 2026',
+    title: 'WordPress Playground 3.1.65',
+    summary: 'Playground runs on its newest release.',
+    changes: [
+      'Playground is updated to 3.1.65.',
+    ],
+  },
+  {
+    version: '0.13.0',
+    date: 'November 22, 2026',
+    title: 'Uploaded plugins activate, and testers can be switched off',
+    summary: 'Drop a plugin ZIP into an open site to install and activate it right away. Turn testers off or upload their Pro versions.',
+    changes: [
+      'Add key and Add license show a key icon with a small plus. Saved keys keep the existing key icon.',
+      'Uploaded plugins install and activate at start or when dropped onto a running site. Failed activation appears on the plugin row and keeps the site open. Add ZIPs in the site bar also accepts uploads and shows progress or failures on its control.',
+      'Query Monitor and Code Profiler have a Turn off button. Uploading query-monitor-pro.zip or code-profiler-pro.zip replaces the free selection; add its key through the existing encrypted vault.',
+    ],
+  },
+  {
+    version: '0.12.2',
+    date: 'November 22, 2026',
+    title: 'Big text on small phones fits cleanly',
+    summary: 'At 320 px with 200% text, the Playground top bar and close confirmation wrap onto their own lines so Close, Keep open and Discard and close stay on screen, and the start page no longer scrolls sideways.',
+    changes: [
+      'On a 320 px phone with 200% text (or other narrow enlarged-text views), the Playground bar wraps onto a second line so Close stays fully on screen and tappable without overlapping neighbours.',
+      'In the close confirmation, "Discard this temporary site?", Keep open and Discard and close wrap cleanly inside the 320 px screen while keeping 44 px tap areas that do not overlap.',
+      'Removed the 20 rem body minimum width and allowed header controls, form inputs, featured plugin cards and setup cards to wrap so a 320 px window does not scroll sideways at 100% or 200% text.',
+    ],
+  },
+  {
+    version: '0.12.1',
+    date: 'November 21, 2026',
+    title: 'Quick checks no longer flash a spinner',
+    summary: 'The Checks spinner now waits 200 ms before appearing.',
+    changes: ['Fixed the spinner delay in the Checks button, overview and detail view.'],
+  },
+  {
+    version: '0.12.0',
+    date: 'November 21, 2026',
+    title: 'Checks that follow the page you open, and explain their scores',
+    summary: 'The Checks panel now checks whichever WordPress page you open, says which page it checked, explains what each score means, and shows what needs fixing first.',
+    changes: [
+      'Checks now run on the page you have open in WordPress, every time you go to another page, even with the Checks panel closed. The Checks button in the top bar always shows the result for the latest page.',
+      'The panel says which page it checked, when, and how long it took.',
+      'The panel opens on an overview of all eight checks, with what needs fixing first. Click a check to see its number, its limits, what it found and where the number came from; All checks takes you back. If you go to another page while a check is open, it stays open and updates.',
+      'The results now say Passed, Warning or Improve. Click the i next to the result to see the Good, Medium and Bad limits for every check, with a More information link to the article that explains them.',
+      'The numbers come from Query Monitor on the page you opened whenever it can report them, and the panel says so; when it cannot, the panel says the Playground measured them instead.',
+      'Numbers roll to their new value when a new result arrives, and stand still with reduce motion turned on. The spinner waits a moment, so quick checks do not flash it.',
+      'On a 320 px phone with 200% text, the Checks title no longer hides behind Run again, Close stays on screen, Keep open and Discard and close are easier to tap, and the start page no longer scrolls a few pixels sideways.',
+    ],
+  },
   {
     version: '0.11.1',
     date: 'November 21, 2026',
@@ -411,15 +494,15 @@ function rememberPersistedSite(id) {
 
 function Select({ id, label, value, onChange, children }) {
   return (
-    <label htmlFor={id} className="grid gap-2 text-base/7 font-medium text-neutral-900 sm:text-sm/6">
+    <label htmlFor={id} className="grid min-w-0 grid-cols-1 gap-2 text-base/7 font-medium text-neutral-900 sm:text-sm/6">
       {label}
-      <span className="inline-grid grid-cols-[1fr_--spacing(8)]">
+      <span className="inline-grid min-w-0 grid-cols-[minmax(0,1fr)_--spacing(8)]">
         <select
           id={id}
           name={id}
           value={value}
           onChange={onChange}
-          className="col-span-full row-start-1 appearance-none rounded-lg bg-white py-2.5 pr-8 pl-3 text-base/7 font-normal text-neutral-900 ring-1 ring-neutral-950/10 outline-none focus-visible:outline-2 -outline-offset-1 focus-visible:outline-teal-600 sm:py-2 sm:text-sm/6"
+          className="col-span-full row-start-1 min-w-0 w-full appearance-none rounded-lg bg-white py-2.5 pr-8 pl-3 text-base/7 font-normal text-neutral-900 ring-1 ring-neutral-950/10 outline-none focus-visible:outline-2 -outline-offset-1 focus-visible:outline-teal-600 sm:py-2 sm:text-sm/6"
         >
           {children}
         </select>
@@ -431,7 +514,7 @@ function Select({ id, label, value, onChange, children }) {
 
 function TextField({ id, label, value, onChange, type = 'text', placeholder = '', description = '' }) {
   return (
-    <label htmlFor={id} className="grid gap-2 text-base/7 font-medium text-neutral-900 sm:text-sm/6">
+    <label htmlFor={id} className="grid min-w-0 grid-cols-1 gap-2 text-base/7 font-medium text-neutral-900 sm:text-sm/6">
       {label}
       <input
         id={id}
@@ -440,7 +523,7 @@ function TextField({ id, label, value, onChange, type = 'text', placeholder = ''
         value={value}
         onChange={onChange}
         placeholder={placeholder}
-        className="rounded-lg bg-white px-3 py-2.5 text-base/7 font-normal text-neutral-900 ring-1 ring-neutral-950/10 outline-none placeholder:text-neutral-400 focus-visible:outline-2 -outline-offset-1 focus-visible:outline-teal-600 sm:py-2 sm:text-sm/6"
+        className="min-w-0 w-full rounded-lg bg-white px-3 py-2.5 text-base/7 font-normal text-neutral-900 ring-1 ring-neutral-950/10 outline-none placeholder:text-neutral-400 focus-visible:outline-2 -outline-offset-1 focus-visible:outline-teal-600 sm:py-2 sm:text-sm/6"
       />
       {description && <span className="font-normal text-neutral-500">{description}</span>}
     </label>
@@ -480,7 +563,7 @@ function Checkbox({ id, checked, onChange, label, description, indicator = 'squa
           </span>
         )}
       </span>
-      <span className="min-w-0">
+      <span className="min-w-0 [overflow-wrap:anywhere]">
         <span className={`font-medium text-neutral-900 ${indicator === 'plugin' ? 'block' : ''}`}>{label}</span>
         {description && (
           <span className={`text-neutral-600 ${indicator === 'plugin' ? 'block' : ''}`}>
@@ -508,7 +591,7 @@ function Radio({ id, name, checked, onChange, label, description }) {
           <span className="pointer-events-none col-start-1 row-start-1 size-2/5 self-center justify-self-center rounded-full bg-white group-not-has-checked:opacity-0" />
         </span>
       </span>
-      <span className="min-w-0">
+      <span className="min-w-0 [overflow-wrap:anywhere]">
         <span className="font-medium text-neutral-900">{label}</span>
         {description && <span className="text-neutral-600"> — {description}</span>}
       </span>
@@ -597,12 +680,12 @@ function AppHeader({ onImportRecipe }) {
 
   return (
     <header className="border-b border-neutral-950/10 bg-white">
-      <div className="relative mx-auto flex max-w-7xl items-center gap-4 px-5 py-4 sm:px-8 lg:px-10">
+      <div className="relative mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-5 py-4 sm:px-8 lg:px-10">
         <a href="/" aria-label="Homepage" className="flex min-w-0 flex-1 items-center gap-3 rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600">
           <CircleStackIcon className="size-4 shrink-0 fill-teal-700" />
           <span className="truncate font-semibold text-neutral-950">Techies Playground</span>
         </a>
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
           <p className="hidden items-center gap-1.5 text-sm/6 text-neutral-600 sm:flex">
             <LockClosedIcon className="size-4 shrink-0 fill-teal-700" />
             Browser-local vault
@@ -1305,7 +1388,7 @@ function LicenseManager({ packages, anchorRef, fillResults, onRecordsChange, onC
                 <p className="min-w-0 max-w-[52ch] flex-1 text-pretty text-base/7 text-neutral-600 sm:text-sm/6">Names are visible after unlocking; keys stay encrypted until you press Copy or a launch fills them in.</p>
                 <button type="button" disabled={!packages.length} onClick={beginAdding} className="relative inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-white py-2 pr-3 pl-2 text-sm/5 font-medium text-neutral-800 ring-1 ring-neutral-950/10 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 disabled:cursor-not-allowed disabled:opacity-50">
                   <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
-                  <PlusIcon className="size-4 shrink-0 fill-neutral-500" />
+                  <KeyPlusIcon />
                   Add license
                 </button>
               </div>
@@ -1521,7 +1604,16 @@ function AddKeyForm({ plugin, onSaved, onSavedElsewhere, onCancel }) {
   )
 }
 
-function PluginRow({ plugin, selected, keySaved, addingKey, onToggle, onReplace, onRemove, onAddKey, onCancelKey, onKeySaved, onKeysChanged }) {
+function KeyPlusIcon() {
+  return (
+    <span aria-hidden="true" className="inline-flex shrink-0 items-center gap-0.5 text-neutral-500">
+      <KeyIcon className="size-4 fill-current" />
+      <PlusIcon className="size-3 fill-current" />
+    </span>
+  )
+}
+
+function PluginRow({ plugin, selected, installResult, keySaved, addingKey, onToggle, onReplace, onRemove, onAddKey, onCancelKey, onKeySaved, onKeysChanged }) {
   const size = `${(plugin.size / 1024 / 1024).toFixed(1)} MB`
   const versionHint = plugin.versionHint || extractVersionHint(plugin.filename)
   const packageDetails = [versionHint && `version ${versionHint}`, size, 'stored only in this browser'].filter(Boolean).join(', ')
@@ -1537,6 +1629,7 @@ function PluginRow({ plugin, selected, keySaved, addingKey, onToggle, onReplace,
           description={packageDetails}
           indicator="plugin"
         />
+        {installResult && <p role="status" className={`text-pretty text-sm/6 ${installResult.status === 'active' ? 'text-teal-800' : 'text-red-700'}`}>{installResult.message}</p>}
       </div>
       {!keySaved && !addingKey && (
         <button
@@ -1546,7 +1639,7 @@ function PluginRow({ plugin, selected, keySaved, addingKey, onToggle, onReplace,
           aria-label={`Add a license key for ${plugin.label}`}
           className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-white py-1 pr-2.5 pl-1.5 text-sm/5 font-medium text-neutral-800 ring-1 ring-neutral-950/10 any-pointer-coarse:min-h-11 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
         >
-          <PlusIcon className="size-4 shrink-0 fill-neutral-500" />
+          <KeyPlusIcon />
           Add key
         </button>
       )}
@@ -1635,35 +1728,35 @@ function LaunchSummary({ recipe, selectedPackageLabel, selectedPluginLabels, key
       <div className="p-6">
         <h2 className="truncate text-2xl font-semibold tracking-tight text-balance text-neutral-950">{recipe.name}</h2>
 
-        <dl className="grid gap-3 pt-5 text-base/7 sm:text-sm/6">
-          <div className="flex items-start justify-between gap-4">
-            <dt className="font-medium text-neutral-900">Environment</dt>
-            <dd className="text-right text-neutral-600">WordPress {recipe.wordpress}<br />PHP {recipe.php}</dd>
+        <dl className="grid grid-cols-1 gap-3 pt-5 text-base/7 sm:text-sm/6">
+          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+            <dt className="shrink-0 font-medium text-neutral-900">Environment</dt>
+            <dd className="flex-1 min-w-[min(100%,8rem)] text-right text-neutral-600 [overflow-wrap:anywhere]">WordPress {recipe.wordpress}<br />PHP {recipe.php}</dd>
           </div>
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
             <dt className="shrink-0 font-medium text-neutral-900">Packages</dt>
-            <dd className="min-w-0 text-end text-neutral-600 [overflow-wrap:break-word]">
+            <dd className="flex-1 min-w-[min(100%,8rem)] text-end text-neutral-600 [overflow-wrap:anywhere]">
               {selectedPackageLabel || 'WordPress only'}
               {selectedPluginLabels.length > 0 && <span className="block">{selectedPluginLabels.join(', ')}</span>}
             </dd>
           </div>
           {keyCounts.total > 0 && (
-            <div className="flex items-start justify-between gap-4">
-              <dt className="font-medium text-neutral-900">Licenses</dt>
-              <dd className="text-right text-neutral-600">{keyCounts.saved} of {keyCounts.total} keys saved</dd>
+            <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+              <dt className="shrink-0 font-medium text-neutral-900">Licenses</dt>
+              <dd className="flex-1 min-w-[min(100%,8rem)] text-right text-neutral-600 [overflow-wrap:anywhere]">{keyCounts.saved} of {keyCounts.total} keys saved</dd>
             </div>
           )}
-          <div className="flex items-start justify-between gap-4">
-            <dt className="font-medium text-neutral-900">Checks</dt>
-            <dd className="text-right text-neutral-600">{checks.length ? checks.map((check) => check.name).join(' + ') : 'None'}</dd>
+          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+            <dt className="shrink-0 font-medium text-neutral-900">Checks</dt>
+            <dd className="flex-1 min-w-[min(100%,8rem)] text-right text-neutral-600 [overflow-wrap:anywhere]">{checks.length ? checks.map((check) => check.name).join(' + ') : 'None'}</dd>
           </div>
-          <div className="flex items-start justify-between gap-4">
-            <dt className="font-medium text-neutral-900">Storage</dt>
-            <dd className="text-right text-neutral-600">{recipe.storage === 'browser' ? 'Saved in this browser' : 'Temporary'}</dd>
+          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+            <dt className="shrink-0 font-medium text-neutral-900">Storage</dt>
+            <dd className="flex-1 min-w-[min(100%,8rem)] text-right text-neutral-600 [overflow-wrap:anywhere]">{recipe.storage === 'browser' ? 'Saved in this browser' : 'Temporary'}</dd>
           </div>
-          <div className="flex items-start justify-between gap-4">
-            <dt className="font-medium text-neutral-900">Networking</dt>
-            <dd className="text-right text-neutral-600">{recipe.networking ? 'Allowed' : 'Blocked'}</dd>
+          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+            <dt className="shrink-0 font-medium text-neutral-900">Networking</dt>
+            <dd className="flex-1 min-w-[min(100%,8rem)] text-right text-neutral-600 [overflow-wrap:anywhere]">{recipe.networking ? 'Allowed' : 'Blocked'}</dd>
           </div>
         </dl>
 
@@ -1791,12 +1884,20 @@ function VaultUnlockPrompt({ onUnlocked, onSkip, onCancel }) {
 export default function App() {
   const [isDraggingPackages, setIsDraggingPackages] = useState(false)
   const [uploadMessage, setUploadMessage] = useState('')
-  const uploadQueueRef = useRef(Promise.resolve())
+  const [pluginInstallResults, setPluginInstallResults] = useState({})
+  const [liveUpload, setLiveUpload] = useState({ state: 'idle', message: '' })
+  const importDroppedPackagesRef = useRef(null)
+  importDroppedPackagesRef.current = importDroppedPackages
+  const uploadQueueRef = useRef(null)
+  uploadQueueRef.current ??= createPackageUploadQueue(() => importDroppedPackagesRef.current, (caught) => {
+    if (caught?.name === 'AbortError') return
+    const message = 'The upload was saved, but could not be applied to the open site. Start the setup again to retry.'
+    setLiveUpload({ state: 'failed', message })
+    setError(message)
+  })
   useEffect(() => registerPackageDrop(window, {
     onActive: setIsDraggingPackages,
-    onFiles: (files) => {
-      uploadQueueRef.current = uploadQueueRef.current.then(() => importDroppedPackages(files))
-    },
+    onFiles: uploadQueueRef.current,
   }), [])
   const iframeRef = useRef(null)
   // A new frame element per launch: a start still waiting on an old frame (closed, or
@@ -1875,9 +1976,19 @@ export default function App() {
   const checksButtonRef = useRef(null)
   const updatesButtonRef = useRef(null)
   const launchedRecipeRef = useRef(null)
-  // The client a check run is measuring now, so a second run never starts on top of it.
-  const checksRunGuardRef = useRef(null)
-  checksRunGuardRef.current ??= createRunGuard()
+  const checksWatchedClientRef = useRef(null)
+  // The page each site measures now and the one that waits, so a site never measures twice at once.
+  const checksQueueRef = useRef(null)
+  checksQueueRef.current ??= createCheckQueue()
+  // For the page watcher, which outlives renders: the latest gate and runChecks, and the site
+  // the checks last ran on.
+  const checksGateRef = useRef(null)
+  const runChecksRef = useRef(null)
+  const checksRanOnRef = useRef(null)
+  const checksActiveRunRef = useRef(null)
+  const checksManualNextRef = useRef(null)
+  const checksPanelOpenRef = useRef(false)
+  const checksEscapeRef = useRef(null)
   const launchAbortRef = useRef(null)
   const savedKeyPackages = useMemo(() => packagesWithSavedKeys(licenseRecords || []), [licenseRecords])
   const keyCountsFor = (candidate) => ({
@@ -2089,19 +2200,27 @@ export default function App() {
     const failures = []
     let pluginCount = 0
     let themeCount = 0
+    const uploadedPlugins = []
+    const uploadLaunchId = launchIdRef.current
+    const uploadClient = status.step === 4 ? clientRef.current : null
+    const inOpenSite = showPlayground
     setError('')
     for (const [index, file] of files.entries()) {
-      setUploadMessage(`Uploading ${index + 1} of ${files.length}: ${file.name}`)
+      const message = `Uploading ${index + 1} of ${files.length}: ${file.name}`
+      if (inOpenSite) {
+        if (uploadLaunchId === launchIdRef.current) setLiveUpload({ state: 'uploading', message })
+      } else setUploadMessage(message)
       try {
         const type = await detectPackageType(file)
         const id = normalizePluginId(file.name)
         if (!id) throw new Error('Could not create a package ID.')
         const existing = await (type === 'theme' ? getTheme(id) : getPlugin(id))
-        await (type === 'theme' ? saveTheme : savePlugin)({
+        const record = {
           id, label: existing?.label || pluginLabelFromFilename(file.name),
           filename: file.name, size: file.size, file,
           versionHint: extractVersionHint(file.name), savedAt: Date.now(),
-        })
+        }
+        await (type === 'theme' ? saveTheme : savePlugin)(record)
         setActiveSavedId('')
         setActiveSpinupId('')
         if (type === 'theme') {
@@ -2110,8 +2229,9 @@ export default function App() {
           setRecipe((current) => validateRecipe({ ...current, theme: id, repositoryTheme: '' }))
         } else {
           pluginCount += 1
+          uploadedPlugins.push(record)
           setPluginRecency((current) => markPluginSelected(current, id))
-          setRecipe((current) => validateRecipe({ ...current, plugins: [...current.plugins, id] }))
+          setRecipe((current) => validateRecipe(selectUploadedPlugin(current, id)))
         }
       } catch (caught) {
         failures.push(`${file.name}: ${caught.message}`)
@@ -2123,36 +2243,104 @@ export default function App() {
     } catch (caught) {
       failures.push(caught.message)
     }
-    setUploadMessage(`Uploaded ${pluginCount} plugin${pluginCount === 1 ? '' : 's'} and ${themeCount} theme${themeCount === 1 ? '' : 's'} to this browser.${failures.length ? ` ${failures.length} upload error(s). ${failures.join(' ')}` : ''}`)
-    setError(failures.join(' '))
+    const summary = `Uploaded ${pluginCount} plugin${pluginCount === 1 ? '' : 's'} and ${themeCount} theme${themeCount === 1 ? '' : 's'} to this browser.`
+    if (!inOpenSite) setError(failures.join(' '))
+    if (!inOpenSite) setUploadMessage(`${summary}${failures.length ? ` ${failures.join(' ')}` : ''}`)
+    try {
+      const { failures: installFailures, problems } = await installLiveUploads(uploadedPlugins, uploadClient, uploadLaunchId)
+      if (inOpenSite && uploadLaunchId === launchIdRef.current) {
+        failures.push(...installFailures)
+        const messages = [...failures, ...problems]
+        setLiveUpload({ state: liveUploadOutcome({ failures, problems, hasClient: Boolean(uploadClient), pluginCount }), message: messages.length ? messages.join(' ') : `${summary}${!uploadClient ? ' Start the setup again to apply these packages.' : themeCount ? ' Start the setup again to apply the theme.' : ''}` })
+      }
+    } catch (caught) {
+      if (uploadLaunchId !== launchIdRef.current) return
+      throw caught
+    }
+  }
+
+  async function installLiveUploads(uploadedPlugins, client, launchId) {
+    const outcome = { failures: [], problems: [] }
+    const { failures, problems } = outcome
+    let installedCount = 0
+    if (!client || client !== clientRef.current || launchId !== launchIdRef.current) return outcome
+    const isCurrent = () => launchId === launchIdRef.current && client === clientRef.current
+    for (const [index, plugin] of uploadedPlugins.entries()) {
+      if (!isCurrent()) return outcome
+      setLiveUpload({ state: 'installing', message: `Installing ${index + 1} of ${uploadedPlugins.length}: ${plugin.label}` })
+      let result
+      try {
+        result = await installUploadedPlugin(client, plugin, { isCurrent })
+      } catch {
+        result = { status: 'failed', message: 'The uploaded plugin could not be installed. Try another ZIP.' }
+      }
+      if (!isCurrent()) return outcome
+      setPluginInstallResults((current) => ({ ...current, [plugin.id]: result }))
+      if (result.status === 'failed') {
+        failures.push(`${plugin.label}: ${result.message}`)
+        continue
+      }
+      if (result.status !== 'active') problems.push(`${plugin.label}: ${result.message}`)
+      installedCount += 1
+      try {
+        launchedRecipeRef.current = selectUploadedPlugin(launchedRecipeRef.current, plugin.id)
+        const checks = checksInSetup(launchedRecipeRef.current)
+        setLaunchedChecks(checks)
+        if (checks.some((check) => check.packageIds?.includes(plugin.id))) {
+          await client.run({ code: rememberCheckPluginsCode(launchedRecipeRef.current) })
+          if (!isCurrent()) return outcome
+        }
+        const folders = new Map(result.folder ? [[plugin.id, result.folder]] : [])
+        if (savedKeyPackages.has(`plugin:${plugin.id}`) && isVaultSessionUnlocked()) {
+          const filled = await fillSavedLicenseKeys({
+            client, getVaultKey: getVaultSessionKey, readKeys: readLicenseKeysForPackages,
+            packages: [{ id: plugin.id, vaultId: `plugin:${plugin.id}`, label: plugin.label }],
+            folders, signal: launchAbortRef.current?.signal,
+          })
+          if (!isCurrent()) return outcome
+          setLicenseFill((current) => [...current.filter((entry) => entry.vaultId !== `plugin:${plugin.id}`), ...filled])
+        }
+        if (checks.length) {
+          await client.writeFile(CHECKS_PLUGIN_PATH, CHECKS_PLUGIN)
+          if (!isCurrent()) return outcome
+          await client.writeFile(MEASURE_PLUGIN_PATH, MEASURE_PLUGIN)
+          if (!isCurrent()) return outcome
+          let needed = [plugin.id]
+          let active = []
+          try {
+            const licenses = await readFreemiusLicenses({ client, signal: launchAbortRef.current?.signal })
+            const state = uploadedPluginLicenses(plugin.id, savedKeyPackages, licenses, folders)
+            needed = state.needed
+            active = state.active
+          } catch {
+            // Unknown licence state keeps checks waiting for activation.
+          }
+          if (!isCurrent()) return outcome
+          setLicensedPackageIds((current) => [...current.filter((id) => id !== plugin.id && launchedRecipeRef.current.plugins.includes(id)), ...needed])
+          setSiteLicensedIds((current) => [...current.filter((id) => id !== plugin.id && launchedRecipeRef.current.plugins.includes(id)), ...active])
+          watchPages(client)
+        }
+      } catch {
+        if (!isCurrent()) return outcome
+        problems.push(`${plugin.label}: Installed, but the checks or licence could not be set up. Start the setup again to retry.`)
+      }
+    }
+    if (isCurrent() && installedCount) {
+      try {
+        await client.goTo('/wp-admin/plugins.php')
+      } catch {
+        if (isCurrent()) problems.push('Installed, but the plugin list could not be opened. Open Plugins in WordPress to check the result.')
+      }
+    }
+    return outcome
   }
 
   async function handleZipImport(event) {
-    setError('')
+    const input = event.target
     try {
-      setActiveSavedId('')
-      for (const file of event.target.files) {
-        await assertZipFile(file)
-        const id = normalizePluginId(file.name)
-        if (!id) throw new Error(`Could not create an ID for ${file.name}.`)
-        const existing = await getPlugin(id)
-        await savePlugin({
-          id,
-          label: existing?.label || pluginLabelFromFilename(file.name),
-          filename: file.name,
-          size: file.size,
-          file,
-          versionHint: extractVersionHint(file.name),
-          savedAt: Date.now(),
-        })
-        setPluginRecency((current) => markPluginSelected(current, id))
-        setRecipe((current) => validateRecipe({ ...current, plugins: [...current.plugins, id] }))
-      }
-      setPlugins(await listPlugins())
-    } catch (caught) {
-      setError(caught.message)
+      await uploadQueueRef.current([...input.files])
     } finally {
-      event.target.value = ''
+      input.value = ''
     }
   }
 
@@ -2182,34 +2370,6 @@ export default function App() {
     }
   }
 
-  async function handleThemeZipImport(event) {
-    setError('')
-    try {
-      setActiveSavedId('')
-      for (const file of event.target.files) {
-        await assertZipFile(file)
-        const id = normalizePluginId(file.name)
-        if (!id) throw new Error(`Could not create a theme ID for ${file.name}.`)
-        const existing = await getTheme(id)
-        await saveTheme({
-          id,
-          label: existing?.label || pluginLabelFromFilename(file.name),
-          filename: file.name,
-          size: file.size,
-          file,
-          versionHint: extractVersionHint(file.name),
-          savedAt: Date.now(),
-        })
-        setThemeRecency((current) => markPluginSelected(current, id))
-        setRecipe((current) => validateRecipe({ ...current, theme: id, repositoryTheme: '' }))
-      }
-      setThemes(await listThemes())
-    } catch (caught) {
-      setError(caught.message)
-    } finally {
-      event.target.value = ''
-    }
-  }
 
   async function handleReplacementThemeZip(event) {
     setError('')
@@ -2284,8 +2444,8 @@ export default function App() {
     checksButtonRef.current?.focus()
   }, [])
 
-  // Escape closes the Updated note first, then the Checks panel. The Licenses manager
-  // handles its own Escape.
+  // Escape closes the Updated note first, then the scores info and the open check inside the
+  // Checks panel, then the panel. The Licenses manager handles its own Escape.
   useEffect(() => {
     if ((!showUpdates && !showChecksPanel) || showLicenseManager) return undefined
     function handleEscape(event) {
@@ -2293,7 +2453,7 @@ export default function App() {
       if (showUpdates) {
         setShowUpdates(false)
         updatesButtonRef.current?.focus()
-      } else {
+      } else if (!checksEscapeRef.current?.()) {
         closeChecksPanel()
       }
     }
@@ -2301,35 +2461,88 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleEscape)
   }, [showUpdates, showChecksPanel, showLicenseManager, closeChecksPanel])
 
-  // Measures the page open in WordPress. The result belongs to the client it ran on, so a
-  // run that finishes after the Playground closed or relaunched is dropped.
-  async function runChecks(client = clientRef.current) {
+  // Measures a page of the site: the one open in WordPress unless a path is given. The result
+  // belongs to the client it ran on, so a run that finishes after the Playground closed or
+  // relaunched is dropped, and so is one whose page was left while it ran: the page opened
+  // since is measured next. auto: a page that opened, which is not measured twice in a row.
+  async function runChecks(client = clientRef.current, { auto = false, path } = {}) {
     const checkIds = checksInSetup(launchedRecipeRef.current || recipe).map((check) => check.id)
-    if (!client || !checkIds.length || !checksRunGuardRef.current.start(client)) return
-    const started = performance.now()
-    setChecksRun((current) => ({ ...current, state: 'running' }))
-    try {
-      let currentPath = ''
+    if (!client || !checkIds.length) return
+    let currentPath = path
+    if (currentPath === undefined) {
       try {
         currentPath = await client.getCurrentURL()
       } catch {
         currentPath = ''
       }
-      const measurement = await measurePage(client, currentPath)
       if (client !== clientRef.current) return
-      setChecksRun({
+    }
+    const page = checkedPagePath(currentPath)
+    if (checksQueueRef.current.request(client, page, { force: !auto }) !== 'start') {
+      // Run again on the page already being measured joins that run and shows it at once; on a
+      // page that waits behind another run, that page starts as Run again.
+      if (!auto) {
+        if (checksActiveRunRef.current?.page === page) checksActiveRunRef.current.join()
+        else checksManualNextRef.current = page
+      }
+      return
+    }
+    checksRanOnRef.current = client
+    const started = performance.now()
+    // A run on a page change keeps the last result on screen for its first 0.6 s. Most take
+    // about 0.3 s, so the bar and the panel do not blink on every page. Run again shows at once.
+    let manual = !auto
+    let runningTimer = 0
+    const showRunning = () => {
+      window.clearTimeout(runningTimer)
+      if (client === clientRef.current) setChecksRun((current) => ({ ...current, state: 'running', path: page, auto: !manual }))
+    }
+    const active = { page, join: () => { manual = true; showRunning() } }
+    checksActiveRunRef.current = active
+    if (manual) showRunning()
+    else runningTimer = window.setTimeout(showRunning, 600)
+    try {
+      const measurement = await measurePage(client, page)
+      if (client !== clientRef.current || checksQueueRef.current.waiting(client)) return
+      const report = evaluateChecks(measurement, checkIds)
+      setChecksRun((current) => ({
         state: 'done',
-        report: evaluateChecks(measurement, checkIds),
+        report,
         title: measurement.title,
+        path: page,
         time: new Date(),
         took: (performance.now() - started) / 1000,
-      })
+        quiet: checksQuiet({ auto: !manual, panelOpen: checksPanelOpenRef.current, previous: current.report, report }),
+      }))
     } catch (caught) {
-      if (client !== clientRef.current) return
-      setChecksRun({ state: 'error', message: caught instanceof Error ? caught.message : 'The checks could not measure this page.' })
+      if (client !== clientRef.current || checksQueueRef.current.waiting(client)) return
+      setChecksRun({ state: 'error', path: page, message: caught instanceof Error ? caught.message : 'The checks could not measure this page.' })
     } finally {
-      checksRunGuardRef.current.finish(client)
+      window.clearTimeout(runningTimer)
+      if (checksActiveRunRef.current === active) checksActiveRunRef.current = null
+      const next = checksQueueRef.current.finish(client)
+      const manualNext = next !== null && checksManualNextRef.current === next
+      checksManualNextRef.current = null
+      if (next !== null && client === clientRef.current) runChecksRef.current(client, { auto: !manualNext, path: next })
     }
+  }
+
+  useEffect(() => {
+    runChecksRef.current = runChecks
+    checksGateRef.current = checksLicenseGate
+    checksPanelOpenRef.current = showChecksPanel
+  })
+
+  // Measures every page that opens in WordPress, also with the panel closed, once the licenses
+  // allow the checks (or they already ran on this site).
+  function watchPages(client) {
+    if (checksWatchedClientRef.current === client) return
+    checksWatchedClientRef.current = client
+    watchCheckPages(client, {
+      isCurrent: () => client === clientRef.current,
+      canRun: () => Boolean(checksGateRef.current?.ready || checksRanOnRef.current === client),
+      run: (path) => runChecksRef.current(client, { auto: true, path }),
+    })
   }
 
   async function openCheck(check) {
@@ -2380,17 +2593,19 @@ export default function App() {
     if (!recipe.plugins.includes(id)) {
       setPluginRecency((current) => markPluginSelected(current, id))
     }
-    updateRecipe({
-      plugins: recipe.plugins.includes(id) ? recipe.plugins.filter((pluginId) => pluginId !== id) : [...recipe.plugins, id],
-    })
+    updateRecipe(recipe.plugins.includes(id)
+      ? { plugins: recipe.plugins.filter((pluginId) => pluginId !== id) }
+      : selectUploadedPlugin(recipe, id))
   }
 
   function toggleRepositoryPlugin(slug) {
-    updateRecipe({
-      repositoryPlugins: recipe.repositoryPlugins.includes(slug)
-        ? recipe.repositoryPlugins.filter((pluginSlug) => pluginSlug !== slug)
-        : [...recipe.repositoryPlugins, slug],
-    })
+    if (recipe.repositoryPlugins.includes(slug)) {
+      updateRecipe({ repositoryPlugins: recipe.repositoryPlugins.filter((id) => id !== slug) })
+      return
+    }
+    const check = CHECKS.find((candidate) => candidate.packageIds.includes(slug))
+    const next = check ? removeCheckFromSetup(recipe, check.id) : recipe
+    updateRecipe({ ...next, repositoryPlugins: [...next.repositoryPlugins, slug] })
   }
 
   function chooseTheme(id) {
@@ -2466,7 +2681,7 @@ export default function App() {
 
     let launchedRecipe
     try {
-      launchedRecipe = validateRecipe(candidate)
+      launchedRecipe = resolveCheckPlugins(validateRecipe(candidate))
       const warning = externalSetupMessage(launchedRecipe)
       if (warning && !window.confirm(`${warning}\n\nLaunch this recipe?`)) return
     } catch (caught) {
@@ -2476,6 +2691,9 @@ export default function App() {
     const launchId = launchIdRef.current + 1
     launchIdRef.current = launchId
     setError('')
+    setUploadMessage('')
+    setLiveUpload({ state: 'idle', message: '' })
+    setPluginInstallResults({})
     setConfirmingPlaygroundClose(false)
     setShowPlayground(true)
     setLicenseFill([])
@@ -2610,16 +2828,16 @@ echo 'PLAYGROUND_WORDPRESS_VERSION:' . $wp_version;
       for (const [index, id] of launchedRecipe.plugins.entries()) {
         const plugin = await getPlugin(id)
         installedPlugins.push(plugin)
-        const pluginFile = new File([plugin.file], plugin.filename, { type: 'application/zip' })
         setStatus({ running: true, step: 1, message: `Installing ${plugin.label} (${index + 1} of ${launchedRecipe.plugins.length})…` })
-        const installed = await installPlugin(client, {
-          pluginData: pluginFile,
-          options: { activate: true },
-          ifAlreadyInstalled: 'overwrite',
-        })
+        const result = await installUploadedPlugin(client, plugin, { isCurrent: () => launchId === launchIdRef.current })
         if (launchId !== launchIdRef.current) return
-        const folder = pluginFolderFromAssetPath(installed?.assetPath)
-        if (folder) pluginFolders.set(id, folder)
+        setPluginInstallResults((current) => ({ ...current, [id]: result }))
+        if (result.folder) pluginFolders.set(id, result.folder)
+      }
+
+      if (checksInSetup({ ...launchedRecipe, repositoryPlugins: [] }).length) {
+        await client.run({ code: rememberCheckPluginsCode(launchedRecipe) })
+        if (launchId !== launchIdRef.current) return
       }
 
       let installedTheme = launchedRecipe.repositoryTheme ? (() => {
@@ -2705,7 +2923,10 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
         ? { ...launchedRecipe, wordpress: launchedWordPressVersion }
         : launchedRecipe
       setSpinupHistory((current) => appendSpinup(current, { recipe: historyRecipe, plugins: installedPlugins, theme: installedTheme }))
-      if (checksInSetup(launchedRecipe).length && checksGate(checksLicenseIds, licenseResults, siteActiveIds).ready) runChecks(client)
+      if (checksInSetup(launchedRecipe).length) {
+        watchPages(client)
+        if (checksGate(checksLicenseIds, licenseResults, siteActiveIds).ready) runChecks(client, { auto: true })
+      }
     } catch (caught) {
       if (launchId !== launchIdRef.current) return
       stopPreviewSessionRef.current?.()
@@ -2751,7 +2972,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
           </div>
         </div>
       )}
-      {uploadMessage && (
+      {uploadMessage && !showPlayground && (
         <div role="status" className="fixed bottom-5 left-5 right-5 z-[1001] mx-auto flex max-w-xl items-start gap-4 rounded-xl border border-teal-200 bg-white p-4 shadow-lg">
           <p className="min-w-0 flex-1 break-words">{uploadMessage}</p>
           <button type="button" onClick={() => setUploadMessage('')} aria-label="Dismiss upload status"><XMarkIcon className="size-5" /></button>
@@ -2759,19 +2980,19 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
       )}
       <AppHeader onImportRecipe={handleRecipeImport} />
       <main className="mx-auto max-w-7xl px-5 py-8 sm:px-8 sm:py-10 lg:px-10">
-        <div className="grid gap-8 lg:grid-cols-[13fr_7fr] lg:items-start">
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[13fr_7fr] lg:items-start">
           <div className="min-w-0">
             <div>
               <p className="font-mono text-base/7 tracking-wide text-teal-700 sm:text-sm/6">PRIVATE, IN-BROWSER PLAYGROUND</p>
-              <h1 className="max-w-[24ch] text-4xl font-semibold tracking-tight text-balance sm:text-5xl">Test premium WordPress tools with ease</h1>
+              <h1 className="max-w-[24ch] text-4xl font-semibold tracking-tight text-balance hyphens-auto [overflow-wrap:anywhere] sm:text-5xl">Test premium WordPress tools with ease</h1>
               <p className="max-w-[48ch] text-pretty text-lg text-neutral-600">
                 Test your premium plugins and themes on the official WordPress Playground stack. Everything runs privately in your browser, with your packages and licenses kept under your control.
               </p>
             </div>
 
-            <form className="grid gap-8 pt-10" onSubmit={(event) => { event.preventDefault(); launch() }}>
+            <form className="grid grid-cols-1 gap-8 pt-10" onSubmit={(event) => { event.preventDefault(); launch() }}>
               <section aria-labelledby="environment-heading" className="border-t border-neutral-950/10 pt-6">
-                <div className="flex items-baseline justify-between gap-4">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                   <h2 id="environment-heading" className="text-xl font-semibold text-balance">1. Environment</h2>
                   <p className="font-mono text-base/7 text-neutral-500 sm:text-sm/6">EPHEMERAL + SQLITE</p>
                 </div>
@@ -2807,16 +3028,16 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                     </div>
                   </div>
                 </div>
-                <details open={Boolean(recipe.wxrUrl || recipe.phpExtensionManifestUrl)} className="group mt-5 rounded-xl bg-white ring-1 ring-neutral-950/10 open:shadow-sm">
-                  <summary className="flex cursor-pointer list-none items-center gap-3 rounded-xl px-4 py-3 text-base/7 font-medium text-neutral-900 outline-none marker:hidden hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 sm:text-sm/6 [&::-webkit-details-marker]:hidden">
-                    <span className="min-w-0 flex-1">Advanced settings</span>
-                    <span className="font-normal text-neutral-500">Site, storage, debugging, and imports</span>
-                    <ChevronDownIcon className="size-4 shrink-0 fill-neutral-500 transition-transform duration-200 group-open:rotate-180" />
+                <details open={Boolean(recipe.wxrUrl || recipe.phpExtensionManifestUrl)} className="group @container mt-5 rounded-xl bg-white ring-1 ring-neutral-950/10 open:shadow-sm">
+                  <summary className="grid cursor-pointer list-none grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 rounded-xl px-4 py-3 text-base/7 font-medium text-neutral-900 outline-none marker:hidden hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 @lg:grid-cols-[minmax(0,1fr)_auto_auto] sm:text-sm/6 [&::-webkit-details-marker]:hidden">
+                    <span className="min-w-0 hyphens-auto [overflow-wrap:anywhere]">Advanced settings</span>
+                    <span className="col-span-full row-start-2 min-w-0 font-normal text-neutral-500 [overflow-wrap:anywhere] @lg:col-span-1 @lg:col-start-2 @lg:row-start-1">Site, storage, debugging, and imports</span>
+                    <ChevronDownIcon className="col-start-2 row-start-1 size-4 shrink-0 fill-neutral-500 transition-transform duration-200 group-open:rotate-180 @lg:col-start-3" />
                   </summary>
-                  <div className="grid gap-6 border-t border-neutral-950/10 p-4">
-                    <fieldset className="grid gap-4">
+                  <div className="grid grid-cols-1 gap-6 border-t border-neutral-950/10 p-4">
+                    <fieldset className="grid min-w-0 grid-cols-1 gap-4">
                       <legend className="text-base/7 font-semibold text-neutral-950 sm:text-sm/6">Site setup</legend>
-                      <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <Select id="site-language" label="Language" value={recipe.language} onChange={(event) => updateRecipe({ language: event.target.value })}>
                           <option value="en_US">English (United States)</option>
                           <option value="nl_NL">Nederlands</option>
@@ -2842,7 +3063,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                       </div>
                     </fieldset>
 
-                    <fieldset className="grid gap-3 border-t border-neutral-950/10 pt-5 text-base/7 sm:text-sm/6">
+                    <fieldset className="grid min-w-0 grid-cols-1 gap-3 border-t border-neutral-950/10 pt-5 text-base/7 sm:text-sm/6">
                       <legend className="mb-1 text-base/7 font-semibold text-neutral-950 sm:text-sm/6">Runtime features</legend>
                       <Checkbox
                         id="networking"
@@ -2855,13 +3076,13 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                       <Checkbox id="intl" checked={recipe.intl} onChange={(event) => updateRecipe({ intl: event.target.checked })} label="Enable PHP Intl" description="Adds locale-aware PHP formatting support." />
                       <Checkbox id="wp-cli" checked={recipe.wpCli} onChange={(event) => updateRecipe({ wpCli: event.target.checked })} label="Load WP-CLI" description="Makes WP-CLI available to Playground automation." />
                       <Checkbox id="wp-debug" checked={recipe.debug} onChange={(event) => updateRecipe({ debug: event.target.checked })} label="WordPress debug mode" description="Displays PHP and WordPress development errors." />
-                      <div className="grid gap-3 pl-7">
+                      <div className="grid grid-cols-1 gap-3 pl-7">
                         <Checkbox id="wp-debug-log" checked={recipe.debugLog} onChange={(event) => updateRecipe({ debugLog: event.target.checked })} label="Write debug.log" description="Only active while debug mode is enabled." />
                         <Checkbox id="script-debug" checked={recipe.scriptDebug} onChange={(event) => updateRecipe({ scriptDebug: event.target.checked })} label="Use development scripts" description="Loads unminified WordPress CSS and JavaScript where available." />
                       </div>
                     </fieldset>
 
-                    <fieldset className="grid gap-4 border-t border-amber-900/15 bg-amber-50/60 p-4">
+                    <fieldset className="grid min-w-0 grid-cols-1 gap-4 border-t border-amber-900/15 bg-amber-50/60 p-4">
                       <legend className="px-1 text-base/7 font-semibold text-amber-950 sm:text-sm/6">External setup</legend>
                       <p className="max-w-[70ch] text-pretty text-base/7 text-amber-900 sm:text-sm/6">These URLs download content or code into Playground. Use only public sources you trust. Do not include passwords, tokens or signatures. Recognized credential parameters are rejected; invalid drafts are not saved.</p>
                       <TextField id="wxr-url" type="url" label="WXR content URL" value={recipe.wxrUrl} onChange={(event) => updateRecipe({ wxrUrl: event.target.value })} placeholder="https://example.com/content.xml" description="Imported once when a new site is created. Requires networking." />
@@ -3006,8 +3227,8 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                       </div>
                     </div>
 
-                    <div className="grid gap-5 pt-5">
-                      <section aria-labelledby="uploaded-themes-heading" className="grid gap-2">
+                    <div className="grid grid-cols-1 gap-5 pt-5">
+                      <section aria-labelledby="uploaded-themes-heading" className="grid grid-cols-1 gap-2">
                         <h3 id="uploaded-themes-heading" className="font-mono text-base/7 tracking-wide text-neutral-500 sm:text-sm/6">UPLOADED THEMES</h3>
                         <div className="rounded-[min(1vw,var(--radius-xl))] bg-white p-4 ring-1 ring-neutral-950/8">
                         <div className="border-b border-neutral-950/8 pb-4 text-base/7 sm:text-sm/6">
@@ -3039,7 +3260,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                           <button
                             type="button"
                             onClick={() => themeZipInputRef.current?.click()}
-                            className="relative grid w-full place-items-center gap-2 px-5 py-8 text-base/7 text-neutral-600 hover:text-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 sm:text-sm/6"
+                            className="relative grid w-full place-items-center gap-2 px-5 py-8 text-base/7 text-neutral-600 [overflow-wrap:anywhere] hover:text-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 sm:text-sm/6"
                           >
                             <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
                             <PlusIcon className="size-4 shrink-0 fill-current" />
@@ -3107,12 +3328,12 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
 
                     <div className="grid gap-5 pt-5">
                       {!pluginSearch.trim() && (
-                        <section aria-labelledby="featured-plugins-heading" className="grid gap-2" aria-live="polite" aria-busy={featuredPluginState.loading}>
+                        <section aria-labelledby="featured-plugins-heading" className="@container grid gap-2" aria-live="polite" aria-busy={featuredPluginState.loading}>
                           <h3 id="featured-plugins-heading" className="font-mono text-base/7 tracking-wide text-neutral-500 sm:text-sm/6">FEATURED ON WORDPRESS.ORG</h3>
                           {featuredPluginState.loading ? (
                             <div className="rounded-[min(1vw,var(--radius-xl))] bg-neutral-100 p-5 text-base/7 text-neutral-600 sm:text-sm/6">Loading featured plugins…</div>
                           ) : featuredPlugins.length ? (
-                            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                            <div className="grid grid-cols-1 gap-3 @[15rem]:grid-cols-2 lg:grid-cols-4">
                               {featuredPlugins.map((plugin) => (
                                 <FeaturedPluginCard
                                   key={plugin.slug}
@@ -3139,6 +3360,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                                 key={plugin.id}
                                 plugin={plugin}
                                 selected={recipe.plugins.includes(plugin.id)}
+                                installResult={pluginInstallResults[plugin.id]}
                                 keySaved={savedKeyPackages.has(`plugin:${plugin.id}`)}
                                 addingKey={addingKeyFor === plugin.id}
                                 onToggle={togglePlugin}
@@ -3207,7 +3429,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
 
                 <input ref={zipInputRef} type="file" name="plugin-zips" accept="application/zip,.zip" multiple className="hidden" onChange={handleZipImport} />
                 <input ref={replacementZipInputRef} type="file" name="replacement-plugin-zip" accept="application/zip,.zip" className="hidden" onChange={handleReplacementZip} />
-                <input ref={themeZipInputRef} type="file" name="theme-zips" accept="application/zip,.zip" multiple className="hidden" onChange={handleThemeZipImport} />
+                <input ref={themeZipInputRef} type="file" name="theme-zips" accept="application/zip,.zip" multiple className="hidden" onChange={handleZipImport} />
                 <input ref={replacementThemeZipInputRef} type="file" name="replacement-theme-zip" accept="application/zip,.zip" className="hidden" onChange={handleReplacementThemeZip} />
               </section>
 
@@ -3229,17 +3451,22 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                           <p className="text-neutral-600">{check.summary}</p>
                         </div>
                         {inSetup ? (
-                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white py-0.5 pr-2 pl-1.5 text-sm/5 font-medium text-teal-800 ring-1 ring-teal-700/20">
-                            <CheckIcon className="size-3.5 shrink-0 fill-teal-700" />
-                            Runs after start
-                          </span>
+                          <button
+                            type="button"
+                            aria-label={`Turn off ${check.name}`}
+                            onClick={() => updateRecipe(removeCheckFromSetup(recipe, check.id))}
+                            className="inline-flex min-w-0 max-w-full min-h-7 items-center gap-1 rounded-lg bg-white px-3 py-1 text-sm/5 font-medium text-teal-800 ring-1 ring-teal-700/20 any-pointer-coarse:min-h-11 hover:bg-teal-50 active:bg-teal-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+                          >
+                            <XMarkIcon className="size-3.5 shrink-0 fill-teal-700" />
+                            Turn off
+                          </button>
                         ) : (
-                          <span className="flex shrink-0 flex-wrap items-center gap-2">
+                          <span className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
                             <span className="text-sm/5 text-neutral-500">Not in this setup</span>
                             <button
                               type="button"
                               onClick={() => addCheck(check)}
-                              className="relative inline-flex items-center gap-1 rounded-lg bg-white py-1 pr-2.5 pl-1.5 text-sm/5 font-medium text-neutral-800 ring-1 ring-neutral-950/10 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+                              className="relative inline-flex max-w-full items-center gap-1 rounded-lg bg-white py-1 pr-2.5 pl-1.5 text-sm/5 font-medium text-neutral-800 ring-1 ring-neutral-950/10 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
                             >
                               <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
                               <PlusIcon className="size-4 shrink-0 fill-neutral-500" />
@@ -3254,7 +3481,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
               </section>
 
               <section aria-labelledby="recipe-heading" className="border-t border-neutral-950/10 pt-6">
-                <div className="grid gap-2">
+                <div className="grid grid-cols-1 gap-2">
                   <label htmlFor="recipe-name" id="recipe-heading" className="text-xl font-semibold">4. Name and save</label>
                   {editingSavedId && (
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-teal-50 px-3 py-2 text-base/7 text-teal-900 ring-1 ring-teal-700/15 sm:text-sm/6">
@@ -3275,7 +3502,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                     type="text"
                     value={recipe.name}
                     onChange={(event) => updateRecipe({ name: event.target.value })}
-                    className="rounded-lg bg-white px-3 py-2.5 text-base/7 text-neutral-900 ring-1 ring-neutral-950/10 outline-none focus-visible:outline-2 -outline-offset-1 focus-visible:outline-teal-600 sm:py-2 sm:text-sm/6"
+                    className="min-w-0 w-full rounded-lg bg-white px-3 py-2.5 text-base/7 text-neutral-900 ring-1 ring-neutral-950/10 outline-none focus-visible:outline-2 -outline-offset-1 focus-visible:outline-teal-600 sm:py-2 sm:text-sm/6"
                   />
                   <p className="max-w-[56ch] text-pretty text-base/7 text-neutral-600 sm:text-sm/6">Save it in this browser for one-click reuse, or export safe JSON for Codex to adjust.</p>
                 </div>
@@ -3327,24 +3554,27 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
       </main>
 
       <section className={showPlayground ? 'fixed inset-0 z-50 grid bg-white' : 'hidden'} aria-label="WordPress Playground">
-        <div className="grid min-h-0 grid-rows-[2rem_1fr] overflow-hidden bg-white">
-          {/* Only the normal bar tightens below 384 px; the close confirmation keeps its buttons apart. */}
-          <div className={`relative z-20 flex min-w-0 items-center gap-1.5 bg-[#1d2327] px-2 text-white max-sm:gap-2.5 ${confirmingPlaygroundClose ? '' : 'max-xs:gap-1'}`}>
+        <div className="@container grid min-h-0 grid-rows-[minmax(2rem,auto)_1fr] overflow-hidden bg-white">
+          {/* Only the normal bar tightens below 384 px; below 20 rem (such as 320 px with 200% text)
+              the bar wraps so Close and the close confirmation stay on screen and tappable. */}
+          <div className={`relative z-20 flex min-w-0 items-center gap-1.5 bg-[#1d2327] px-2 text-white max-sm:gap-2.5 ${confirmingPlaygroundClose ? '' : 'max-xs:gap-1'} ${liveUpload.state === 'failed' || liveUpload.state === 'partial' ? 'flex-wrap' : ''} @max-[20rem]:flex-wrap @max-[20rem]:py-1 ${confirmingPlaygroundClose ? '' : '@max-[20rem]:gap-x-1 @max-[20rem]:gap-y-2'}`}>
             {confirmingPlaygroundClose ? (
               <>
-                <p className="min-w-0 flex-1 truncate text-sm/5 font-medium">Discard this temporary site?</p>
+                <p className="min-w-0 flex-1 truncate text-sm/5 font-medium @max-[20rem]:basis-full @max-[20rem]:whitespace-normal">Discard this temporary site?</p>
                 <button
                   type="button"
                   onClick={() => setConfirmingPlaygroundClose(false)}
-                  className="relative shrink-0 rounded-md px-2 py-1 text-sm/5 font-medium text-neutral-200 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
+                  className="relative max-w-full shrink-0 rounded-md px-2 py-1 text-sm/5 font-medium text-neutral-200 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
                 >
+                  <span className="pointer-fine:hidden absolute top-1/2 left-1/2 h-[max(100%,2.75rem)] w-[max(100%,2.75rem)] -translate-1/2 @max-[20rem]:h-[max(100%,44px)] @max-[20rem]:w-[max(100%,44px)]" aria-hidden="true" />
                   Keep open
                 </button>
                 <button
                   type="button"
                   onClick={closePlayground}
-                  className="relative shrink-0 rounded-md bg-red-500/15 px-2 py-1 text-sm/5 font-medium text-red-100 ring-1 ring-red-300/20 hover:bg-red-500/25 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
+                  className="relative max-w-full shrink-0 rounded-md bg-red-500/15 px-2 py-1 text-sm/5 font-medium text-red-100 ring-1 ring-red-300/20 hover:bg-red-500/25 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
                 >
+                  <span className="pointer-fine:hidden absolute top-1/2 left-1/2 h-[max(100%,2.75rem)] w-[max(100%,2.75rem)] -translate-1/2 @max-[20rem]:h-[max(100%,44px)] @max-[20rem]:w-[max(100%,44px)]" aria-hidden="true" />
                   Discard and close
                 </button>
               </>
@@ -3358,9 +3588,9 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
               aria-expanded={showLicenseManager}
               title="Licenses"
               onClick={() => setShowLicenseManager(true)}
-              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-md:px-2.5 max-xs:min-w-10 max-xs:justify-center max-xs:gap-1 max-xs:px-1.5 [anchor-name:--license-trigger]"
+              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-md:px-2.5 max-xs:min-w-10 max-xs:justify-center max-xs:gap-1 max-xs:px-1.5 @max-[20rem]:min-h-[max(1.75rem,calc(44px-0.5rem))] [anchor-name:--license-trigger]"
             >
-              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)] max-xs:w-[calc(100%+0.25rem)]" aria-hidden="true" />
+              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)] max-xs:w-[calc(100%+0.25rem)] @max-[20rem]:h-[calc(100%+0.5rem)] @max-[20rem]:w-[calc(100%+0.25rem)]" aria-hidden="true" />
               <KeyIcon className="size-4 shrink-0 fill-neutral-300" />
               {/* Up to 767 px the bar buttons show their icons only, so Close stays on a full bar. */}
               <span className="max-md:sr-only">Licenses</span>
@@ -3386,13 +3616,15 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
               disabled={status.step < 4 || snapshotExporting}
               title={status.step < 4 ? 'Available when setup finishes' : 'Export snapshot'}
               onClick={exportSiteSnapshot}
-              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-md:px-2.5 max-xs:min-w-10 max-xs:justify-center max-xs:gap-1 max-xs:px-1.5 disabled:cursor-not-allowed disabled:opacity-50"
+              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-md:px-2.5 max-xs:min-w-10 max-xs:justify-center max-xs:gap-1 max-xs:px-1.5 @max-[20rem]:min-h-[max(1.75rem,calc(44px-0.5rem))] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)] max-xs:w-[calc(100%+0.25rem)]" aria-hidden="true" />
+              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)] max-xs:w-[calc(100%+0.25rem)] @max-[20rem]:h-[calc(100%+0.5rem)] @max-[20rem]:w-[calc(100%+0.25rem)]" aria-hidden="true" />
               <ArrowDownTrayIcon className="size-4 shrink-0 fill-neutral-300" />
               <span className="max-md:sr-only">{snapshotExporting ? 'Exporting…' : 'Export snapshot'}</span>
             </button>
+            <UploadControl upload={liveUpload} siteReady={status.step >= 4} onUpload={() => { setLiveUpload({ state: 'idle', message: '' }); zipInputRef.current?.click() }} />
             <UpdatesControl updates={pluginUpdates} open={showUpdates} onOpenChange={setShowUpdates} buttonRef={updatesButtonRef} />
+            <span className="sr-only" aria-live="polite">{liveUpload.state === 'idle' ? '' : `${uploadControlLabel(liveUpload.state)}: ${liveUpload.message}`}</span>
             <span className="sr-only" aria-live="polite">{barMessage}</span>
             <span className="sr-only" aria-live="polite">{updatesAnnouncement(pluginUpdates)}</span>
             <span className="sr-only" aria-live="polite">{checksAnnouncement(checksRun)}</span>
@@ -3401,9 +3633,9 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
               type="button"
               aria-label="Close Playground"
               onClick={requestPlaygroundClose}
-              className="relative shrink-0 rounded-md p-1.5 text-neutral-300 max-sm:px-2.5 max-xs:px-3 hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
+              className="relative inline-flex shrink-0 items-center justify-center rounded-md p-1.5 text-neutral-300 max-sm:px-2.5 max-xs:px-3 @max-[20rem]:ml-auto @max-[20rem]:min-h-[max(1.75rem,calc(44px-0.5rem))] hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
             >
-              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)] max-xs:w-[calc(100%+0.25rem)]" aria-hidden="true" />
+              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)] max-xs:w-[calc(100%+0.25rem)] @max-[20rem]:h-[calc(100%+0.5rem)] @max-[20rem]:w-[calc(100%+0.25rem)]" aria-hidden="true" />
               <XMarkIcon className="size-4 shrink-0 fill-current" />
             </button>
               </>
@@ -3419,6 +3651,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                 onRun={() => runChecks()}
                 onClose={closeChecksPanel}
                 onOpenCheck={(toolId) => openCheck(CHECKS.find((check) => check.id === toolId))}
+                escapeRef={checksEscapeRef}
               />
             )}
             {unlockPending && <VaultUnlockPrompt

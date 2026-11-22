@@ -72,6 +72,7 @@ const MEASURED = {
   title: 'Dashboard', time: 0.62, memory: 44 * 1048576, memoryLimit: 256 * 1048576, queries: 36, queryTime: 0.025,
   slowQueries: 0, duplicates: 2, errorCounts: { error: 0, warning: 0, notice: 0, deprecated: 0 }, errors: [],
   calls: 0, failedCalls: 0, http: [], plugins: [{ name: 'WP 2FA', time: 0.05 }, { name: 'Query Monitor', time: 0.02 }],
+  source: 'playground', qmVersion: '', repeated: [],
 }
 
 test('reads the numbers the measure plugin appends to the page', async () => {
@@ -79,11 +80,16 @@ test('reads the numbers the measure plugin appends to the page', async () => {
   const page = `<html>…</html>\n<!-- ${MEASURE_MARKER}${encode({ ...MEASURED, title: 'Plugins ‹ Café' })} -->`
   assert.deepEqual(parseMeasurement(page), { ...MEASURED, title: 'Plugins ‹ Café' })
   // Odd fields read as zero or empty, never as text that could break the panel.
-  const odd = parseMeasurement(`<!-- ${MEASURE_MARKER}${encode({ time: 'x', errors: [null, { line: '4' }], http: 'no', plugins: [{ name: 3 }] })} -->`)
+  const odd = parseMeasurement(`<!-- ${MEASURE_MARKER}${encode({ time: 'x', errors: [null, { line: '4' }], http: 'no', plugins: [{ name: 3 }], source: '<b>', qmVersion: 4, repeated: [{ count: '2', caller: 7 }, 'x'] })} -->`)
   assert.equal(odd.time, 0)
   assert.deepEqual(odd.errors, [{ kind: 'error', message: '', file: '', line: 0 }])
   assert.deepEqual(odd.http, [])
   assert.deepEqual(odd.plugins, [{ name: '3', time: 0 }])
+  assert.equal(odd.source, 'playground')
+  assert.equal(odd.qmVersion, '')
+  assert.deepEqual(odd.repeated, [{ count: 0, caller: '7' }])
+  const fromQueryMonitor = parseMeasurement(`<!-- ${MEASURE_MARKER}${encode({ ...MEASURED, source: 'query-monitor', qmVersion: '4.1.1', repeated: [{ count: 3, caller: 'get_option()' }] })} -->`)
+  assert.deepEqual([fromQueryMonitor.source, fromQueryMonitor.qmVersion, fromQueryMonitor.repeated], ['query-monitor', '4.1.1', [{ count: 3, caller: 'get_option()' }]])
   assert.throws(() => parseMeasurement('<html>login</html>'), /did not return its numbers/)
 })
 
@@ -115,15 +121,100 @@ test('a clean page passes every check, and only the checks in the setup show', a
     ['page-time', 'pass', '0.62 s'], ['slowest-plugin', 'pass', '0.05 s'],
   ])
   assert.deepEqual([both.passed, both.warnings, both.failed], [8, 0, 0])
-  assert.equal(both.checks.find((check) => check.id === 'queries').details, '36 queries, 0.025 s together. Warning above 100.')
-  assert.equal(both.checks.find((check) => check.id === 'memory').details, '17% of the 256 MB limit. Warning above 75%, failure above 90%.')
-  assert.match(both.checks.at(-1).details, /^WP 2FA took 0\.05 s to load, Query Monitor 0\.02 s\./)
+  // The limits are in the scale under each check, so the text only says what was found.
+  assert.equal(both.checks.find((check) => check.id === 'queries').details, '36 queries, 0.025 s together.')
+  assert.equal(both.checks.find((check) => check.id === 'memory').details, '17% of the site’s 256 MB limit.')
+  assert.equal(both.checks.at(-1).details, 'WP 2FA took the longest to load.')
+  assert.deepEqual(both.checks.at(-1).found, {
+    type: 'table', title: 'Load time per plugin',
+    rows: [{ name: 'WP 2FA', value: '0.05 s', status: 'pass' }, { name: 'Query Monitor', value: '0.02 s', status: 'pass' }],
+  })
   assert.deepEqual(evaluateChecks(MEASURED, ['code-profiler']).checks.map((check) => check.id), ['slowest-plugin'])
   const none = evaluateChecks(MEASURED, [])
   assert.deepEqual(none.checks, [])
-  assert.deepEqual(none.tiles.map((tile) => [tile.label, tile.value, tile.status]), [
-    ['Page time', '0.62 s', 'pass'], ['Memory', '44 MB', 'pass'], ['Queries', '36', 'pass'], ['PHP errors', '0', 'pass'],
+  assert.equal('tiles' in none, false, 'the overview lists the checks; the number tiles are gone')
+})
+
+test('each check says where its number came from', async () => {
+  const { evaluateChecks } = await import('./checks.js')
+  const from = (measurement) => Object.fromEntries(evaluateChecks(measurement, ['query-monitor', 'code-profiler']).checks.map((check) => [check.id, check.source]))
+  const fromQueryMonitor = from({ ...MEASURED, source: 'query-monitor', qmVersion: '4.1.1' })
+  for (const id of ['php-errors', 'slow-queries', 'outside-calls', 'duplicate-queries', 'queries', 'memory', 'page-time']) {
+    assert.equal(fromQueryMonitor[id], 'From Query Monitor 4.1.1 on this page.', id)
+  }
+  // Code Profiler only profiles on its own screen, so the per-page plugin times are the Playground's own.
+  assert.equal(fromQueryMonitor['slowest-plugin'], 'Timed by the Playground as each plugin loaded. Code Profiler shows the full profile.')
+  const fallback = from({ ...MEASURED, source: 'playground' })
+  assert.equal(fallback['page-time'], 'Measured by the Playground: Query Monitor did not report on this page.')
+})
+
+test('what each check found: PHP errors, the queries repeated most and the calls that failed', async () => {
+  const { evaluateChecks } = await import('./checks.js')
+  const report = evaluateChecks({
+    ...MEASURED,
+    errorCounts: { error: 0, warning: 1, notice: 1, deprecated: 0 },
+    errors: [
+      { kind: 'warning', message: 'Undefined array key "layout"', file: 'wp-content/plugins/acme/render.php', line: 212 },
+      { kind: 'notice', message: 'Called too early', file: '', line: 0 },
+    ],
+    duplicates: 14,
+    repeated: [{ count: 6, caller: 'get_option()' }, { count: 5, caller: '' }],
+    calls: 3, failedCalls: 2,
+    http: [{ host: 'api.wordpress.org', code: 200 }, { host: 'api.vendor.com', code: 403 }, { host: 'api.other.com', code: 0 }],
+  }, ['query-monitor'])
+  const found = (id) => report.checks.find((check) => check.id === id).found
+  assert.deepEqual(found('php-errors'), {
+    type: 'list', title: 'Found on this page', total: 2,
+    entries: [
+      { status: 'fail', kind: 'PHP warning', message: 'Undefined array key "layout"', where: 'wp-content/plugins/acme/render.php, line 212' },
+      { status: 'warn', kind: 'PHP notice', message: 'Called too early', where: '' },
+    ],
+  })
+  assert.deepEqual(found('duplicate-queries'), {
+    // No count beside the title: the number of groups listed (at most 3) would read like a total.
+    type: 'list', title: 'Repeated most', total: undefined,
+    entries: [
+      { status: 'warn', count: '6×', message: 'get_option()', where: 'Function that ran it' },
+      { status: 'warn', count: '5×', message: 'Unknown function', where: 'Function that ran it' },
+    ],
+  })
+  assert.deepEqual(found('outside-calls'), {
+    type: 'list', title: 'Failed calls', total: 2,
+    entries: [
+      { status: 'warn', message: 'api.vendor.com', where: 'Answered HTTP 403' },
+      { status: 'warn', message: 'api.other.com', where: 'No answer' },
+    ],
+  })
+  assert.equal(report.checks.find((check) => check.id === 'outside-calls').details, '2 of 3 calls to other sites failed. Blocked networking makes every call fail.')
+  // A clean page has nothing to list.
+  const clean = evaluateChecks(MEASURED, ['query-monitor'])
+  for (const id of ['php-errors', 'duplicate-queries', 'outside-calls', 'slow-queries']) assert.equal(clean.checks.find((check) => check.id === id).found, undefined, id)
+})
+
+test('the "i" lists good, medium and bad for every check, from the same limits that judge them', async () => {
+  const { CHECKS_ARTICLE_URL, LIMIT_ROWS } = await import('./checks.js')
+  assert.deepEqual(LIMIT_ROWS.map((row) => [row.id, row.name, row.good, row.medium, row.bad]), [
+    ['page-time', 'Page time', 'up to 1 s', 'over 1 s', 'over 3 s'],
+    ['memory', 'Memory', 'up to 75%', 'over 75%', 'over 90%'],
+    ['queries', 'Database queries', 'up to 100', 'over 100', ''],
+    ['duplicate-queries', 'Duplicate queries', 'up to 10', 'over 10', ''],
+    ['slow-queries', 'Slow queries', 'none', '1 or more', ''],
+    ['php-errors', 'PHP errors', 'none', 'notices, deprecations', 'errors, warnings'],
+    ['outside-calls', 'Calls to other sites', 'none failed', 'any failed', ''],
+    ['slowest-plugin', 'Slowest plugin', 'up to 0.5 s', 'over 0.5 s', ''],
   ])
+  assert.equal(LIMIT_ROWS.find((row) => row.id === 'memory').note, 'share of the site’s limit')
+  assert.equal(LIMIT_ROWS.find((row) => row.id === 'slow-queries').note, 'longer than 0.05 s')
+  assert.deepEqual([...new Set(LIMIT_ROWS.map((row) => row.tool))], ['query-monitor', 'code-profiler'])
+  assert.equal(CHECKS_ARTICLE_URL, 'https://techies.review/articles/techies-playground-check-score/')
+})
+
+test('the checks that need fixing come first, in their usual order otherwise', async () => {
+  const { STATUS_LABEL, checksByStatus } = await import('./checks.js')
+  assert.deepEqual(STATUS_LABEL, { pass: 'Passed', warn: 'Warning', fail: 'Improve' })
+  const checks = [{ id: 'a', status: 'pass' }, { id: 'b', status: 'warn' }, { id: 'c', status: 'fail' }, { id: 'd', status: 'warn' }, { id: 'e', status: 'pass' }]
+  assert.deepEqual(checksByStatus(checks).map((check) => check.id), ['c', 'b', 'd', 'a', 'e'])
+  assert.deepEqual(checks.map((check) => check.id), ['a', 'b', 'c', 'd', 'e'], 'the list it was given stays as it was')
 })
 
 test('errors and warnings fail, notices warn, and each limit turns a check amber or red', async () => {
@@ -148,44 +239,191 @@ test('errors and warnings fail, notices warn, and each limit turns a check amber
   assert.equal(status({ plugins: [{ name: 'Heavy', time: 0.6 }] }, 'slowest-plugin'), 'warn')
   const failing = evaluateChecks({ ...MEASURED, ...counts({ warning: 1, notice: 2 }), http: [{ host: 'api.wordpress.org', code: 0 }, { host: 'api.wordpress.org', code: 0 }] }, ['query-monitor'])
   assert.deepEqual([failing.passed, failing.warnings, failing.failed], [5, 1, 1])
-  assert.equal(failing.checks[0].value, '1 warning, 2 notices')
-  assert.match(failing.checks[2].details, /^2 of 2 calls to other sites failed: api\.wordpress\.org\./)
-  assert.equal(failing.tiles.find((tile) => tile.id === 'php-errors').status, 'fail')
-  // Without Query Monitor its limits judge nothing, so the tiles show the numbers uncoloured
-  // and never contradict a passing verdict.
+  // The number is the total, so a long breakdown never pushes the panel sideways; the details name each kind.
+  assert.equal(failing.checks[0].value, '3')
+  assert.equal(failing.checks[0].details, '1 warning, 2 notices on this page.')
+  assert.match(failing.checks[2].details, /^2 of 2 calls to other sites failed\./)
+  // Without Query Monitor its limits judge nothing, so nothing fails.
   const profilerOnly = evaluateChecks({ ...MEASURED, ...counts({ warning: 1 }), time: 4 }, ['code-profiler'])
-  assert.deepEqual(profilerOnly.tiles.map((tile) => tile.status), ['pass', 'pass', 'pass', 'pass'])
   assert.equal(profilerOnly.failed, 0)
 })
 
-test('the verdict leads with failures, then warnings, else all passed', async () => {
+test('the verdict leads with what to improve, then warnings, else all passed', async () => {
   const { checksVerdict } = await import('./checks.js')
   const report = (passed, warnings, failed) => ({ passed, warnings, failed, checks: Array(passed + warnings + failed) })
   assert.deepEqual(checksVerdict(report(8, 0, 0)), { status: 'pass', headline: 'All 8 checks passed', short: '8 passed' })
   assert.deepEqual(checksVerdict(report(1, 0, 0)), { status: 'pass', headline: 'The check passed', short: '1 passed' })
-  assert.deepEqual(checksVerdict(report(6, 2, 0)), { status: 'warn', headline: '2 checks need a look', short: '2 warnings' })
-  assert.deepEqual(checksVerdict(report(6, 1, 1)), { status: 'fail', headline: '1 check failed', short: '1 failed' })
-  assert.deepEqual(checksVerdict(report(5, 0, 3)), { status: 'fail', headline: '3 checks failed', short: '3 failed' })
+  assert.deepEqual(checksVerdict(report(6, 2, 0)), { status: 'warn', headline: '2 warnings', short: '2 warnings' })
+  assert.deepEqual(checksVerdict(report(7, 1, 0)), { status: 'warn', headline: '1 warning', short: '1 warning' })
+  assert.deepEqual(checksVerdict(report(6, 1, 1)), { status: 'fail', headline: '1 check to improve', short: '1 to improve' })
+  assert.deepEqual(checksVerdict(report(5, 0, 3)), { status: 'fail', headline: '3 checks to improve', short: '3 to improve' })
 })
 
-test('screen readers hear when the checks start and what they found', async () => {
+test('screen readers hear when the checks start and what they found on which page', async () => {
   const { checksAnnouncement } = await import('./checks.js')
   assert.equal(checksAnnouncement({ state: 'idle' }), '')
   assert.equal(checksAnnouncement({ state: 'running' }), 'Running checks.')
-  assert.equal(checksAnnouncement({ state: 'done', report: { passed: 7, warnings: 0, failed: 1, checks: Array(8) } }), 'Checks: 1 check failed.')
+  assert.equal(checksAnnouncement({ state: 'done', title: 'Plugins', report: { passed: 7, warnings: 0, failed: 1, checks: Array(8) } }), 'Checks on Plugins: 1 check to improve.')
+  assert.equal(checksAnnouncement({ state: 'done', title: '', report: { passed: 8, warnings: 0, failed: 0, checks: Array(8) } }), 'Checks: All 8 checks passed.')
   assert.equal(checksAnnouncement({ state: 'error', message: 'This page did not return its numbers.' }), 'The checks could not run. This page did not return its numbers.')
 })
 
-test('a second run on the same site waits, while a run on a new site can start', async () => {
-  const { createRunGuard } = await import('./checks.js')
-  const guard = createRunGuard()
+test('a page change is not announced twice: no start, and the result only when it is news', async () => {
+  const { checksAnnouncement } = await import('./checks.js')
+  // The frame announces the new page itself; a run that starts by itself says nothing.
+  assert.equal(checksAnnouncement({ state: 'running', auto: true }), '')
+  const report = { passed: 8, warnings: 0, failed: 0, checks: Array(8) }
+  assert.equal(checksAnnouncement({ state: 'done', title: 'Dashboard', report, quiet: true }), '')
+  assert.equal(checksAnnouncement({ state: 'done', title: 'Dashboard', report, quiet: false }), 'Checks on Dashboard: All 8 checks passed.')
+})
+
+test('a result is quiet only when it starts by itself, the panel is closed and the verdict is the same', async () => {
+  const { checksQuiet } = await import('./checks.js')
+  const pass = { passed: 8, warnings: 0, failed: 0, checks: Array(8) }
+  const fail = { passed: 7, warnings: 0, failed: 1, checks: Array(8) }
+  assert.equal(checksQuiet({ auto: true, panelOpen: false, previous: pass, report: pass }), true)
+  assert.equal(checksQuiet({ auto: true, panelOpen: false, previous: pass, report: fail }), false)
+  assert.equal(checksQuiet({ auto: true, panelOpen: true, previous: pass, report: pass }), false)
+  assert.equal(checksQuiet({ auto: false, panelOpen: false, previous: pass, report: pass }), false)
+  assert.equal(checksQuiet({ auto: true, panelOpen: false, previous: undefined, report: pass }), false)
+})
+
+test('a page opened during a run is checked next, and only the latest page waits', async () => {
+  const { createCheckQueue } = await import('./checks.js')
+  const queue = createCheckQueue()
+  const site = {}
+  assert.equal(queue.request(site, '/a'), 'start')
+  assert.equal(queue.request(site, '/a'), 'skip', 'the page being checked is not checked twice')
+  assert.equal(queue.request(site, '/b'), 'queued')
+  assert.equal(queue.request(site, '/c'), 'queued')
+  assert.equal(queue.waiting(site), true, 'the run on /a is out of date: its result is dropped')
+  assert.equal(queue.finish(site), '/c', 'only the latest page runs next')
+  assert.equal(queue.request(site, '/c'), 'start')
+  assert.equal(queue.waiting(site), false)
+  assert.equal(queue.finish(site), null)
+})
+
+test('going back to the page being checked cancels the page that waited', async () => {
+  const { createCheckQueue } = await import('./checks.js')
+  const queue = createCheckQueue()
+  const site = {}
+  queue.request(site, '/a')
+  queue.request(site, '/b')
+  assert.equal(queue.request(site, '/a'), 'skip')
+  assert.equal(queue.waiting(site), false)
+  assert.equal(queue.finish(site), null)
+})
+
+test('a page is checked again by itself only after another page, but Run again always runs', async () => {
+  const { createCheckQueue } = await import('./checks.js')
+  const queue = createCheckQueue()
+  const site = {}
+  queue.request(site, '/a')
+  queue.finish(site)
+  assert.equal(queue.request(site, '/a'), 'skip', 'the same page again, as when a tool opens on it')
+  assert.equal(queue.request(site, '/a', { force: true }), 'start', 'Run again')
+  queue.finish(site)
+  assert.equal(queue.request(site, '/b'), 'start')
+  queue.finish(site)
+  assert.equal(queue.request(site, '/a'), 'start')
+})
+
+test('a run on a new site starts at once, and the old site finishing changes nothing', async () => {
+  const { createCheckQueue } = await import('./checks.js')
+  const queue = createCheckQueue()
   const oldSite = {}
   const newSite = {}
-  assert.equal(guard.start(oldSite), true)
-  assert.equal(guard.start(oldSite), false)
-  assert.equal(guard.start(newSite), true)
-  guard.finish(oldSite)
-  assert.equal(guard.start(newSite), false, 'the old run finishing does not unblock the new site')
-  guard.finish(newSite)
-  assert.equal(guard.start(newSite), true)
+  assert.equal(queue.request(oldSite, '/a'), 'start')
+  queue.request(oldSite, '/b')
+  assert.equal(queue.request(newSite, '/a'), 'start')
+  assert.equal(queue.finish(oldSite), null, 'the old site has nothing left to run')
+  assert.equal(queue.request(newSite, '/a'), 'skip', 'the new site is still running')
+  assert.equal(queue.finish(newSite), null)
+  assert.equal(queue.request(newSite, '/b'), 'start')
+})
+
+test('the page that was checked is the one measured, without the Playground’s own parameters', async () => {
+  const { checkedPagePath } = await import('./checks.js')
+  assert.equal(checkedPagePath('/wp-admin/plugins.php?techies-check=query-monitor'), '/wp-admin/plugins.php')
+  assert.equal(checkedPagePath('/?p=1&techies-measure=1'), '/?p=1')
+  assert.equal(checkedPagePath(''), '/wp-admin/')
+  // A page that ran an action is not loaded again: the dashboard is measured instead.
+  assert.equal(checkedPagePath('/wp-admin/update.php?action=upgrade-plugin&_wpnonce=abc'), '/wp-admin/')
+  assert.equal(checkedPagePath('https://elsewhere.example/'), '/wp-admin/')
+})
+
+test('each page that settles is checked once, and only while the site is current and allowed', async (t) => {
+  const { watchCheckPages } = await import('./checks.js')
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  let navigate
+  const client = { onNavigation: (callback) => { navigate = callback } }
+  const runs = []
+  let current = true
+  let allowed = true
+  watchCheckPages(client, { isCurrent: () => current, canRun: () => allowed, run: (path) => runs.push(path) })
+
+  // A redirect within 400 ms is one visit.
+  navigate('/wp-admin/')
+  t.mock.timers.tick(200)
+  navigate('/wp-admin/index.php')
+  t.mock.timers.tick(399)
+  assert.deepEqual(runs, [])
+  t.mock.timers.tick(1)
+  assert.deepEqual(runs, ['/wp-admin/index.php'])
+
+  // Open in Code Profiler neither runs nor cancels the page that is settling.
+  navigate('/wp-admin/plugins.php')
+  t.mock.timers.tick(100)
+  navigate('/wp-admin/admin.php?page=code-profiler&techies-check=code-profiler')
+  t.mock.timers.tick(400)
+  assert.deepEqual(runs, ['/wp-admin/index.php', '/wp-admin/plugins.php'])
+
+  // While the licenses are missing nothing runs by itself.
+  allowed = false
+  navigate('/wp-admin/options-general.php')
+  t.mock.timers.tick(400)
+  assert.equal(runs.length, 2)
+
+  // A site that was closed or relaunched has no say any more.
+  allowed = true
+  current = false
+  navigate('/wp-admin/tools.php')
+  t.mock.timers.tick(400)
+  assert.equal(runs.length, 2)
+})
+
+test('opening a check in its tool is not a new page to check', async () => {
+  const { isCheckToolPage } = await import('./checks.js')
+  const codeProfiler = CHECKS.find((check) => check.id === 'code-profiler')
+  const queryMonitor = CHECKS.find((check) => check.id === 'query-monitor')
+  const recipe = addCheckToSetup(DEFAULT_RECIPE, 'code-profiler')
+  // Code Profiler's own screen would otherwise be checked, and the panel would say "Checks on Code Profiler".
+  assert.equal(isCheckToolPage(checkResultsPath(codeProfiler, recipe, '/wp-admin/plugins.php')), true)
+  assert.equal(isCheckToolPage(checkResultsPath(queryMonitor, recipe, '/wp-admin/plugins.php')), true)
+  assert.equal(isCheckToolPage('/wp-admin/admin.php?page=code-profiler'), false)
+  assert.equal(isCheckToolPage('/wp-admin/plugins.php'), false)
+  assert.equal(isCheckToolPage(''), false)
+})
+
+test('Query Monitor Pro counts as a check', () => {
+  assert.deepEqual(checksInSetup(recipe({ plugins: ['query-monitor-pro'] })).map((check) => check.id), ['query-monitor'])
+})
+
+test('turning a check off removes its free and Pro selections, keeping other plugins', async () => {
+  const { removeCheckFromSetup } = await import('./checks.js')
+  const result = removeCheckFromSetup(recipe({ plugins: ['query-monitor-pro', 'other'], repositoryPlugins: ['query-monitor', 'akismet'] }), 'query-monitor')
+  assert.deepEqual(result.plugins, ['other'])
+  assert.deepEqual(result.repositoryPlugins, ['akismet'])
+})
+
+test('uploaded Pro replaces free tester selection and free upload replaces Pro', async () => {
+  const { selectUploadedPlugin, resolveCheckPlugins } = await import('./checks.js')
+  for (const id of ['query-monitor', 'code-profiler']) {
+    const selected = selectUploadedPlugin(recipe({ plugins: [id, 'other'], repositoryPlugins: [id, 'akismet'] }), `${id}-pro`)
+    assert.deepEqual(selected.plugins, ['other', `${id}-pro`])
+    assert.deepEqual(selected.repositoryPlugins, ['akismet'])
+    assert.deepEqual(selectUploadedPlugin(selected, id).plugins, ['other', id])
+    assert.deepEqual(resolveCheckPlugins(recipe({ plugins: [`${id}-pro`, id], repositoryPlugins: [id] })).plugins, [`${id}-pro`])
+    assert.deepEqual(resolveCheckPlugins(recipe({ plugins: [`${id}-pro`], repositoryPlugins: [id] })).repositoryPlugins, [])
+  }
 })

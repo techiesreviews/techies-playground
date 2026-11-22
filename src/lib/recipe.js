@@ -1,3 +1,4 @@
+import { checkPluginSyncCode, rememberCheckPluginsCode, resolveCheckPlugins } from './checks.js'
 import { FREEMIUS_PLUGIN, FREEMIUS_PLUGIN_PATH } from './freemius-plugin.js'
 
 export const DEFAULT_RECIPE = Object.freeze({
@@ -189,7 +190,7 @@ export function validateRecipe(candidate) {
 }
 
 export function buildPlaygroundBlueprint(candidate, { includeOneTimeSetup = true } = {}) {
-  const recipe = validateRecipe(candidate)
+  const recipe = resolveCheckPlugins(validateRecipe(candidate))
   const steps = [
     {
       step: 'defineWpConfigConsts',
@@ -220,6 +221,7 @@ export function buildPlaygroundBlueprint(candidate, { includeOneTimeSetup = true
       file: { resource: 'url', url: recipe.wxrUrl },
     })
   }
+  steps.push({ step: 'runPHP', code: checkPluginSyncCode(recipe) })
   for (const slug of recipe.repositoryPlugins) {
     steps.push({
       step: 'installPlugin',
@@ -228,6 +230,7 @@ export function buildPlaygroundBlueprint(candidate, { includeOneTimeSetup = true
       ifAlreadyInstalled: 'overwrite',
     })
   }
+  steps.push({ step: 'runPHP', code: rememberCheckPluginsCode(recipe) })
   if (recipe.repositoryTheme) {
     steps.push({
       step: 'installTheme',

@@ -52,3 +52,38 @@ test('global drops preserve file batches, ignore text and clean up listeners', (
   assert.equal(fire('drop', files).defaultPrevented, false)
   assert.equal(batches.length, 1)
 })
+
+test('drop queue uses the current importer after startup and recovers after a failed upload', async () => {
+  const { createPackageUploadQueue } = await import('./package-upload.js')
+  const seen = []
+  const errors = []
+  let ready = false
+  let importer = async (files) => { seen.push([files, ready]) }
+  const enqueue = createPackageUploadQueue(() => importer, (error) => errors.push(error.message))
+  await enqueue(['during-startup'])
+  ready = true
+  importer = async (files) => { seen.push([files, ready]); if (files[0] === 'failure') throw new Error('Closed site') }
+  await enqueue(['after-startup'])
+  await enqueue(['failure'])
+  await enqueue(['next-drop'])
+  assert.deepEqual(seen, [[['during-startup'], false], [['after-startup'], true], [['failure'], true], [['next-drop'], true]])
+  assert.deepEqual(errors, ['Closed site'])
+})
+
+test('runtime ZIP control names progress and failures on the control', async () => {
+  const { uploadControlLabel } = await import('./package-upload.js')
+  assert.equal(uploadControlLabel('idle'), 'Add ZIPs')
+  assert.equal(uploadControlLabel('uploading'), 'Uploading')
+  assert.equal(uploadControlLabel('installing'), 'Installing')
+  assert.equal(uploadControlLabel('failed'), 'Upload failed')
+  assert.equal(uploadControlLabel('complete'), 'Added')
+})
+
+test('runtime upload distinguishes saved packages from plugins applied to the site', async () => {
+  const { liveUploadOutcome, uploadControlLabel } = await import('./package-upload.js')
+  assert.equal(liveUploadOutcome({ failures: [], hasClient: false, pluginCount: 1 }), 'saved')
+  assert.equal(liveUploadOutcome({ failures: [], hasClient: true, pluginCount: 0 }), 'saved')
+  assert.equal(liveUploadOutcome({ failures: ['invalid ZIP'], hasClient: true, pluginCount: 0 }), 'failed')
+  assert.equal(liveUploadOutcome({ failures: [], hasClient: true, pluginCount: 1 }), 'complete')
+  assert.equal(uploadControlLabel('saved'), 'Saved for next start')
+})

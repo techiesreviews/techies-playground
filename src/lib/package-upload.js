@@ -59,3 +59,21 @@ export function registerPackageDrop(target, { onActive, onFiles }) {
     for (const [name, handler] of Object.entries(handlers)) target.removeEventListener(name, handler, { capture: true })
   }
 }
+
+export function createPackageUploadQueue(getImport, onError) {
+  let queue = Promise.resolve()
+  return (files) => {
+    queue = queue.then(() => getImport()(files)).catch(onError)
+    return queue
+  }
+}
+
+export function uploadControlLabel(state) {
+  return { saved: 'Saved for next start', uploading: 'Uploading', installing: 'Installing', failed: 'Upload failed', partial: 'Added with problems', complete: 'Added' }[state] || 'Add ZIPs'
+}
+
+export function liveUploadOutcome({ failures, problems = [], hasClient, pluginCount }) {
+  if (failures.length) return 'failed'
+  if (problems.length) return 'partial'
+  return hasClient && pluginCount > 0 ? 'complete' : 'saved'
+}

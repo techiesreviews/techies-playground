@@ -1,7 +1,7 @@
 {
   "name": "techies-playground",
   "private": true,
-  "version": "0.11.1",
+  "version": "0.13.3",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -15,15 +15,15 @@
   "dependencies": {
     "@heroicons/react": "^2.2.0",
     "@tailwindcss/vite": "^4.1.16",
-    "@wp-playground/blueprints": "3.1.64",
+    "@wp-playground/blueprints": "3.1.65",
     "@zip.js/zip.js": "2.7.57",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "tailwindcss": "^4.1.16"
   },
   "devDependencies": {
-    "@php-wasm/node-8-3": "3.1.64",
-    "@php-wasm/universal": "3.1.64",
+    "@php-wasm/node-8-3": "3.1.65",
+    "@php-wasm/universal": "3.1.65",
     "@vitejs/plugin-react": "^5.0.4",
     "vite": "^7.3.8",
     "wrangler": "^4.155.0"
