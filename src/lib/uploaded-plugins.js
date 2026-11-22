@@ -1,6 +1,6 @@
 import { installPlugin } from '@wp-playground/blueprints'
 import { CHECKS } from './checks.js'
-import { pluginFolderFromAssetPath } from './license-fill.js'
+import { activeInSite, licensesNeeded, pluginFolderFromAssetPath } from './license-fill.js'
 
 const NOTICE_PATH = '/wordpress/wp-content/mu-plugins/techies-uploaded-plugins.php'
 const NOTICE_PLUGIN = `<?php
@@ -92,5 +92,12 @@ foreach (get_plugins() as $file => $data) {
     message: status === 'active' ? 'Active in WordPress' : status === 'inactive'
       ? 'Installed, but activation failed. Try activating this plugin in WordPress.'
       : 'Installed, but activation could not be verified. Check this plugin in WordPress.',
+  }
+}
+
+export function uploadedPluginLicenses(id, savedKeyPackages, licenses, folders) {
+  return {
+    needed: licensesNeeded(savedKeyPackages.has(`plugin:${id}`) ? [id] : [], licenses, folders),
+    active: activeInSite(licenses, folders),
   }
 }

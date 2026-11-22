@@ -52,3 +52,20 @@ test('global drops preserve file batches, ignore text and clean up listeners', (
   assert.equal(fire('drop', files).defaultPrevented, false)
   assert.equal(batches.length, 1)
 })
+
+test('drop queue uses the current importer after startup and recovers after a failed upload', async () => {
+  const { createPackageUploadQueue } = await import('./package-upload.js')
+  const seen = []
+  const errors = []
+  let ready = false
+  let importer = async (files) => { seen.push([files, ready]) }
+  const enqueue = createPackageUploadQueue(() => importer, (error) => errors.push(error.message))
+  await enqueue(['during-startup'])
+  ready = true
+  importer = async (files) => { seen.push([files, ready]); if (files[0] === 'failure') throw new Error('Closed site') }
+  await enqueue(['after-startup'])
+  await enqueue(['failure'])
+  await enqueue(['next-drop'])
+  assert.deepEqual(seen, [[['during-startup'], false], [['after-startup'], true], [['failure'], true], [['next-drop'], true]])
+  assert.deepEqual(errors, ['Closed site'])
+})

@@ -59,3 +59,11 @@ export function registerPackageDrop(target, { onActive, onFiles }) {
     for (const [name, handler] of Object.entries(handlers)) target.removeEventListener(name, handler, { capture: true })
   }
 }
+
+export function createPackageUploadQueue(getImport, onError) {
+  let queue = Promise.resolve()
+  return (files) => {
+    queue = queue.then(() => getImport()(files)).catch(onError)
+    return queue
+  }
+}

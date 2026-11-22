@@ -171,7 +171,7 @@ test('at 320 px with 200% text the launcher has no 20 rem body minimum or unwrap
 
   const checksSectionStart = app.indexOf('aria-labelledby="checks-heading"')
   const checksSection = app.slice(checksSectionStart, app.indexOf('</section>', checksSectionStart))
-  assert.match(checksSection, /<span className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full/)
+  assert.match(checksSection, /aria-label=\{`Turn off \$\{check.name\}`\}[\s\S]*?className="inline-flex min-w-0 max-w-full min-h-7 items-center/, 'the tester off control stays within a narrow row')
   assert.match(checksSection, /<span className="flex min-w-0 max-w-full flex-wrap items-center gap-2">/)
 
   const nameSaveStart = app.indexOf('aria-labelledby="recipe-heading"')

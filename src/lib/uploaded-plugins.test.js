@@ -48,3 +48,10 @@ test('stale upload never activates a replacement site', async () => {
   })
   assert.equal(result.status, 'cancelled')
 })
+
+test('a live free plugin without a saved key does not block checks; unknown premium state does', async () => {
+  const { uploadedPluginLicenses } = await import('./uploaded-plugins.js')
+  const folders = new Map([['free-plugin', 'free-plugin']])
+  assert.deepEqual(uploadedPluginLicenses('free-plugin', new Set(), { licensed: [], unlicensed: [] }, folders), { needed: [], active: [] })
+  assert.deepEqual(uploadedPluginLicenses('free-plugin', new Set(), null, folders), { needed: ['free-plugin'], active: [] })
+})

@@ -29,8 +29,8 @@ import {
   XMarkIcon,
 } from '@heroicons/react/16/solid'
 import { installTheme, zipWpContent } from '@wp-playground/blueprints'
-import { detectPackageType, registerPackageDrop } from './lib/package-upload'
-import { installUploadedPlugin } from './lib/uploaded-plugins'
+import { createPackageUploadQueue, detectPackageType, registerPackageDrop } from './lib/package-upload'
+import { installUploadedPlugin, uploadedPluginLicenses } from './lib/uploaded-plugins'
 import { buildPreviewPlugin, createLauncherScope, hostPreviewSession } from './lib/playground-preview'
 import { PLAYGROUND_ORIGIN, PLAYGROUND_READY_TIMEOUT_MS, PLAYGROUND_REMOTE_URL, startPlaygroundWithin } from './lib/playground-host'
 import {
@@ -155,7 +155,7 @@ const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-stora
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
   {
-    version: '0.12.3',
+    version: '0.13.0',
     date: 'November 22, 2026',
     title: 'Uploaded plugins activate, and testers can be switched off',
     summary: 'Drop a plugin ZIP into an open site to install and activate it right away. Turn testers off or upload their Pro versions.',
@@ -1852,12 +1852,13 @@ export default function App() {
   const [isDraggingPackages, setIsDraggingPackages] = useState(false)
   const [uploadMessage, setUploadMessage] = useState('')
   const [pluginInstallResults, setPluginInstallResults] = useState({})
-  const uploadQueueRef = useRef(Promise.resolve())
+  const importDroppedPackagesRef = useRef(null)
+  importDroppedPackagesRef.current = importDroppedPackages
   useEffect(() => registerPackageDrop(window, {
     onActive: setIsDraggingPackages,
-    onFiles: (files) => {
-      uploadQueueRef.current = uploadQueueRef.current.then(() => importDroppedPackages(files))
-    },
+    onFiles: createPackageUploadQueue(() => importDroppedPackagesRef.current, () => {
+      setError('The upload was saved, but could not be applied to the open site. Start the setup again to retry.')
+    }),
   }), [])
   const iframeRef = useRef(null)
   // A new frame element per launch: a start still waiting on an old frame (closed, or
@@ -2240,8 +2241,9 @@ export default function App() {
         let active = []
         try {
           const licenses = await readFreemiusLicenses({ client, signal: launchAbortRef.current?.signal })
-          needed = licensesNeeded([plugin.id], licenses, folders)
-          active = activeInSite(licenses, folders)
+          const state = uploadedPluginLicenses(plugin.id, savedKeyPackages, licenses, folders)
+          needed = state.needed
+          active = state.active
         } catch {
           // Unknown licence state keeps checks waiting for activation.
         }
@@ -2932,7 +2934,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
           </div>
         </div>
       )}
-      {uploadMessage && (
+      {uploadMessage && !showPlayground && (
         <div role="status" className="fixed bottom-5 left-5 right-5 z-[1001] mx-auto flex max-w-xl items-start gap-4 rounded-xl border border-teal-200 bg-white p-4 shadow-lg">
           <p className="min-w-0 flex-1 break-words">{uploadMessage}</p>
           <button type="button" onClick={() => setUploadMessage('')} aria-label="Dismiss upload status"><XMarkIcon className="size-5" /></button>
@@ -3415,9 +3417,9 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                             type="button"
                             aria-label={`Turn off ${check.name}`}
                             onClick={() => updateRecipe(removeCheckFromSetup(recipe, check.id))}
-                            className="inline-flex min-h-11 items-center gap-1 rounded-lg bg-white px-3 py-2 text-sm/5 font-medium text-teal-800 ring-1 ring-teal-700/20 hover:bg-teal-50 active:bg-teal-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+                            className="inline-flex min-w-0 max-w-full min-h-7 items-center gap-1 rounded-lg bg-white px-3 py-1 text-sm/5 font-medium text-teal-800 ring-1 ring-teal-700/20 any-pointer-coarse:min-h-11 hover:bg-teal-50 active:bg-teal-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
                           >
-                            <CheckIcon className="size-3.5 shrink-0 fill-teal-700" />
+                            <XMarkIcon className="size-3.5 shrink-0 fill-teal-700" />
                             Turn off
                           </button>
                         ) : (
