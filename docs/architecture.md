@@ -72,7 +72,7 @@ Recipe + local package IDs
   -> startPlaygroundWeb
        -> verify running WordPress version with PHP
        -> establish/resume OPFS mount
-       -> install local plugin ZIPs
+       -> install local plugin ZIPs, activate them, and verify activation in a separate request
        -> install and verify local theme
        -> fill saved licence keys
        -> update plugins and themes (networking allowed only)
@@ -83,7 +83,11 @@ Recipe + local package IDs
 
 The checks and the updates write only to their own state (`checksRun`, `pluginUpdates`); a result that arrives after the site closed or relaunched is dropped (`launchIdRef` for the updates, the client in `clientRef` for a check run). `licensedPackageIds` keeps which plugins needed a licence at launch (saved-key plugins, then premium Freemius plugins that cannot use their premium code; every uploaded plugin when the probe failed), so the gate stays closed after Start without keys. `siteLicensedIds` keeps which of them WordPress already reports as licensed, so a saved site with an active licence does not wait.
 
-Directory packages are included as Blueprint resource steps. Local packages cannot be embedded in a serializable recipe, so they are installed after the client is ready using their IndexedDB `File` objects.
+Directory packages are included as Blueprint resource steps. Before those steps, a PHP step deactivates tester editions absent from the resolved setup, including on resumed sites. Local packages cannot be embedded in a serializable recipe, so they are installed after the client is ready using their IndexedDB `File` objects.
+
+### Uploaded plugins in a running site
+
+The existing sequential drop queue saves the ZIPs and then installs uploaded plugins into the captured ready client through `src/lib/uploaded-plugins.js`. Installation uses the Blueprint installer without activation, followed by quiet PHP activation and a separate active-state probe. The probe stores failed plugin basenames only in a WordPress option; a must-use plugin shows the failure on the corresponding Plugins row. Vendor output is never copied into launcher state. The launch id and client identity discard stale continuations. Adding a tester installs the measurement helpers and registers the page watcher once per client; the existing licence fill and probe keep the licence gate current.
 
 ## Preview tabs
 

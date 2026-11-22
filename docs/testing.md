@@ -201,3 +201,9 @@ See [0.7.1 remediation and release](changes/2026-09-10-security-fixes.md). Chrom
 ### Live release verification
 
 A subsequent isolated Chromium smoke on production passed: synthetic drag events displayed the upload-box; a compressed plugin ZIP, invalid middle file, and two compressed theme ZIPs produced one plugin and two themes in their correct IndexedDB stores. Reload preserved plugin selection and the last theme selection with no directory theme. No page errors occurred. See [deployment evidence](changes/2026-09-16-release-0.8.0-deployed.md). This supplements the earlier unit/build-only evidence; physical OS drag and Firefox/Safari were not tested.
+
+## TOOLS-402 uploaded plugins and tester editions
+
+`src/lib/uploaded-plugins.test.js` covers install/activate/verify ordering, safe failed activation and stale-client cancellation. `src/lib/uploaded-plugins-php.test.js` executes the activation and tester synchronisation PHP with a focused WordPress stub, including activation redirects and failures. `src/lib/checks.test.js` covers Query Monitor Pro, turning testers off, and free/Pro selection replacement.
+
+Browser acceptance: upload a synthetic plugin, check the key-plus icon, save a fake licence in the existing encrypted vault, turn each tester on then off, upload Pro fixtures and confirm only Pro is selected. Start a temporary site, drop another plugin onto the running site, and check WordPress's row shows Deactivate. Drop a plugin that refuses activation and check its row shows the inline activation failure. Resume a browser-saved site with testers off and confirm old testers are inactive. Paid vendor binaries and real licence activation require Lex's own preview test; fixtures prove installation behavior, not vendor licence validity.

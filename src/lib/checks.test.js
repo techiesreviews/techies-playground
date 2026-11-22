@@ -404,3 +404,26 @@ test('opening a check in its tool is not a new page to check', async () => {
   assert.equal(isCheckToolPage('/wp-admin/plugins.php'), false)
   assert.equal(isCheckToolPage(''), false)
 })
+
+test('Query Monitor Pro counts as a check', () => {
+  assert.deepEqual(checksInSetup(recipe({ plugins: ['query-monitor-pro'] })).map((check) => check.id), ['query-monitor'])
+})
+
+test('turning a check off removes its free and Pro selections, keeping other plugins', async () => {
+  const { removeCheckFromSetup } = await import('./checks.js')
+  const result = removeCheckFromSetup(recipe({ plugins: ['query-monitor-pro', 'other'], repositoryPlugins: ['query-monitor', 'akismet'] }), 'query-monitor')
+  assert.deepEqual(result.plugins, ['other'])
+  assert.deepEqual(result.repositoryPlugins, ['akismet'])
+})
+
+test('uploaded Pro replaces free tester selection and free upload replaces Pro', async () => {
+  const { selectUploadedPlugin, resolveCheckPlugins } = await import('./checks.js')
+  for (const id of ['query-monitor', 'code-profiler']) {
+    const selected = selectUploadedPlugin(recipe({ plugins: [id, 'other'], repositoryPlugins: [id, 'akismet'] }), `${id}-pro`)
+    assert.deepEqual(selected.plugins, ['other', `${id}-pro`])
+    assert.deepEqual(selected.repositoryPlugins, ['akismet'])
+    assert.deepEqual(selectUploadedPlugin(selected, id).plugins, ['other', id])
+    assert.deepEqual(resolveCheckPlugins(recipe({ plugins: [`${id}-pro`, id], repositoryPlugins: [id] })).plugins, [`${id}-pro`])
+    assert.deepEqual(resolveCheckPlugins(recipe({ plugins: [`${id}-pro`], repositoryPlugins: [id] })).repositoryPlugins, [])
+  }
+})

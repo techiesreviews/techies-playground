@@ -28,8 +28,9 @@ import {
   TrashIcon,
   XMarkIcon,
 } from '@heroicons/react/16/solid'
-import { installPlugin, installTheme, zipWpContent } from '@wp-playground/blueprints'
+import { installTheme, zipWpContent } from '@wp-playground/blueprints'
 import { detectPackageType, registerPackageDrop } from './lib/package-upload'
+import { installUploadedPlugin } from './lib/uploaded-plugins'
 import { buildPreviewPlugin, createLauncherScope, hostPreviewSession } from './lib/playground-preview'
 import { PLAYGROUND_ORIGIN, PLAYGROUND_READY_TIMEOUT_MS, PLAYGROUND_REMOTE_URL, startPlaygroundWithin } from './lib/playground-host'
 import {
@@ -111,7 +112,6 @@ import {
   licensesNeeded,
   activeInSite,
   packagesWithSavedKeys,
-  pluginFolderFromAssetPath,
 } from './lib/license-fill'
 import {
   CHECKS,
@@ -120,6 +120,9 @@ import {
   MEASURE_PLUGIN,
   MEASURE_PLUGIN_PATH,
   addCheckToSetup,
+  removeCheckFromSetup,
+  resolveCheckPlugins,
+  selectUploadedPlugin,
   checkResultsPath,
   checksAnnouncement,
   checksGate,
@@ -151,6 +154,17 @@ const PERSISTED_SITES_KEY = persistedSitesKey(PLAYGROUND_ORIGIN)
 const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-storage-default-v1'
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
+  {
+    version: '0.12.3',
+    date: 'November 22, 2026',
+    title: 'Uploaded plugins activate, and testers can be switched off',
+    summary: 'Drop a plugin ZIP into an open site to install and activate it right away. Turn testers off or upload their Pro versions.',
+    changes: [
+      'Add key and Add license show a key icon with a small plus. Saved keys keep the existing key icon.',
+      'Uploaded plugins install and activate at start or when dropped onto a running site. Failed activation appears on the plugin row and keeps the site open.',
+      'Query Monitor and Code Profiler have a Turn off button. Uploading query-monitor-pro.zip or code-profiler-pro.zip replaces the free selection; add its key through the existing encrypted vault.',
+    ],
+  },
   {
     version: '0.12.2',
     date: 'November 22, 2026',
@@ -1341,7 +1355,7 @@ function LicenseManager({ packages, anchorRef, fillResults, onRecordsChange, onC
                 <p className="min-w-0 max-w-[52ch] flex-1 text-pretty text-base/7 text-neutral-600 sm:text-sm/6">Names are visible after unlocking; keys stay encrypted until you press Copy or a launch fills them in.</p>
                 <button type="button" disabled={!packages.length} onClick={beginAdding} className="relative inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-white py-2 pr-3 pl-2 text-sm/5 font-medium text-neutral-800 ring-1 ring-neutral-950/10 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 disabled:cursor-not-allowed disabled:opacity-50">
                   <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
-                  <PlusIcon className="size-4 shrink-0 fill-neutral-500" />
+                  <KeyPlusIcon />
                   Add license
                 </button>
               </div>
@@ -1557,7 +1571,16 @@ function AddKeyForm({ plugin, onSaved, onSavedElsewhere, onCancel }) {
   )
 }
 
-function PluginRow({ plugin, selected, keySaved, addingKey, onToggle, onReplace, onRemove, onAddKey, onCancelKey, onKeySaved, onKeysChanged }) {
+function KeyPlusIcon() {
+  return (
+    <span aria-hidden="true" className="inline-flex shrink-0 items-center gap-0.5 text-neutral-500">
+      <KeyIcon className="size-4 fill-current" />
+      <PlusIcon className="size-3 fill-current" />
+    </span>
+  )
+}
+
+function PluginRow({ plugin, selected, installResult, keySaved, addingKey, onToggle, onReplace, onRemove, onAddKey, onCancelKey, onKeySaved, onKeysChanged }) {
   const size = `${(plugin.size / 1024 / 1024).toFixed(1)} MB`
   const versionHint = plugin.versionHint || extractVersionHint(plugin.filename)
   const packageDetails = [versionHint && `version ${versionHint}`, size, 'stored only in this browser'].filter(Boolean).join(', ')
@@ -1573,6 +1596,7 @@ function PluginRow({ plugin, selected, keySaved, addingKey, onToggle, onReplace,
           description={packageDetails}
           indicator="plugin"
         />
+        {installResult && <p role="status" className={`text-pretty text-sm/6 ${installResult.status === 'active' ? 'text-teal-800' : 'text-red-700'}`}>{installResult.message}</p>}
       </div>
       {!keySaved && !addingKey && (
         <button
@@ -1582,7 +1606,7 @@ function PluginRow({ plugin, selected, keySaved, addingKey, onToggle, onReplace,
           aria-label={`Add a license key for ${plugin.label}`}
           className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-white py-1 pr-2.5 pl-1.5 text-sm/5 font-medium text-neutral-800 ring-1 ring-neutral-950/10 any-pointer-coarse:min-h-11 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
         >
-          <PlusIcon className="size-4 shrink-0 fill-neutral-500" />
+          <KeyPlusIcon />
           Add key
         </button>
       )}
@@ -1827,6 +1851,7 @@ function VaultUnlockPrompt({ onUnlocked, onSkip, onCancel }) {
 export default function App() {
   const [isDraggingPackages, setIsDraggingPackages] = useState(false)
   const [uploadMessage, setUploadMessage] = useState('')
+  const [pluginInstallResults, setPluginInstallResults] = useState({})
   const uploadQueueRef = useRef(Promise.resolve())
   useEffect(() => registerPackageDrop(window, {
     onActive: setIsDraggingPackages,
@@ -1911,6 +1936,7 @@ export default function App() {
   const checksButtonRef = useRef(null)
   const updatesButtonRef = useRef(null)
   const launchedRecipeRef = useRef(null)
+  const checksWatchedClientRef = useRef(null)
   // The page each site measures now and the one that waits, so a site never measures twice at once.
   const checksQueueRef = useRef(null)
   checksQueueRef.current ??= createCheckQueue()
@@ -2134,6 +2160,7 @@ export default function App() {
     const failures = []
     let pluginCount = 0
     let themeCount = 0
+    const uploadedPlugins = []
     setError('')
     for (const [index, file] of files.entries()) {
       setUploadMessage(`Uploading ${index + 1} of ${files.length}: ${file.name}`)
@@ -2142,11 +2169,12 @@ export default function App() {
         const id = normalizePluginId(file.name)
         if (!id) throw new Error('Could not create a package ID.')
         const existing = await (type === 'theme' ? getTheme(id) : getPlugin(id))
-        await (type === 'theme' ? saveTheme : savePlugin)({
+        const record = {
           id, label: existing?.label || pluginLabelFromFilename(file.name),
           filename: file.name, size: file.size, file,
           versionHint: extractVersionHint(file.name), savedAt: Date.now(),
-        })
+        }
+        await (type === 'theme' ? saveTheme : savePlugin)(record)
         setActiveSavedId('')
         setActiveSpinupId('')
         if (type === 'theme') {
@@ -2155,8 +2183,9 @@ export default function App() {
           setRecipe((current) => validateRecipe({ ...current, theme: id, repositoryTheme: '' }))
         } else {
           pluginCount += 1
+          uploadedPlugins.push(record)
           setPluginRecency((current) => markPluginSelected(current, id))
-          setRecipe((current) => validateRecipe({ ...current, plugins: [...current.plugins, id] }))
+          setRecipe((current) => validateRecipe(selectUploadedPlugin(current, id)))
         }
       } catch (caught) {
         failures.push(`${file.name}: ${caught.message}`)
@@ -2170,6 +2199,59 @@ export default function App() {
     }
     setUploadMessage(`Uploaded ${pluginCount} plugin${pluginCount === 1 ? '' : 's'} and ${themeCount} theme${themeCount === 1 ? '' : 's'} to this browser.${failures.length ? ` ${failures.length} upload error(s). ${failures.join(' ')}` : ''}`)
     setError(failures.join(' '))
+    await installLiveUploads(uploadedPlugins)
+  }
+
+  async function installLiveUploads(uploadedPlugins) {
+    const client = clientRef.current
+    if (!client || status.step !== 4) return
+    const launchId = launchIdRef.current
+    const isCurrent = () => launchId === launchIdRef.current && client === clientRef.current
+    for (const plugin of uploadedPlugins) {
+      if (!isCurrent()) return
+      let result
+      try {
+        result = await installUploadedPlugin(client, plugin, { isCurrent })
+      } catch {
+        result = { status: 'failed', message: 'The uploaded plugin could not be installed. Try another ZIP.' }
+      }
+      if (!isCurrent()) return
+      setPluginInstallResults((current) => ({ ...current, [plugin.id]: result }))
+      if (result.status === 'failed') continue
+      launchedRecipeRef.current = selectUploadedPlugin(launchedRecipeRef.current, plugin.id)
+      const checks = checksInSetup(launchedRecipeRef.current)
+      setLaunchedChecks(checks)
+      const folders = new Map(result.folder ? [[plugin.id, result.folder]] : [])
+      if (savedKeyPackages.has(`plugin:${plugin.id}`) && isVaultSessionUnlocked()) {
+        const filled = await fillSavedLicenseKeys({
+          client, getVaultKey: getVaultSessionKey, readKeys: readLicenseKeysForPackages,
+          packages: [{ id: plugin.id, vaultId: `plugin:${plugin.id}`, label: plugin.label }],
+          folders, signal: launchAbortRef.current?.signal,
+        })
+        if (!isCurrent()) return
+        setLicenseFill((current) => [...current.filter((entry) => entry.vaultId !== `plugin:${plugin.id}`), ...filled])
+      }
+      if (checks.length) {
+        await client.writeFile(CHECKS_PLUGIN_PATH, CHECKS_PLUGIN)
+        if (!isCurrent()) return
+        await client.writeFile(MEASURE_PLUGIN_PATH, MEASURE_PLUGIN)
+        if (!isCurrent()) return
+        let needed = [plugin.id]
+        let active = []
+        try {
+          const licenses = await readFreemiusLicenses({ client, signal: launchAbortRef.current?.signal })
+          needed = licensesNeeded([plugin.id], licenses, folders)
+          active = activeInSite(licenses, folders)
+        } catch {
+          // Unknown licence state keeps checks waiting for activation.
+        }
+        if (!isCurrent()) return
+        setLicensedPackageIds((current) => [...current.filter((id) => id !== plugin.id && launchedRecipeRef.current.plugins.includes(id)), ...needed])
+        setSiteLicensedIds((current) => [...current.filter((id) => id !== plugin.id && launchedRecipeRef.current.plugins.includes(id)), ...active])
+        watchPages(client)
+      }
+    }
+    if (isCurrent() && uploadedPlugins.length) await client.goTo('/wp-admin/plugins.php')
   }
 
   async function handleZipImport(event) {
@@ -2191,7 +2273,7 @@ export default function App() {
           savedAt: Date.now(),
         })
         setPluginRecency((current) => markPluginSelected(current, id))
-        setRecipe((current) => validateRecipe({ ...current, plugins: [...current.plugins, id] }))
+        setRecipe((current) => validateRecipe(selectUploadedPlugin(current, id)))
       }
       setPlugins(await listPlugins())
     } catch (caught) {
@@ -2421,6 +2503,8 @@ export default function App() {
   // Measures every page that opens in WordPress, also with the panel closed, once the licenses
   // allow the checks (or they already ran on this site).
   function watchPages(client) {
+    if (checksWatchedClientRef.current === client) return
+    checksWatchedClientRef.current = client
     watchCheckPages(client, {
       isCurrent: () => client === clientRef.current,
       canRun: () => Boolean(checksGateRef.current?.ready || checksRanOnRef.current === client),
@@ -2476,17 +2560,19 @@ export default function App() {
     if (!recipe.plugins.includes(id)) {
       setPluginRecency((current) => markPluginSelected(current, id))
     }
-    updateRecipe({
-      plugins: recipe.plugins.includes(id) ? recipe.plugins.filter((pluginId) => pluginId !== id) : [...recipe.plugins, id],
-    })
+    updateRecipe(recipe.plugins.includes(id)
+      ? { plugins: recipe.plugins.filter((pluginId) => pluginId !== id) }
+      : selectUploadedPlugin(recipe, id))
   }
 
   function toggleRepositoryPlugin(slug) {
-    updateRecipe({
-      repositoryPlugins: recipe.repositoryPlugins.includes(slug)
-        ? recipe.repositoryPlugins.filter((pluginSlug) => pluginSlug !== slug)
-        : [...recipe.repositoryPlugins, slug],
-    })
+    if (recipe.repositoryPlugins.includes(slug)) {
+      updateRecipe({ repositoryPlugins: recipe.repositoryPlugins.filter((id) => id !== slug) })
+      return
+    }
+    const check = CHECKS.find((candidate) => candidate.packageIds.includes(slug))
+    const next = check ? removeCheckFromSetup(recipe, check.id) : recipe
+    updateRecipe({ ...next, repositoryPlugins: [...next.repositoryPlugins, slug] })
   }
 
   function chooseTheme(id) {
@@ -2562,7 +2648,7 @@ export default function App() {
 
     let launchedRecipe
     try {
-      launchedRecipe = validateRecipe(candidate)
+      launchedRecipe = resolveCheckPlugins(validateRecipe(candidate))
       const warning = externalSetupMessage(launchedRecipe)
       if (warning && !window.confirm(`${warning}\n\nLaunch this recipe?`)) return
     } catch (caught) {
@@ -2572,6 +2658,7 @@ export default function App() {
     const launchId = launchIdRef.current + 1
     launchIdRef.current = launchId
     setError('')
+    setPluginInstallResults({})
     setConfirmingPlaygroundClose(false)
     setShowPlayground(true)
     setLicenseFill([])
@@ -2706,16 +2793,11 @@ echo 'PLAYGROUND_WORDPRESS_VERSION:' . $wp_version;
       for (const [index, id] of launchedRecipe.plugins.entries()) {
         const plugin = await getPlugin(id)
         installedPlugins.push(plugin)
-        const pluginFile = new File([plugin.file], plugin.filename, { type: 'application/zip' })
         setStatus({ running: true, step: 1, message: `Installing ${plugin.label} (${index + 1} of ${launchedRecipe.plugins.length})…` })
-        const installed = await installPlugin(client, {
-          pluginData: pluginFile,
-          options: { activate: true },
-          ifAlreadyInstalled: 'overwrite',
-        })
+        const result = await installUploadedPlugin(client, plugin, { isCurrent: () => launchId === launchIdRef.current })
         if (launchId !== launchIdRef.current) return
-        const folder = pluginFolderFromAssetPath(installed?.assetPath)
-        if (folder) pluginFolders.set(id, folder)
+        setPluginInstallResults((current) => ({ ...current, [id]: result }))
+        if (result.folder) pluginFolders.set(id, result.folder)
       }
 
       let installedTheme = launchedRecipe.repositoryTheme ? (() => {
@@ -3238,6 +3320,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                                 key={plugin.id}
                                 plugin={plugin}
                                 selected={recipe.plugins.includes(plugin.id)}
+                                installResult={pluginInstallResults[plugin.id]}
                                 keySaved={savedKeyPackages.has(`plugin:${plugin.id}`)}
                                 addingKey={addingKeyFor === plugin.id}
                                 onToggle={togglePlugin}
@@ -3328,10 +3411,15 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                           <p className="text-neutral-600">{check.summary}</p>
                         </div>
                         {inSetup ? (
-                          <span className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full bg-white py-0.5 pr-2 pl-1.5 text-sm/5 font-medium text-teal-800 ring-1 ring-teal-700/20">
+                          <button
+                            type="button"
+                            aria-label={`Turn off ${check.name}`}
+                            onClick={() => updateRecipe(removeCheckFromSetup(recipe, check.id))}
+                            className="inline-flex min-h-11 items-center gap-1 rounded-lg bg-white px-3 py-2 text-sm/5 font-medium text-teal-800 ring-1 ring-teal-700/20 hover:bg-teal-50 active:bg-teal-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+                          >
                             <CheckIcon className="size-3.5 shrink-0 fill-teal-700" />
-                            Runs after start
-                          </span>
+                            Turn off
+                          </button>
                         ) : (
                           <span className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
                             <span className="text-sm/5 text-neutral-500">Not in this setup</span>

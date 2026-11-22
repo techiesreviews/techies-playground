@@ -46,7 +46,7 @@ A validated recipe produces:
 - `preferredVersions.php` and `.wp`.
 - `features.networking` and `.intl`.
 - Optional `extraLibraries: ['wp-cli']`.
-- Steps in order: WP config constants, site options, a `writeFile` of the Freemius must-use plugin (`/wordpress/wp-content/mu-plugins/techies-freemius.php`, every launch), optional language, optional one-time Multisite, optional one-time WXR import, directory plugin installs, optional directory theme install, login.
+- Steps in order: WP config constants, site options, a `writeFile` of the Freemius must-use plugin (`/wordpress/wp-content/mu-plugins/techies-freemius.php`, every launch), optional language, optional one-time Multisite, optional one-time WXR import, tester-edition deactivation, directory plugin installs, optional directory theme install, login.
 
 Local ZIPs and the PHP extension manifest are not serialized into these steps. The manifest is passed as a Playground startup extension, and local ZIPs are installed through the ready client.
 
@@ -185,3 +185,7 @@ Do not add secrets to:
 - test fixtures copied from real licenses.
 
 The stronger local-helper concept and its additional constraints are documented in [license-helper.md](license-helper.md), but it is not implemented.
+
+## Uploaded plugin activation state
+
+`pluginInstallResults` is session-only launcher state keyed by local package ID. It contains a fixed status (`active`, `inactive`, `unknown` or `failed`) and safe fixed UI text, never raw PHP/vendor output or licence data. `techies_upload_activation_failed` is a WordPress option containing failed plugin basenames only. The `techies-uploaded-plugins.php` must-use plugin uses it to render an inline error on an inactive plugin row; successful activation verification clears that basename. These site-local records may be included in a site snapshot. Recipe, package-vault and encrypted licence-vault schemas remain unchanged. Free/Pro tester selections use their existing local IDs (`query-monitor[-pro]`, `code-profiler[-pro]`), and only one edition is selected at a time.
