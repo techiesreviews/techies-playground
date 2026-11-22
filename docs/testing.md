@@ -26,7 +26,7 @@ For a deployment preparation, also run `npm run deploy:check`. Per the Release s
 
 ## Current automated suite
 
-The suite uses Node's built-in test runner and contains 342 tests in 40 files in the current working tree. `npm test` names its files (`src/**/*.test.js`, `scripts/*.test.mjs`), so a locally prepared `playground-host/dist` adds none.
+The suite uses Node's built-in test runner and contains 344 tests in 40 files in the current working tree. `npm test` names its files (`src/**/*.test.js`, `scripts/*.test.mjs`), so a locally prepared `playground-host/dist` adds none.
 
 Use the shared [Agent Kit](agents/agent-scripts.md): `scripts/agents/kit doctor`, `scripts/agents/kit unit` (the same files as `npm test`), and `scripts/agents/kit build`. The unit tests are Node tests only; browser specs and `kit shots` are not integrated. Real browser checks below use T3 separately and must not be inferred from the Node results.
 
@@ -204,10 +204,12 @@ See [0.7.1 remediation and release](changes/2026-09-10-security-fixes.md). Chrom
 
 A subsequent isolated Chromium smoke on production passed: synthetic drag events displayed the upload-box; a compressed plugin ZIP, invalid middle file, and two compressed theme ZIPs produced one plugin and two themes in their correct IndexedDB stores. Reload preserved plugin selection and the last theme selection with no directory theme. No page errors occurred. See [deployment evidence](changes/2026-09-16-release-0.8.0-deployed.md). This supplements the earlier unit/build-only evidence; physical OS drag and Firefox/Safari were not tested.
 
-## TOOLS-402 uploaded plugins and tester editions
+## Checks spinner reveal
 
 The Checks spinner regression test verifies separate reveal wrappers for the bar, overview and detail spinners, so the spin animation cannot override the 200 ms reveal animation. This is source inspection, not browser timing evidence.
 
-`src/lib/uploaded-plugins.test.js` covers install/activate/verify ordering, safe failed activation and stale-client cancellation. `src/lib/uploaded-plugins-php.test.js` executes the activation and tester synchronisation PHP with a focused WordPress stub, including activation redirects, failures, and preserving testers outside the setup. `src/app-upload.test.js` executes the picker and live-install orchestration with focused adapters to cover mixed ZIP queueing and failures after installation. `src/lib/checks.test.js` covers Query Monitor Pro, turning testers off, and free/Pro selection replacement.
+## TOOLS-402 uploaded plugins and tester editions
+
+`src/lib/uploaded-plugins.test.js` covers install/activate/verify ordering, safe failed activation and stale-client cancellation. `src/lib/uploaded-plugins-php.test.js` executes the activation and tester synchronisation PHP with a focused WordPress stub, including activation redirects, failures, and preserving testers outside the setup and turning off only launcher-owned testers on resume. `src/app-upload.test.js` executes the picker and live-install orchestration with focused adapters to cover mixed ZIP queueing and failures after installation. `src/lib/checks.test.js` covers Query Monitor Pro, turning testers off, and free/Pro selection replacement.
 
 Browser acceptance: upload a synthetic plugin, check the key-plus icon, save a fake licence in the existing encrypted vault, turn each tester on then off, upload Pro fixtures and confirm only Pro is selected. Start a temporary site, drop another plugin onto the running site, and check WordPress's row shows Deactivate. Drop a plugin that refuses activation and check its row shows the inline activation failure. Resume a browser-saved site with a Pro tester selected and confirm only its competing free edition is inactive. Testers activated inside WordPress but absent from the setup must stay active. Paid vendor binaries and real licence activation require Lex's own preview test; fixtures prove installation behavior, not vendor licence validity.

@@ -66,9 +66,29 @@ export function checkPluginSyncCode(recipe) {
 require_once '/wordpress/wp-load.php';
 require_once '/wordpress/wp-admin/includes/plugin.php';
 $disabled = json_decode('${JSON.stringify(disabled)}', true);
+$selected = json_decode('${JSON.stringify(selected.filter((id) => CHECKS.some((check) => check.packageIds.includes(id))))}', true);
+$managed = get_option('techies_launcher_testers', array());
+if (is_array($managed)) $disabled = array_merge($disabled, array_diff($managed, $selected));
 foreach (get_plugins() as $file => $data) {
   if (in_array(explode('/', $file)[0], $disabled, true)) deactivate_plugins($file, true);
 }
+`
+}
+
+// Remember only tester editions that actually activated, so Turn off can remove our
+// selections on resume without claiming testers the user activated inside WordPress.
+export function rememberCheckPluginsCode(recipe) {
+  const selected = [...recipe.plugins, ...recipe.repositoryPlugins].filter((id) => CHECKS.some((check) => check.packageIds.includes(id)))
+  return `<?php
+require_once '/wordpress/wp-load.php';
+require_once '/wordpress/wp-admin/includes/plugin.php';
+$selected = json_decode('${JSON.stringify(selected)}', true);
+$managed = array();
+foreach (get_plugins() as $file => $data) {
+  $id = explode('/', $file)[0];
+  if (in_array($id, $selected, true) && is_plugin_active($file)) $managed[] = $id;
+}
+update_option('techies_launcher_testers', array_values(array_unique($managed)), false);
 `
 }
 

@@ -46,7 +46,7 @@ A validated recipe produces:
 - `preferredVersions.php` and `.wp`.
 - `features.networking` and `.intl`.
 - Optional `extraLibraries: ['wp-cli']`.
-- Steps in order: WP config constants, site options, a `writeFile` of the Freemius must-use plugin (`/wordpress/wp-content/mu-plugins/techies-freemius.php`, every launch), optional language, optional one-time Multisite, optional one-time WXR import, tester-edition deactivation, directory plugin installs, optional directory theme install, login.
+- Steps in order: WP config constants, site options, a `writeFile` of the Freemius must-use plugin (`/wordpress/wp-content/mu-plugins/techies-freemius.php`, every launch), optional language, optional one-time Multisite, optional one-time WXR import, tester-edition deactivation, directory plugin installs, recording active tester ownership, optional directory theme install, login.
 
 Local ZIPs and the PHP extension manifest are not serialized into these steps. The manifest is passed as a Playground startup extension, and local ZIPs are installed through the ready client.
 
@@ -189,3 +189,7 @@ The stronger local-helper concept and its additional constraints are documented 
 ## Uploaded plugin activation state
 
 `pluginInstallResults` is session-only launcher state keyed by local package ID. It contains a fixed status (`active`, `inactive`, `unknown` or `failed`) and safe fixed UI text, never raw PHP/vendor output or licence data. `techies_upload_activation_failed` is a WordPress option containing failed plugin basenames only. The `techies-uploaded-plugins.php` must-use plugin uses it to render an inline error on an inactive plugin row; successful activation verification clears that basename. These site-local records may be included in a site snapshot. Recipe, package-vault and encrypted licence-vault schemas remain unchanged. Free/Pro tester selections use their existing local IDs (`query-monitor[-pro]`, `code-profiler[-pro]`), and only one edition is selected at a time.
+
+### Launcher-owned tester editions
+
+The WordPress option `techies_launcher_testers` stores an array of built-in tester package IDs that the launcher selected and confirmed active. Directory installs record ownership in the Blueprint; uploaded tester installs refresh it after activation. A later launch deactivates competing editions of selected testers and previously owned editions removed from the setup. Testers with no recorded ownership are preserved when absent from the setup. Older sites without this option are not assigned ownership by inference. This is site-local WordPress data and contains no licence keys.

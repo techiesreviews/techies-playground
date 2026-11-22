@@ -1,4 +1,4 @@
-import { ArrowUpTrayIcon, CheckIcon, ExclamationTriangleIcon } from '@heroicons/react/16/solid'
+import { ArrowUpTrayIcon, CheckIcon, ClockIcon, ExclamationTriangleIcon } from '@heroicons/react/16/solid'
 import { BAR_BUTTON_CLASS, BarTapTarget, Spinner } from './UpdatesControl'
 import { uploadControlLabel } from './lib/package-upload'
 
@@ -8,8 +8,8 @@ export function UploadControl({ upload, siteReady, onUpload }) {
   const label = uploadControlLabel(upload.state)
   const detail = upload.message
     ? upload.message.startsWith(label) ? upload.message : `${label}: ${upload.message}`
-    : 'Add ZIPs, plugins or themes, to this site'
-  const Icon = failed ? ExclamationTriangleIcon : upload.state === 'complete' ? CheckIcon : ArrowUpTrayIcon
+    : 'Add ZIPs: plugins or themes'
+  const Icon = failed ? ExclamationTriangleIcon : upload.state === 'complete' ? CheckIcon : upload.state === 'saved' ? ClockIcon : ArrowUpTrayIcon
   return (
     <div className={failed ? 'flex min-w-0 max-w-full flex-wrap items-center gap-1.5 @max-[20rem]:basis-full' : 'contents'}>
     <button
@@ -18,8 +18,8 @@ export function UploadControl({ upload, siteReady, onUpload }) {
       aria-busy={busy}
       onClick={() => { if (siteReady && !busy) onUpload() }}
       aria-label={detail}
-      title={detail}
-      className={`${BAR_BUTTON_CLASS} active:bg-white/15 aria-disabled:cursor-not-allowed aria-disabled:opacity-50`}
+      title={siteReady ? detail : 'Available when setup finishes'}
+      className={`${BAR_BUTTON_CLASS} active:bg-white/15 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-white/5 aria-disabled:active:bg-white/5`}
     >
       <BarTapTarget />
       {busy ? <Spinner className="text-neutral-300" /> : <Icon className={`size-4 shrink-0 ${failed ? 'fill-amber-300' : 'fill-neutral-300'}`} />}
