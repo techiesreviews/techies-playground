@@ -1,4 +1,4 @@
-import { checkPluginSyncCode, resolveCheckPlugins } from './checks.js'
+import { checkPluginSyncCode, rememberCheckPluginsCode, resolveCheckPlugins } from './checks.js'
 import { FREEMIUS_PLUGIN, FREEMIUS_PLUGIN_PATH } from './freemius-plugin.js'
 
 export const DEFAULT_RECIPE = Object.freeze({
@@ -230,6 +230,7 @@ export function buildPlaygroundBlueprint(candidate, { includeOneTimeSetup = true
       ifAlreadyInstalled: 'overwrite',
     })
   }
+  steps.push({ step: 'runPHP', code: rememberCheckPluginsCode(recipe) })
   if (recipe.repositoryTheme) {
     steps.push({
       step: 'installTheme',

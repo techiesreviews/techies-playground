@@ -18,8 +18,8 @@ Route both pickers through the existing queue, keep upload states compact below 
 ## Implementation
 
 - Both ZIP inputs use `handleZipImport`, sharing queue ordering, header detection and input reset.
-- Upload labels stay visually hidden below 768 px except failures. Busy states use the existing reduced-motion-aware spinner. `aria-disabled` preserves keyboard focus and ignores activation while unavailable; accessible names include the visible label without repeating the progress prefix.
-- Tester sync considers only families selected in the recipe. Other testers activated separately inside WordPress remain untouched.
+- Upload labels stay visually hidden below 768 px except failures. Busy states use the existing reduced-motion-aware spinner; saved uploads use a distinct clock icon. `aria-disabled` preserves keyboard focus and ignores activation while unavailable; accessible names include the visible label without repeating the progress prefix.
+- Tester sync disables competing editions of selected families and previously launcher-owned editions removed from the recipe. An option in the site records selected editions only after successful activation; other testers remain untouched.
 - Post-install setup and navigation failures return accurate inline messages without changing the successful installation result.
 - Close-confirmation tap spans use the existing `pointer-fine:hidden` rule. The changelog/version, current-state docs, test inventory and four missing change-index links are aligned.
 
@@ -59,3 +59,13 @@ Validation gaps R1-12, R1-13 and R1-14 have focused orchestration/PHP coverage; 
 ## Result and follow-ups
 
 The release fixes and required boot acceptance pass locally. The incomplete historical test save is preserved for inspection; its missing files cannot be restored by a runtime downgrade. This work lands on dev only. The lead checks preview deployment, controls any live release, and handles the repository setting that lets the daily sync create update PRs.
+
+## Review follow-up
+
+The first fix-round review found two P2s: Turn off needed saved-site ownership tracking, and the compact saved state needed its own icon. Two new PHP tests first failed (5/7 passing), then passed after adding `rememberCheckPluginsCode` and ownership-aware synchronisation. They prove that removing a launcher-owned Code Profiler deactivates it while independently activated Query Monitor survives, and that a failed Code Profiler installation cannot claim ownership of a later manual activation.
+
+The compact saved state now uses a clock; unavailable controls keep their normal surface and explain their availability through the title. Documentation now states the compact icon rule, groups spinner coverage under its own Checks heading, and puts the November 21 index entries after November 22. The plugin list opens only when at least one ZIP installed, so an all-failed batch cannot add an inaccurate “Installed” navigation message.
+
+The post-install setup message deliberately groups checks and licence setup as “checks or licence”; it distinguishes that group from opening the plugin list without claiming to identify which internal setup call failed. The extra source assertions and test permutations proposed as validation gaps in this review remain optional; real browser layout/focus evidence and focused orchestration/PHP tests cover the required outcomes.
+
+Final follow-up checks: `kit unit --affected` passed 140/140 in 13 files; full `kit unit` passed 344/344 in 40 files; `kit build` passed with the existing warnings. `kit ux` again reported the missing feature list. The standalone Chromium rerun passed all four 320/375 px upload/saved layouts with the new clock icon and no page errors. It also launched the saved site three times: both selected testers were recorded as managed; turning both off removed them; manually activating Query Monitor inside WordPress then resuming with both absent from the setup preserved Query Monitor while Code Profiler stayed off. The resulting `active_plugins` and ownership arrays are in `.scratch/tools-403-bar-proof.json`.

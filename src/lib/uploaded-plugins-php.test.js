@@ -60,3 +60,26 @@ for (const selected of [[], ['code-profiler-pro']]) {
     } finally { php.exit() }
   })
 }
+
+test('real PHP: turning off a launcher-managed tester preserves a tester activated outside the setup', async () => {
+  const { rememberCheckPluginsCode } = await import('./checks.js')
+  const php = await setup()
+  try {
+    php.writeFile('/active', JSON.stringify(['query-monitor/query-monitor.php', 'code-profiler/free.php', 'other/other.php']))
+    await php.run({ code: rememberCheckPluginsCode({ ...DEFAULT_RECIPE, repositoryPlugins: ['code-profiler'] }) })
+    await php.run({ code: checkPluginSyncCode(DEFAULT_RECIPE) })
+    assert.deepEqual(JSON.parse(php.readFileAsText('/active')), ['query-monitor/query-monitor.php', 'other/other.php'])
+  } finally { php.exit() }
+})
+
+test('real PHP: failed tester installation never claims an externally activated tester', async () => {
+  const { rememberCheckPluginsCode } = await import('./checks.js')
+  const php = await setup()
+  try {
+    php.writeFile('/active', JSON.stringify(['query-monitor/query-monitor.php', 'other/other.php']))
+    await php.run({ code: rememberCheckPluginsCode({ ...DEFAULT_RECIPE, repositoryPlugins: ['code-profiler'] }) })
+    php.writeFile('/active', JSON.stringify(['query-monitor/query-monitor.php', 'code-profiler/free.php', 'other/other.php']))
+    await php.run({ code: checkPluginSyncCode(DEFAULT_RECIPE) })
+    assert.deepEqual(JSON.parse(php.readFileAsText('/active')), ['query-monitor/query-monitor.php', 'code-profiler/free.php', 'other/other.php'])
+  } finally { php.exit() }
+})

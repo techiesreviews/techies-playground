@@ -128,6 +128,7 @@ import {
   checksGate,
   checkedPagePath,
   checksInSetup,
+  rememberCheckPluginsCode,
   checksQuiet,
   createCheckQueue,
   evaluateChecks,
@@ -163,8 +164,8 @@ const CHANGELOG_ENTRIES = [
     changes: [
       'Both Add ZIPs pickers share the upload queue and detect plugins and themes from their headers.',
       'Upload progress uses the existing spinner on narrow bars, and the upload button keeps keyboard focus while busy.',
-      'Starting a saved setup only switches off competing editions of a selected tester. Testers activated separately inside WordPress stay on.',
-      'Failures after installation keep the installed plugin status and name the checks, licence or page-opening step that failed.',
+      'Starting a saved setup switches off competing editions and testers previously activated by the launcher that you turned off. Testers activated separately inside WordPress stay on.',
+      'Failures after installation keep the installed plugin status and report when checks or licence setup fails, or the plugin list cannot be opened.',
     ],
   },
   {
@@ -2249,6 +2250,7 @@ export default function App() {
 
   async function installLiveUploads(uploadedPlugins, client, launchId) {
     const failures = []
+    let installedCount = 0
     if (!client || client !== clientRef.current || launchId !== launchIdRef.current) return failures
     const isCurrent = () => launchId === launchIdRef.current && client === clientRef.current
     for (const [index, plugin] of uploadedPlugins.entries()) {
@@ -2264,10 +2266,15 @@ export default function App() {
       setPluginInstallResults((current) => ({ ...current, [plugin.id]: result }))
       if (result.status !== 'active') failures.push(`${plugin.label}: ${result.message}`)
       if (result.status === 'failed') continue
+      installedCount += 1
       try {
         launchedRecipeRef.current = selectUploadedPlugin(launchedRecipeRef.current, plugin.id)
         const checks = checksInSetup(launchedRecipeRef.current)
         setLaunchedChecks(checks)
+        if (checks.some((check) => check.packageIds?.includes(plugin.id))) {
+          await client.run({ code: rememberCheckPluginsCode(launchedRecipeRef.current) })
+          if (!isCurrent()) return failures
+        }
         const folders = new Map(result.folder ? [[plugin.id, result.folder]] : [])
         if (savedKeyPackages.has(`plugin:${plugin.id}`) && isVaultSessionUnlocked()) {
           const filled = await fillSavedLicenseKeys({
@@ -2303,7 +2310,7 @@ export default function App() {
         failures.push(`${plugin.label}: Installed, but the checks or licence could not be set up. Start the setup again to retry.`)
       }
     }
-    if (isCurrent() && uploadedPlugins.length) {
+    if (isCurrent() && installedCount) {
       try {
         await client.goTo('/wp-admin/plugins.php')
       } catch {
@@ -2811,6 +2818,11 @@ echo 'PLAYGROUND_WORDPRESS_VERSION:' . $wp_version;
         if (launchId !== launchIdRef.current) return
         setPluginInstallResults((current) => ({ ...current, [id]: result }))
         if (result.folder) pluginFolders.set(id, result.folder)
+      }
+
+      if (checksInSetup({ ...launchedRecipe, repositoryPlugins: [] }).length) {
+        await client.run({ code: rememberCheckPluginsCode(launchedRecipe) })
+        if (launchId !== launchIdRef.current) return
       }
 
       let installedTheme = launchedRecipe.repositoryTheme ? (() => {
