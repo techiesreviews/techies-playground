@@ -2252,41 +2252,52 @@ export default function App() {
       setPluginInstallResults((current) => ({ ...current, [plugin.id]: result }))
       if (result.status !== 'active') failures.push(`${plugin.label}: ${result.message}`)
       if (result.status === 'failed') continue
-      launchedRecipeRef.current = selectUploadedPlugin(launchedRecipeRef.current, plugin.id)
-      const checks = checksInSetup(launchedRecipeRef.current)
-      setLaunchedChecks(checks)
-      const folders = new Map(result.folder ? [[plugin.id, result.folder]] : [])
-      if (savedKeyPackages.has(`plugin:${plugin.id}`) && isVaultSessionUnlocked()) {
-        const filled = await fillSavedLicenseKeys({
-          client, getVaultKey: getVaultSessionKey, readKeys: readLicenseKeysForPackages,
-          packages: [{ id: plugin.id, vaultId: `plugin:${plugin.id}`, label: plugin.label }],
-          folders, signal: launchAbortRef.current?.signal,
-        })
-        if (!isCurrent()) return failures
-        setLicenseFill((current) => [...current.filter((entry) => entry.vaultId !== `plugin:${plugin.id}`), ...filled])
-      }
-      if (checks.length) {
-        await client.writeFile(CHECKS_PLUGIN_PATH, CHECKS_PLUGIN)
-        if (!isCurrent()) return failures
-        await client.writeFile(MEASURE_PLUGIN_PATH, MEASURE_PLUGIN)
-        if (!isCurrent()) return failures
-        let needed = [plugin.id]
-        let active = []
-        try {
-          const licenses = await readFreemiusLicenses({ client, signal: launchAbortRef.current?.signal })
-          const state = uploadedPluginLicenses(plugin.id, savedKeyPackages, licenses, folders)
-          needed = state.needed
-          active = state.active
-        } catch {
-          // Unknown licence state keeps checks waiting for activation.
+      try {
+        launchedRecipeRef.current = selectUploadedPlugin(launchedRecipeRef.current, plugin.id)
+        const checks = checksInSetup(launchedRecipeRef.current)
+        setLaunchedChecks(checks)
+        const folders = new Map(result.folder ? [[plugin.id, result.folder]] : [])
+        if (savedKeyPackages.has(`plugin:${plugin.id}`) && isVaultSessionUnlocked()) {
+          const filled = await fillSavedLicenseKeys({
+            client, getVaultKey: getVaultSessionKey, readKeys: readLicenseKeysForPackages,
+            packages: [{ id: plugin.id, vaultId: `plugin:${plugin.id}`, label: plugin.label }],
+            folders, signal: launchAbortRef.current?.signal,
+          })
+          if (!isCurrent()) return failures
+          setLicenseFill((current) => [...current.filter((entry) => entry.vaultId !== `plugin:${plugin.id}`), ...filled])
         }
+        if (checks.length) {
+          await client.writeFile(CHECKS_PLUGIN_PATH, CHECKS_PLUGIN)
+          if (!isCurrent()) return failures
+          await client.writeFile(MEASURE_PLUGIN_PATH, MEASURE_PLUGIN)
+          if (!isCurrent()) return failures
+          let needed = [plugin.id]
+          let active = []
+          try {
+            const licenses = await readFreemiusLicenses({ client, signal: launchAbortRef.current?.signal })
+            const state = uploadedPluginLicenses(plugin.id, savedKeyPackages, licenses, folders)
+            needed = state.needed
+            active = state.active
+          } catch {
+            // Unknown licence state keeps checks waiting for activation.
+          }
+          if (!isCurrent()) return failures
+          setLicensedPackageIds((current) => [...current.filter((id) => id !== plugin.id && launchedRecipeRef.current.plugins.includes(id)), ...needed])
+          setSiteLicensedIds((current) => [...current.filter((id) => id !== plugin.id && launchedRecipeRef.current.plugins.includes(id)), ...active])
+          watchPages(client)
+        }
+      } catch {
         if (!isCurrent()) return failures
-        setLicensedPackageIds((current) => [...current.filter((id) => id !== plugin.id && launchedRecipeRef.current.plugins.includes(id)), ...needed])
-        setSiteLicensedIds((current) => [...current.filter((id) => id !== plugin.id && launchedRecipeRef.current.plugins.includes(id)), ...active])
-        watchPages(client)
+        failures.push(`${plugin.label}: Installed, but the checks or licence could not be set up. Start the setup again to retry.`)
       }
     }
-    if (isCurrent() && uploadedPlugins.length) await client.goTo('/wp-admin/plugins.php')
+    if (isCurrent() && uploadedPlugins.length) {
+      try {
+        await client.goTo('/wp-admin/plugins.php')
+      } catch {
+        if (isCurrent()) failures.push('Installed, but the plugin list could not be opened. Open Plugins in WordPress to check the result.')
+      }
+    }
     return failures
   }
 
@@ -2325,34 +2336,6 @@ export default function App() {
     }
   }
 
-  async function handleThemeZipImport(event) {
-    setError('')
-    try {
-      setActiveSavedId('')
-      for (const file of event.target.files) {
-        await assertZipFile(file)
-        const id = normalizePluginId(file.name)
-        if (!id) throw new Error(`Could not create a theme ID for ${file.name}.`)
-        const existing = await getTheme(id)
-        await saveTheme({
-          id,
-          label: existing?.label || pluginLabelFromFilename(file.name),
-          filename: file.name,
-          size: file.size,
-          file,
-          versionHint: extractVersionHint(file.name),
-          savedAt: Date.now(),
-        })
-        setThemeRecency((current) => markPluginSelected(current, id))
-        setRecipe((current) => validateRecipe({ ...current, theme: id, repositoryTheme: '' }))
-      }
-      setThemes(await listThemes())
-    } catch (caught) {
-      setError(caught.message)
-    } finally {
-      event.target.value = ''
-    }
-  }
 
   async function handleReplacementThemeZip(event) {
     setError('')
@@ -3407,7 +3390,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
 
                 <input ref={zipInputRef} type="file" name="plugin-zips" accept="application/zip,.zip" multiple className="hidden" onChange={handleZipImport} />
                 <input ref={replacementZipInputRef} type="file" name="replacement-plugin-zip" accept="application/zip,.zip" className="hidden" onChange={handleReplacementZip} />
-                <input ref={themeZipInputRef} type="file" name="theme-zips" accept="application/zip,.zip" multiple className="hidden" onChange={handleThemeZipImport} />
+                <input ref={themeZipInputRef} type="file" name="theme-zips" accept="application/zip,.zip" multiple className="hidden" onChange={handleZipImport} />
                 <input ref={replacementThemeZipInputRef} type="file" name="replacement-theme-zip" accept="application/zip,.zip" className="hidden" onChange={handleReplacementThemeZip} />
               </section>
 
@@ -3544,7 +3527,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                   onClick={() => setConfirmingPlaygroundClose(false)}
                   className="relative max-w-full shrink-0 rounded-md px-2 py-1 text-sm/5 font-medium text-neutral-200 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
                 >
-                  <span className="absolute top-1/2 left-1/2 h-[max(100%,2.75rem)] w-[max(100%,2.75rem)] -translate-1/2 @max-[20rem]:h-[max(100%,44px)] @max-[20rem]:w-[max(100%,44px)]" aria-hidden="true" />
+                  <span className="pointer-fine:hidden absolute top-1/2 left-1/2 h-[max(100%,2.75rem)] w-[max(100%,2.75rem)] -translate-1/2 @max-[20rem]:h-[max(100%,44px)] @max-[20rem]:w-[max(100%,44px)]" aria-hidden="true" />
                   Keep open
                 </button>
                 <button
@@ -3552,7 +3535,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                   onClick={closePlayground}
                   className="relative max-w-full shrink-0 rounded-md bg-red-500/15 px-2 py-1 text-sm/5 font-medium text-red-100 ring-1 ring-red-300/20 hover:bg-red-500/25 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
                 >
-                  <span className="absolute top-1/2 left-1/2 h-[max(100%,2.75rem)] w-[max(100%,2.75rem)] -translate-1/2 @max-[20rem]:h-[max(100%,44px)] @max-[20rem]:w-[max(100%,44px)]" aria-hidden="true" />
+                  <span className="pointer-fine:hidden absolute top-1/2 left-1/2 h-[max(100%,2.75rem)] w-[max(100%,2.75rem)] -translate-1/2 @max-[20rem]:h-[max(100%,44px)] @max-[20rem]:w-[max(100%,44px)]" aria-hidden="true" />
                   Discard and close
                 </button>
               </>

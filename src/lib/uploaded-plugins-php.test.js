@@ -10,7 +10,7 @@ const WP_LOAD = `<?php
 const WP_PLUGIN_DIR = '/wordpress/wp-content/plugins';
 function get_users($args) { return array((object) array('ID' => 1)); }
 function wp_set_current_user($id) {}
-function get_plugins() { return array('code-profiler/free.php' => array(), 'code-profiler-pro/pro.php' => array(), 'other/other.php' => array()); }
+function get_plugins() { return array('query-monitor/query-monitor.php' => array(), 'code-profiler/free.php' => array(), 'code-profiler-pro/pro.php' => array(), 'other/other.php' => array()); }
 function get_option($key, $default = false) { return file_exists('/' . $key) ? json_decode(file_get_contents('/' . $key), true) : $default; }
 function update_option($key, $value, $autoload = null) { file_put_contents('/' . $key, json_encode($value)); }
 function deactivate_plugins($file, $silent) { update_option('active', array_values(array_diff(get_option('active', array()), array($file)))); }
@@ -49,11 +49,14 @@ for (const mode of ['normal', 'redirect', 'fail']) {
   })
 }
 
-test('real PHP: restarting with testers off deactivates persisted testers only', async () => {
-  const php = await setup()
-  try {
-    php.writeFile('/active', JSON.stringify(['code-profiler/free.php', 'code-profiler-pro/pro.php', 'other/other.php']))
-    await php.run({ code: checkPluginSyncCode(DEFAULT_RECIPE) })
-    assert.deepEqual(JSON.parse(php.readFileAsText('/active')), ['other/other.php'])
-  } finally { php.exit() }
-})
+for (const selected of [[], ['code-profiler-pro']]) {
+  test(`real PHP: sync preserves testers outside the setup (${selected.join(',') || 'none selected'})`, async () => {
+    const php = await setup()
+    try {
+      const active = ['query-monitor/query-monitor.php', 'code-profiler/free.php', 'code-profiler-pro/pro.php', 'other/other.php']
+      php.writeFile('/active', JSON.stringify(active))
+      await php.run({ code: checkPluginSyncCode({ ...DEFAULT_RECIPE, plugins: selected }) })
+      assert.deepEqual(JSON.parse(php.readFileAsText('/active')), selected.length ? active.filter((file) => file !== 'code-profiler/free.php') : active)
+    } finally { php.exit() }
+  })
+}
