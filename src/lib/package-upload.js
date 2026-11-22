@@ -69,10 +69,11 @@ export function createPackageUploadQueue(getImport, onError) {
 }
 
 export function uploadControlLabel(state) {
-  return { saved: 'Saved for next start', uploading: 'Uploading', installing: 'Installing', failed: 'Upload failed', complete: 'Added' }[state] || 'Add ZIPs'
+  return { saved: 'Saved for next start', uploading: 'Uploading', installing: 'Installing', failed: 'Upload failed', partial: 'Added with problems', complete: 'Added' }[state] || 'Add ZIPs'
 }
 
-export function liveUploadOutcome({ failures, hasClient, pluginCount }) {
+export function liveUploadOutcome({ failures, problems = [], hasClient, pluginCount }) {
   if (failures.length) return 'failed'
+  if (problems.length) return 'partial'
   return hasClient && pluginCount > 0 ? 'complete' : 'saved'
 }

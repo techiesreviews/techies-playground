@@ -157,6 +157,16 @@ const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-stora
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
   {
+    version: '0.13.3',
+    date: 'November 22, 2026',
+    title: 'Saved uploads leave room for Close',
+    summary: 'Saved uploads stay compact on medium-width bars. Problems after installation keep an accurate Added with problems headline.',
+    changes: [
+      'The saved-upload control keeps its clock icon without the long label below 1041 px, so Close stays on screen.',
+      'When a plugin installs but activation, checks, licence setup or opening the plugin list has a problem, the control says Added with problems and keeps the reason beside it.',
+    ],
+  },
+  {
     version: '0.13.2',
     date: 'November 22, 2026',
     title: 'ZIP uploads and tester selections',
@@ -2237,10 +2247,11 @@ export default function App() {
     if (!inOpenSite) setError(failures.join(' '))
     if (!inOpenSite) setUploadMessage(`${summary}${failures.length ? ` ${failures.join(' ')}` : ''}`)
     try {
-      const installFailures = await installLiveUploads(uploadedPlugins, uploadClient, uploadLaunchId)
+      const { failures: installFailures, problems } = await installLiveUploads(uploadedPlugins, uploadClient, uploadLaunchId)
       if (inOpenSite && uploadLaunchId === launchIdRef.current) {
         failures.push(...installFailures)
-        setLiveUpload({ state: liveUploadOutcome({ failures, hasClient: Boolean(uploadClient), pluginCount }), message: failures.length ? failures.join(' ') : `${summary}${!uploadClient ? ' Start the setup again to apply these packages.' : themeCount ? ' Start the setup again to apply the theme.' : ''}` })
+        const messages = [...failures, ...problems]
+        setLiveUpload({ state: liveUploadOutcome({ failures, problems, hasClient: Boolean(uploadClient), pluginCount }), message: messages.length ? messages.join(' ') : `${summary}${!uploadClient ? ' Start the setup again to apply these packages.' : themeCount ? ' Start the setup again to apply the theme.' : ''}` })
       }
     } catch (caught) {
       if (uploadLaunchId !== launchIdRef.current) return
@@ -2249,12 +2260,13 @@ export default function App() {
   }
 
   async function installLiveUploads(uploadedPlugins, client, launchId) {
-    const failures = []
+    const outcome = { failures: [], problems: [] }
+    const { failures, problems } = outcome
     let installedCount = 0
-    if (!client || client !== clientRef.current || launchId !== launchIdRef.current) return failures
+    if (!client || client !== clientRef.current || launchId !== launchIdRef.current) return outcome
     const isCurrent = () => launchId === launchIdRef.current && client === clientRef.current
     for (const [index, plugin] of uploadedPlugins.entries()) {
-      if (!isCurrent()) return failures
+      if (!isCurrent()) return outcome
       setLiveUpload({ state: 'installing', message: `Installing ${index + 1} of ${uploadedPlugins.length}: ${plugin.label}` })
       let result
       try {
@@ -2262,10 +2274,13 @@ export default function App() {
       } catch {
         result = { status: 'failed', message: 'The uploaded plugin could not be installed. Try another ZIP.' }
       }
-      if (!isCurrent()) return failures
+      if (!isCurrent()) return outcome
       setPluginInstallResults((current) => ({ ...current, [plugin.id]: result }))
-      if (result.status !== 'active') failures.push(`${plugin.label}: ${result.message}`)
-      if (result.status === 'failed') continue
+      if (result.status === 'failed') {
+        failures.push(`${plugin.label}: ${result.message}`)
+        continue
+      }
+      if (result.status !== 'active') problems.push(`${plugin.label}: ${result.message}`)
       installedCount += 1
       try {
         launchedRecipeRef.current = selectUploadedPlugin(launchedRecipeRef.current, plugin.id)
@@ -2273,7 +2288,7 @@ export default function App() {
         setLaunchedChecks(checks)
         if (checks.some((check) => check.packageIds?.includes(plugin.id))) {
           await client.run({ code: rememberCheckPluginsCode(launchedRecipeRef.current) })
-          if (!isCurrent()) return failures
+          if (!isCurrent()) return outcome
         }
         const folders = new Map(result.folder ? [[plugin.id, result.folder]] : [])
         if (savedKeyPackages.has(`plugin:${plugin.id}`) && isVaultSessionUnlocked()) {
@@ -2282,14 +2297,14 @@ export default function App() {
             packages: [{ id: plugin.id, vaultId: `plugin:${plugin.id}`, label: plugin.label }],
             folders, signal: launchAbortRef.current?.signal,
           })
-          if (!isCurrent()) return failures
+          if (!isCurrent()) return outcome
           setLicenseFill((current) => [...current.filter((entry) => entry.vaultId !== `plugin:${plugin.id}`), ...filled])
         }
         if (checks.length) {
           await client.writeFile(CHECKS_PLUGIN_PATH, CHECKS_PLUGIN)
-          if (!isCurrent()) return failures
+          if (!isCurrent()) return outcome
           await client.writeFile(MEASURE_PLUGIN_PATH, MEASURE_PLUGIN)
-          if (!isCurrent()) return failures
+          if (!isCurrent()) return outcome
           let needed = [plugin.id]
           let active = []
           try {
@@ -2300,24 +2315,24 @@ export default function App() {
           } catch {
             // Unknown licence state keeps checks waiting for activation.
           }
-          if (!isCurrent()) return failures
+          if (!isCurrent()) return outcome
           setLicensedPackageIds((current) => [...current.filter((id) => id !== plugin.id && launchedRecipeRef.current.plugins.includes(id)), ...needed])
           setSiteLicensedIds((current) => [...current.filter((id) => id !== plugin.id && launchedRecipeRef.current.plugins.includes(id)), ...active])
           watchPages(client)
         }
       } catch {
-        if (!isCurrent()) return failures
-        failures.push(`${plugin.label}: Installed, but the checks or licence could not be set up. Start the setup again to retry.`)
+        if (!isCurrent()) return outcome
+        problems.push(`${plugin.label}: Installed, but the checks or licence could not be set up. Start the setup again to retry.`)
       }
     }
     if (isCurrent() && installedCount) {
       try {
         await client.goTo('/wp-admin/plugins.php')
       } catch {
-        if (isCurrent()) failures.push('Installed, but the plugin list could not be opened. Open Plugins in WordPress to check the result.')
+        if (isCurrent()) problems.push('Installed, but the plugin list could not be opened. Open Plugins in WordPress to check the result.')
       }
     }
-    return failures
+    return outcome
   }
 
   async function handleZipImport(event) {
@@ -3542,7 +3557,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
         <div className="@container grid min-h-0 grid-rows-[minmax(2rem,auto)_1fr] overflow-hidden bg-white">
           {/* Only the normal bar tightens below 384 px; below 20 rem (such as 320 px with 200% text)
               the bar wraps so Close and the close confirmation stay on screen and tappable. */}
-          <div className={`relative z-20 flex min-w-0 items-center gap-1.5 bg-[#1d2327] px-2 text-white max-sm:gap-2.5 ${confirmingPlaygroundClose ? '' : 'max-xs:gap-1'} ${liveUpload.state === 'failed' ? 'flex-wrap' : ''} @max-[20rem]:flex-wrap @max-[20rem]:py-1 ${confirmingPlaygroundClose ? '' : '@max-[20rem]:gap-x-1 @max-[20rem]:gap-y-2'}`}>
+          <div className={`relative z-20 flex min-w-0 items-center gap-1.5 bg-[#1d2327] px-2 text-white max-sm:gap-2.5 ${confirmingPlaygroundClose ? '' : 'max-xs:gap-1'} ${liveUpload.state === 'failed' || liveUpload.state === 'partial' ? 'flex-wrap' : ''} @max-[20rem]:flex-wrap @max-[20rem]:py-1 ${confirmingPlaygroundClose ? '' : '@max-[20rem]:gap-x-1 @max-[20rem]:gap-y-2'}`}>
             {confirmingPlaygroundClose ? (
               <>
                 <p className="min-w-0 flex-1 truncate text-sm/5 font-medium @max-[20rem]:basis-full @max-[20rem]:whitespace-normal">Discard this temporary site?</p>

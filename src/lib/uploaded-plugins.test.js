@@ -4,6 +4,17 @@ import { installUploadedPlugin } from './uploaded-plugins.js'
 
 const plugin = { id: 'paid-plugin', filename: 'paid-plugin.zip', file: new Blob(['fake zip']), label: 'Paid plugin' }
 
+test('tester deactivation failure rejects before installation or file writes', async () => {
+  let runs = 0
+  await assert.rejects(installUploadedPlugin({
+    run: async () => { runs += 1; throw new Error('tester deactivation failed') },
+    writeFile: async () => assert.fail('deactivation failure wrote a file'),
+  }, { ...plugin, id: 'query-monitor-pro' }, {
+    install: async () => assert.fail('deactivation failure installed a plugin'),
+  }), /tester deactivation failed/)
+  assert.equal(runs, 1)
+})
+
 test('uploaded ZIP installs then activates and verifies WordPress state', async () => {
   const calls = []
   const client = {
