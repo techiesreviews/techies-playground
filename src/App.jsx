@@ -29,7 +29,7 @@ import {
   XMarkIcon,
 } from '@heroicons/react/16/solid'
 import { installTheme, zipWpContent } from '@wp-playground/blueprints'
-import { createPackageUploadQueue, detectPackageType, registerPackageDrop } from './lib/package-upload'
+import { createPackageUploadQueue, detectPackageType, liveUploadOutcome, registerPackageDrop, uploadControlLabel } from './lib/package-upload'
 import { installUploadedPlugin, uploadedPluginLicenses } from './lib/uploaded-plugins'
 import { buildPreviewPlugin, createLauncherScope, hostPreviewSession } from './lib/playground-preview'
 import { PLAYGROUND_ORIGIN, PLAYGROUND_READY_TIMEOUT_MS, PLAYGROUND_REMOTE_URL, startPlaygroundWithin } from './lib/playground-host'
@@ -2212,13 +2212,13 @@ export default function App() {
       failures.push(caught.message)
     }
     const summary = `Uploaded ${pluginCount} plugin${pluginCount === 1 ? '' : 's'} and ${themeCount} theme${themeCount === 1 ? '' : 's'} to this browser.`
-    setError(failures.join(' '))
+    if (!inOpenSite) setError(failures.join(' '))
     if (!inOpenSite) setUploadMessage(`${summary}${failures.length ? ` ${failures.join(' ')}` : ''}`)
     try {
       const installFailures = await installLiveUploads(uploadedPlugins, uploadClient, uploadLaunchId)
       if (inOpenSite && uploadLaunchId === launchIdRef.current) {
         failures.push(...installFailures)
-        setLiveUpload({ state: failures.length ? 'failed' : 'complete', message: failures.length ? failures.join(' ') : `${summary}${!uploadClient ? ' Start the setup again to apply these packages.' : themeCount ? ' Start the setup again to apply the theme.' : ''}` })
+        setLiveUpload({ state: liveUploadOutcome({ failures, hasClient: Boolean(uploadClient), pluginCount }), message: failures.length ? failures.join(' ') : `${summary}${!uploadClient ? ' Start the setup again to apply these packages.' : themeCount ? ' Start the setup again to apply the theme.' : ''}` })
       }
     } catch (caught) {
       if (uploadLaunchId !== launchIdRef.current) return
@@ -3526,7 +3526,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
         <div className="@container grid min-h-0 grid-rows-[minmax(2rem,auto)_1fr] overflow-hidden bg-white">
           {/* Only the normal bar tightens below 384 px; below 20 rem (such as 320 px with 200% text)
               the bar wraps so Close and the close confirmation stay on screen and tappable. */}
-          <div className={`relative z-20 flex min-w-0 items-center gap-1.5 bg-[#1d2327] px-2 text-white max-sm:gap-2.5 ${confirmingPlaygroundClose ? '' : 'max-xs:gap-1'} @max-[20rem]:flex-wrap @max-[20rem]:py-1 ${confirmingPlaygroundClose ? '' : '@max-[20rem]:gap-x-1 @max-[20rem]:gap-y-2'}`}>
+          <div className={`relative z-20 flex min-w-0 items-center gap-1.5 bg-[#1d2327] px-2 text-white max-sm:gap-2.5 ${confirmingPlaygroundClose ? '' : 'max-xs:gap-1'} ${liveUpload.state === 'failed' ? 'flex-wrap' : ''} @max-[20rem]:flex-wrap @max-[20rem]:py-1 ${confirmingPlaygroundClose ? '' : '@max-[20rem]:gap-x-1 @max-[20rem]:gap-y-2'}`}>
             {confirmingPlaygroundClose ? (
               <>
                 <p className="min-w-0 flex-1 truncate text-sm/5 font-medium @max-[20rem]:basis-full @max-[20rem]:whitespace-normal">Discard this temporary site?</p>
@@ -3591,8 +3591,9 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
               <ArrowDownTrayIcon className="size-4 shrink-0 fill-neutral-300" />
               <span className="max-md:sr-only">{snapshotExporting ? 'Exporting…' : 'Export snapshot'}</span>
             </button>
-            <UploadControl upload={liveUpload} siteReady={status.step >= 4} onUpload={() => zipInputRef.current?.click()} />
+            <UploadControl upload={liveUpload} siteReady={status.step >= 4} onUpload={() => { setLiveUpload({ state: 'idle', message: '' }); zipInputRef.current?.click() }} />
             <UpdatesControl updates={pluginUpdates} open={showUpdates} onOpenChange={setShowUpdates} buttonRef={updatesButtonRef} />
+            <span className="sr-only" aria-live="polite">{liveUpload.state === 'idle' ? '' : `${uploadControlLabel(liveUpload.state)}: ${liveUpload.message}`}</span>
             <span className="sr-only" aria-live="polite">{barMessage}</span>
             <span className="sr-only" aria-live="polite">{updatesAnnouncement(pluginUpdates)}</span>
             <span className="sr-only" aria-live="polite">{checksAnnouncement(checksRun)}</span>

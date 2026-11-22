@@ -78,3 +78,12 @@ test('runtime ZIP control names progress and failures on the control', async () 
   assert.equal(uploadControlLabel('failed'), 'Upload failed')
   assert.equal(uploadControlLabel('complete'), 'Added')
 })
+
+test('runtime upload distinguishes saved packages from plugins applied to the site', async () => {
+  const { liveUploadOutcome, uploadControlLabel } = await import('./package-upload.js')
+  assert.equal(liveUploadOutcome({ failures: [], hasClient: false, pluginCount: 1 }), 'saved')
+  assert.equal(liveUploadOutcome({ failures: [], hasClient: true, pluginCount: 0 }), 'saved')
+  assert.equal(liveUploadOutcome({ failures: ['invalid ZIP'], hasClient: true, pluginCount: 0 }), 'failed')
+  assert.equal(liveUploadOutcome({ failures: [], hasClient: true, pluginCount: 1 }), 'complete')
+  assert.equal(uploadControlLabel('saved'), 'Saved for next start')
+})
