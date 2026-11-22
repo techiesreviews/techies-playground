@@ -1674,11 +1674,11 @@ function LaunchSummary({ recipe, selectedPackageLabel, selectedPluginLabels, key
         <dl className="grid grid-cols-1 gap-3 pt-5 text-base/7 sm:text-sm/6">
           <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
             <dt className="shrink-0 font-medium text-neutral-900">Environment</dt>
-            <dd className="flex-1 basis-0 min-w-[min(100%,8rem)] text-right text-neutral-600 [overflow-wrap:anywhere]">WordPress {recipe.wordpress}<br />PHP {recipe.php}</dd>
+            <dd className="flex-1 min-w-[min(100%,8rem)] text-right text-neutral-600 [overflow-wrap:anywhere]">WordPress {recipe.wordpress}<br />PHP {recipe.php}</dd>
           </div>
           <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
             <dt className="shrink-0 font-medium text-neutral-900">Packages</dt>
-            <dd className="flex-1 basis-0 min-w-[min(100%,8rem)] text-end text-neutral-600 [overflow-wrap:anywhere]">
+            <dd className="flex-1 min-w-[min(100%,8rem)] text-end text-neutral-600 [overflow-wrap:anywhere]">
               {selectedPackageLabel || 'WordPress only'}
               {selectedPluginLabels.length > 0 && <span className="block">{selectedPluginLabels.join(', ')}</span>}
             </dd>
@@ -1686,20 +1686,20 @@ function LaunchSummary({ recipe, selectedPackageLabel, selectedPluginLabels, key
           {keyCounts.total > 0 && (
             <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
               <dt className="shrink-0 font-medium text-neutral-900">Licenses</dt>
-              <dd className="flex-1 basis-0 min-w-[min(100%,8rem)] text-right text-neutral-600 [overflow-wrap:anywhere]">{keyCounts.saved} of {keyCounts.total} keys saved</dd>
+              <dd className="flex-1 min-w-[min(100%,8rem)] text-right text-neutral-600 [overflow-wrap:anywhere]">{keyCounts.saved} of {keyCounts.total} keys saved</dd>
             </div>
           )}
           <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
             <dt className="shrink-0 font-medium text-neutral-900">Checks</dt>
-            <dd className="flex-1 basis-0 min-w-[min(100%,8rem)] text-right text-neutral-600 [overflow-wrap:anywhere]">{checks.length ? checks.map((check) => check.name).join(' + ') : 'None'}</dd>
+            <dd className="flex-1 min-w-[min(100%,8rem)] text-right text-neutral-600 [overflow-wrap:anywhere]">{checks.length ? checks.map((check) => check.name).join(' + ') : 'None'}</dd>
           </div>
           <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
             <dt className="shrink-0 font-medium text-neutral-900">Storage</dt>
-            <dd className="flex-1 basis-0 min-w-[min(100%,8rem)] text-right text-neutral-600 [overflow-wrap:anywhere]">{recipe.storage === 'browser' ? 'Saved in this browser' : 'Temporary'}</dd>
+            <dd className="flex-1 min-w-[min(100%,8rem)] text-right text-neutral-600 [overflow-wrap:anywhere]">{recipe.storage === 'browser' ? 'Saved in this browser' : 'Temporary'}</dd>
           </div>
           <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
             <dt className="shrink-0 font-medium text-neutral-900">Networking</dt>
-            <dd className="flex-1 basis-0 min-w-[min(100%,8rem)] text-right text-neutral-600 [overflow-wrap:anywhere]">{recipe.networking ? 'Allowed' : 'Blocked'}</dd>
+            <dd className="flex-1 min-w-[min(100%,8rem)] text-right text-neutral-600 [overflow-wrap:anywhere]">{recipe.networking ? 'Allowed' : 'Blocked'}</dd>
           </div>
         </dl>
 
@@ -2907,10 +2907,10 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                   </div>
                 </div>
                 <details open={Boolean(recipe.wxrUrl || recipe.phpExtensionManifestUrl)} className="group @container mt-5 rounded-xl bg-white ring-1 ring-neutral-950/10 open:shadow-sm">
-                  <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 rounded-xl px-4 py-3 text-base/7 font-medium text-neutral-900 outline-none marker:hidden hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 sm:text-sm/6 [&::-webkit-details-marker]:hidden">
-                    <span className="min-w-0 flex-auto">Advanced settings</span>
-                    <span className="min-w-0 font-normal text-neutral-500 @max-[20rem]:order-last @max-[20rem]:basis-full">Site, storage, debugging, and imports</span>
-                    <ChevronDownIcon className="size-4 shrink-0 fill-neutral-500 transition-transform duration-200 group-open:rotate-180" />
+                  <summary className="grid cursor-pointer list-none grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 rounded-xl px-4 py-3 text-base/7 font-medium text-neutral-900 outline-none marker:hidden hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 @lg:grid-cols-[minmax(0,1fr)_auto_auto] sm:text-sm/6 [&::-webkit-details-marker]:hidden">
+                    <span className="min-w-0 hyphens-auto [overflow-wrap:anywhere]">Advanced settings</span>
+                    <span className="col-span-full row-start-2 min-w-0 font-normal text-neutral-500 [overflow-wrap:anywhere] @lg:col-span-1 @lg:col-start-2 @lg:row-start-1">Site, storage, debugging, and imports</span>
+                    <ChevronDownIcon className="col-start-2 row-start-1 size-4 shrink-0 fill-neutral-500 transition-transform duration-200 group-open:rotate-180 @lg:col-start-3" />
                   </summary>
                   <div className="grid grid-cols-1 gap-6 border-t border-neutral-950/10 p-4">
                     <fieldset className="grid min-w-0 grid-cols-1 gap-4">

@@ -194,21 +194,22 @@ test('at 320 px with 200% text the launcher has no 20 rem body minimum or unwrap
   const radioFn = app.slice(app.indexOf('function Radio('), app.indexOf('function GitHubStarButton('))
   assert.match(radioFn, /<span className="min-w-0 \[overflow-wrap:anywhere\]">/)
 
-  // Advanced settings summary wraps its description below the label in narrow containers instead of
-  // squeezing the label to 0 px.
+  // Advanced settings summary uses a two-column grid so the arrow stays on the title line and
+  // flush right at every width, with the description on its own row until @lg (32 rem).
   const detailsStart = app.indexOf('<details open={Boolean(recipe.wxrUrl')
   const summaryBlock = app.slice(detailsStart, app.indexOf('</summary>', detailsStart))
   assert.match(summaryBlock, /(?:^|[\s"])@container\b/)
-  assert.match(summaryBlock, /<summary className="[^"]*\bflex-wrap\b/)
-  assert.match(summaryBlock, /<span className="min-w-0 flex-auto">Advanced settings<\/span>/)
-  assert.match(summaryBlock, /@max-\[20rem\]:order-last @max-\[20rem\]:basis-full/)
+  assert.match(summaryBlock, /<summary className="[^"]*\bgrid\b[^"]*\bgrid-cols-\[minmax\(0,1fr\)_auto\][^"]*@lg:grid-cols-\[minmax\(0,1fr\)_auto_auto\]/)
+  assert.match(summaryBlock, /col-span-full row-start-2[^"]*@lg:col-span-1 @lg:col-start-2 @lg:row-start-1/)
+  assert.match(summaryBlock, /<ChevronDownIcon className="[^"]*\bcol-start-2 row-start-1\b[^"]*@lg:col-start-3/)
+  assert.doesNotMatch(summaryBlock, /@max-\[20rem\]:/, 'does not leave common phone widths (360–430 px) with a misplaced arrow')
 
-  // LaunchSummary values start from zero width with an 8 rem floor, so long plugin lists stay
-  // beside their label at normal text and only wrap on narrow enlarged-text views.
+  // LaunchSummary values start from zero width (flex-1) with an 8 rem floor, so long plugin lists
+  // stay beside their label at normal text and only wrap on narrow enlarged-text views.
   const summaryFn = app.slice(app.indexOf('function LaunchSummary('), app.indexOf('function FeaturedPluginCard('))
   const dds = [...summaryFn.matchAll(/<dd className="([^"]*)"/g)]
   assert.equal(dds.length, 6)
   for (const [, cls] of dds) {
-    assert.match(cls, /\bflex-1 basis-0 min-w-\[min\(100%,8rem\)\](?:\s|$)/)
+    assert.match(cls, /\bflex-1 min-w-\[min\(100%,8rem\)\](?:\s|$)/)
   }
 })
