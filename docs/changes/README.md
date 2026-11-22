@@ -33,6 +33,7 @@ Prefer, in order:
 
 ## Index
 
+- [2026-11-22-mid-width-upload-control.md](2026-11-22-mid-width-upload-control.md) — saved upload labels stay icon-only below 1041 px; installed plugins with follow-up problems retain an accurate headline (TOOLS-403).
 - [2026-11-22-release-review-fixes.md](2026-11-22-release-review-fixes.md) — shared ZIP queue, compact upload states, preserved external tester selections, accurate post-install failures, and saved-site boot diagnosis (TOOLS-403).
 - [2026-11-22-playground-3-1-65-and-daily-check.md](2026-11-22-playground-3-1-65-and-daily-check.md) — Playground 3.1.65 pins, daily scheduler investigation, and hosted plugin/tester acceptance (TOOLS-403).
 - [2026-11-22-uploaded-plugins-live-install-and-tester-editions.md](2026-11-22-uploaded-plugins-live-install-and-tester-editions.md) — uploaded plugins activate in open sites; free and Pro tester selections replace each other (TOOLS-402).
