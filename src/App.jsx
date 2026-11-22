@@ -152,6 +152,17 @@ const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-stora
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
   {
+    version: '0.12.2',
+    date: 'November 22, 2026',
+    title: 'Big text on small phones fits cleanly',
+    summary: 'At 320 px with 200% text, the Playground top bar and close confirmation wrap onto their own lines so Close, Keep open and Discard and close stay on screen, and the start page no longer scrolls sideways.',
+    changes: [
+      'When the Playground bar is narrower than 20 rem (such as a 320 px phone at 200% text), its buttons wrap onto a second line so Close stays fully on screen and tappable without overlapping neighbours.',
+      'In the close confirmation, "Discard this temporary site?", Keep open and Discard and close wrap cleanly inside the 320 px screen while keeping 44 px tap areas that do not overlap.',
+      'Removed the 20 rem body minimum width and allowed header controls, form inputs, featured plugin cards and setup cards to wrap so a 320 px window does not scroll sideways at 100% or 200% text.',
+    ],
+  },
+  {
     version: '0.12.1',
     date: 'November 21, 2026',
     title: 'Quick checks no longer flash a spinner',
@@ -436,15 +447,15 @@ function rememberPersistedSite(id) {
 
 function Select({ id, label, value, onChange, children }) {
   return (
-    <label htmlFor={id} className="grid gap-2 text-base/7 font-medium text-neutral-900 sm:text-sm/6">
+    <label htmlFor={id} className="grid min-w-0 grid-cols-1 gap-2 text-base/7 font-medium text-neutral-900 sm:text-sm/6">
       {label}
-      <span className="inline-grid grid-cols-[1fr_--spacing(8)]">
+      <span className="inline-grid min-w-0 grid-cols-[minmax(0,1fr)_--spacing(8)]">
         <select
           id={id}
           name={id}
           value={value}
           onChange={onChange}
-          className="col-span-full row-start-1 appearance-none rounded-lg bg-white py-2.5 pr-8 pl-3 text-base/7 font-normal text-neutral-900 ring-1 ring-neutral-950/10 outline-none focus-visible:outline-2 -outline-offset-1 focus-visible:outline-teal-600 sm:py-2 sm:text-sm/6"
+          className="col-span-full row-start-1 min-w-0 w-full appearance-none rounded-lg bg-white py-2.5 pr-8 pl-3 text-base/7 font-normal text-neutral-900 ring-1 ring-neutral-950/10 outline-none focus-visible:outline-2 -outline-offset-1 focus-visible:outline-teal-600 sm:py-2 sm:text-sm/6"
         >
           {children}
         </select>
@@ -456,7 +467,7 @@ function Select({ id, label, value, onChange, children }) {
 
 function TextField({ id, label, value, onChange, type = 'text', placeholder = '', description = '' }) {
   return (
-    <label htmlFor={id} className="grid gap-2 text-base/7 font-medium text-neutral-900 sm:text-sm/6">
+    <label htmlFor={id} className="grid min-w-0 grid-cols-1 gap-2 text-base/7 font-medium text-neutral-900 sm:text-sm/6">
       {label}
       <input
         id={id}
@@ -465,7 +476,7 @@ function TextField({ id, label, value, onChange, type = 'text', placeholder = ''
         value={value}
         onChange={onChange}
         placeholder={placeholder}
-        className="rounded-lg bg-white px-3 py-2.5 text-base/7 font-normal text-neutral-900 ring-1 ring-neutral-950/10 outline-none placeholder:text-neutral-400 focus-visible:outline-2 -outline-offset-1 focus-visible:outline-teal-600 sm:py-2 sm:text-sm/6"
+        className="min-w-0 w-full rounded-lg bg-white px-3 py-2.5 text-base/7 font-normal text-neutral-900 ring-1 ring-neutral-950/10 outline-none placeholder:text-neutral-400 focus-visible:outline-2 -outline-offset-1 focus-visible:outline-teal-600 sm:py-2 sm:text-sm/6"
       />
       {description && <span className="font-normal text-neutral-500">{description}</span>}
     </label>
@@ -505,7 +516,7 @@ function Checkbox({ id, checked, onChange, label, description, indicator = 'squa
           </span>
         )}
       </span>
-      <span className="min-w-0">
+      <span className="min-w-0 [overflow-wrap:anywhere]">
         <span className={`font-medium text-neutral-900 ${indicator === 'plugin' ? 'block' : ''}`}>{label}</span>
         {description && (
           <span className={`text-neutral-600 ${indicator === 'plugin' ? 'block' : ''}`}>
@@ -533,7 +544,7 @@ function Radio({ id, name, checked, onChange, label, description }) {
           <span className="pointer-events-none col-start-1 row-start-1 size-2/5 self-center justify-self-center rounded-full bg-white group-not-has-checked:opacity-0" />
         </span>
       </span>
-      <span className="min-w-0">
+      <span className="min-w-0 [overflow-wrap:anywhere]">
         <span className="font-medium text-neutral-900">{label}</span>
         {description && <span className="text-neutral-600"> — {description}</span>}
       </span>
@@ -622,12 +633,12 @@ function AppHeader({ onImportRecipe }) {
 
   return (
     <header className="border-b border-neutral-950/10 bg-white">
-      <div className="relative mx-auto flex max-w-7xl items-center gap-4 px-5 py-4 sm:px-8 lg:px-10">
+      <div className="relative mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-5 py-4 sm:px-8 lg:px-10">
         <a href="/" aria-label="Homepage" className="flex min-w-0 flex-1 items-center gap-3 rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600">
           <CircleStackIcon className="size-4 shrink-0 fill-teal-700" />
           <span className="truncate font-semibold text-neutral-950">Techies Playground</span>
         </a>
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
           <p className="hidden items-center gap-1.5 text-sm/6 text-neutral-600 sm:flex">
             <LockClosedIcon className="size-4 shrink-0 fill-teal-700" />
             Browser-local vault
@@ -1660,35 +1671,35 @@ function LaunchSummary({ recipe, selectedPackageLabel, selectedPluginLabels, key
       <div className="p-6">
         <h2 className="truncate text-2xl font-semibold tracking-tight text-balance text-neutral-950">{recipe.name}</h2>
 
-        <dl className="grid gap-3 pt-5 text-base/7 sm:text-sm/6">
-          <div className="flex items-start justify-between gap-4">
+        <dl className="grid grid-cols-1 gap-3 pt-5 text-base/7 sm:text-sm/6">
+          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
             <dt className="font-medium text-neutral-900">Environment</dt>
-            <dd className="text-right text-neutral-600">WordPress {recipe.wordpress}<br />PHP {recipe.php}</dd>
+            <dd className="min-w-0 text-right text-neutral-600 [overflow-wrap:anywhere]">WordPress {recipe.wordpress}<br />PHP {recipe.php}</dd>
           </div>
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
             <dt className="shrink-0 font-medium text-neutral-900">Packages</dt>
-            <dd className="min-w-0 text-end text-neutral-600 [overflow-wrap:break-word]">
+            <dd className="min-w-0 text-end text-neutral-600 [overflow-wrap:anywhere]">
               {selectedPackageLabel || 'WordPress only'}
               {selectedPluginLabels.length > 0 && <span className="block">{selectedPluginLabels.join(', ')}</span>}
             </dd>
           </div>
           {keyCounts.total > 0 && (
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
               <dt className="font-medium text-neutral-900">Licenses</dt>
-              <dd className="text-right text-neutral-600">{keyCounts.saved} of {keyCounts.total} keys saved</dd>
+              <dd className="min-w-0 text-right text-neutral-600 [overflow-wrap:anywhere]">{keyCounts.saved} of {keyCounts.total} keys saved</dd>
             </div>
           )}
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
             <dt className="font-medium text-neutral-900">Checks</dt>
-            <dd className="text-right text-neutral-600">{checks.length ? checks.map((check) => check.name).join(' + ') : 'None'}</dd>
+            <dd className="min-w-0 text-right text-neutral-600 [overflow-wrap:anywhere]">{checks.length ? checks.map((check) => check.name).join(' + ') : 'None'}</dd>
           </div>
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
             <dt className="font-medium text-neutral-900">Storage</dt>
-            <dd className="text-right text-neutral-600">{recipe.storage === 'browser' ? 'Saved in this browser' : 'Temporary'}</dd>
+            <dd className="min-w-0 text-right text-neutral-600 [overflow-wrap:anywhere]">{recipe.storage === 'browser' ? 'Saved in this browser' : 'Temporary'}</dd>
           </div>
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
             <dt className="font-medium text-neutral-900">Networking</dt>
-            <dd className="text-right text-neutral-600">{recipe.networking ? 'Allowed' : 'Blocked'}</dd>
+            <dd className="min-w-0 text-right text-neutral-600 [overflow-wrap:anywhere]">{recipe.networking ? 'Allowed' : 'Blocked'}</dd>
           </div>
         </dl>
 
@@ -2847,11 +2858,11 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
       )}
       <AppHeader onImportRecipe={handleRecipeImport} />
       <main className="mx-auto max-w-7xl px-5 py-8 sm:px-8 sm:py-10 lg:px-10">
-        <div className="grid gap-8 lg:grid-cols-[13fr_7fr] lg:items-start">
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[13fr_7fr] lg:items-start">
           <div className="min-w-0">
             <div>
               <p className="font-mono text-base/7 tracking-wide text-teal-700 sm:text-sm/6">PRIVATE, IN-BROWSER PLAYGROUND</p>
-              <h1 className="max-w-[24ch] text-4xl font-semibold tracking-tight text-balance sm:text-5xl">Test premium WordPress tools with ease</h1>
+              <h1 className="max-w-[24ch] text-4xl font-semibold tracking-tight text-balance [overflow-wrap:anywhere] sm:text-5xl">Test premium WordPress tools with ease</h1>
               <p className="max-w-[48ch] text-pretty text-lg text-neutral-600">
                 Test your premium plugins and themes on the official WordPress Playground stack. Everything runs privately in your browser, with your packages and licenses kept under your control.
               </p>
@@ -2859,7 +2870,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
 
             <form className="grid grid-cols-1 gap-8 pt-10" onSubmit={(event) => { event.preventDefault(); launch() }}>
               <section aria-labelledby="environment-heading" className="border-t border-neutral-950/10 pt-6">
-                <div className="flex items-baseline justify-between gap-4">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                   <h2 id="environment-heading" className="text-xl font-semibold text-balance">1. Environment</h2>
                   <p className="font-mono text-base/7 text-neutral-500 sm:text-sm/6">EPHEMERAL + SQLITE</p>
                 </div>
@@ -2898,13 +2909,13 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                 <details open={Boolean(recipe.wxrUrl || recipe.phpExtensionManifestUrl)} className="group mt-5 rounded-xl bg-white ring-1 ring-neutral-950/10 open:shadow-sm">
                   <summary className="flex cursor-pointer list-none items-center gap-3 rounded-xl px-4 py-3 text-base/7 font-medium text-neutral-900 outline-none marker:hidden hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 sm:text-sm/6 [&::-webkit-details-marker]:hidden">
                     <span className="min-w-0 flex-1">Advanced settings</span>
-                    <span className="font-normal text-neutral-500">Site, storage, debugging, and imports</span>
+                    <span className="min-w-0 font-normal text-neutral-500">Site, storage, debugging, and imports</span>
                     <ChevronDownIcon className="size-4 shrink-0 fill-neutral-500 transition-transform duration-200 group-open:rotate-180" />
                   </summary>
-                  <div className="grid gap-6 border-t border-neutral-950/10 p-4">
-                    <fieldset className="grid gap-4">
+                  <div className="grid grid-cols-1 gap-6 border-t border-neutral-950/10 p-4">
+                    <fieldset className="grid min-w-0 grid-cols-1 gap-4">
                       <legend className="text-base/7 font-semibold text-neutral-950 sm:text-sm/6">Site setup</legend>
-                      <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <Select id="site-language" label="Language" value={recipe.language} onChange={(event) => updateRecipe({ language: event.target.value })}>
                           <option value="en_US">English (United States)</option>
                           <option value="nl_NL">Nederlands</option>
@@ -2930,7 +2941,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                       </div>
                     </fieldset>
 
-                    <fieldset className="grid gap-3 border-t border-neutral-950/10 pt-5 text-base/7 sm:text-sm/6">
+                    <fieldset className="grid min-w-0 grid-cols-1 gap-3 border-t border-neutral-950/10 pt-5 text-base/7 sm:text-sm/6">
                       <legend className="mb-1 text-base/7 font-semibold text-neutral-950 sm:text-sm/6">Runtime features</legend>
                       <Checkbox
                         id="networking"
@@ -2943,13 +2954,13 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                       <Checkbox id="intl" checked={recipe.intl} onChange={(event) => updateRecipe({ intl: event.target.checked })} label="Enable PHP Intl" description="Adds locale-aware PHP formatting support." />
                       <Checkbox id="wp-cli" checked={recipe.wpCli} onChange={(event) => updateRecipe({ wpCli: event.target.checked })} label="Load WP-CLI" description="Makes WP-CLI available to Playground automation." />
                       <Checkbox id="wp-debug" checked={recipe.debug} onChange={(event) => updateRecipe({ debug: event.target.checked })} label="WordPress debug mode" description="Displays PHP and WordPress development errors." />
-                      <div className="grid gap-3 pl-7">
+                      <div className="grid grid-cols-1 gap-3 pl-7">
                         <Checkbox id="wp-debug-log" checked={recipe.debugLog} onChange={(event) => updateRecipe({ debugLog: event.target.checked })} label="Write debug.log" description="Only active while debug mode is enabled." />
                         <Checkbox id="script-debug" checked={recipe.scriptDebug} onChange={(event) => updateRecipe({ scriptDebug: event.target.checked })} label="Use development scripts" description="Loads unminified WordPress CSS and JavaScript where available." />
                       </div>
                     </fieldset>
 
-                    <fieldset className="grid gap-4 border-t border-amber-900/15 bg-amber-50/60 p-4">
+                    <fieldset className="grid min-w-0 grid-cols-1 gap-4 border-t border-amber-900/15 bg-amber-50/60 p-4">
                       <legend className="px-1 text-base/7 font-semibold text-amber-950 sm:text-sm/6">External setup</legend>
                       <p className="max-w-[70ch] text-pretty text-base/7 text-amber-900 sm:text-sm/6">These URLs download content or code into Playground. Use only public sources you trust. Do not include passwords, tokens or signatures. Recognized credential parameters are rejected; invalid drafts are not saved.</p>
                       <TextField id="wxr-url" type="url" label="WXR content URL" value={recipe.wxrUrl} onChange={(event) => updateRecipe({ wxrUrl: event.target.value })} placeholder="https://example.com/content.xml" description="Imported once when a new site is created. Requires networking." />
@@ -3094,8 +3105,8 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                       </div>
                     </div>
 
-                    <div className="grid gap-5 pt-5">
-                      <section aria-labelledby="uploaded-themes-heading" className="grid gap-2">
+                    <div className="grid grid-cols-1 gap-5 pt-5">
+                      <section aria-labelledby="uploaded-themes-heading" className="grid grid-cols-1 gap-2">
                         <h3 id="uploaded-themes-heading" className="font-mono text-base/7 tracking-wide text-neutral-500 sm:text-sm/6">UPLOADED THEMES</h3>
                         <div className="rounded-[min(1vw,var(--radius-xl))] bg-white p-4 ring-1 ring-neutral-950/8">
                         <div className="border-b border-neutral-950/8 pb-4 text-base/7 sm:text-sm/6">
@@ -3127,7 +3138,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                           <button
                             type="button"
                             onClick={() => themeZipInputRef.current?.click()}
-                            className="relative grid w-full place-items-center gap-2 px-5 py-8 text-base/7 text-neutral-600 hover:text-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 sm:text-sm/6"
+                            className="relative grid w-full place-items-center gap-2 px-5 py-8 text-base/7 text-neutral-600 [overflow-wrap:anywhere] hover:text-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 sm:text-sm/6"
                           >
                             <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
                             <PlusIcon className="size-4 shrink-0 fill-current" />
@@ -3195,12 +3206,12 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
 
                     <div className="grid gap-5 pt-5">
                       {!pluginSearch.trim() && (
-                        <section aria-labelledby="featured-plugins-heading" className="grid gap-2" aria-live="polite" aria-busy={featuredPluginState.loading}>
+                        <section aria-labelledby="featured-plugins-heading" className="@container grid gap-2" aria-live="polite" aria-busy={featuredPluginState.loading}>
                           <h3 id="featured-plugins-heading" className="font-mono text-base/7 tracking-wide text-neutral-500 sm:text-sm/6">FEATURED ON WORDPRESS.ORG</h3>
                           {featuredPluginState.loading ? (
                             <div className="rounded-[min(1vw,var(--radius-xl))] bg-neutral-100 p-5 text-base/7 text-neutral-600 sm:text-sm/6">Loading featured plugins…</div>
                           ) : featuredPlugins.length ? (
-                            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                            <div className="grid grid-cols-1 gap-3 @[15rem]:grid-cols-2 lg:grid-cols-4">
                               {featuredPlugins.map((plugin) => (
                                 <FeaturedPluginCard
                                   key={plugin.slug}
@@ -3317,17 +3328,17 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                           <p className="text-neutral-600">{check.summary}</p>
                         </div>
                         {inSetup ? (
-                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white py-0.5 pr-2 pl-1.5 text-sm/5 font-medium text-teal-800 ring-1 ring-teal-700/20">
+                          <span className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full bg-white py-0.5 pr-2 pl-1.5 text-sm/5 font-medium text-teal-800 ring-1 ring-teal-700/20">
                             <CheckIcon className="size-3.5 shrink-0 fill-teal-700" />
                             Runs after start
                           </span>
                         ) : (
-                          <span className="flex shrink-0 flex-wrap items-center gap-2">
+                          <span className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
                             <span className="text-sm/5 text-neutral-500">Not in this setup</span>
                             <button
                               type="button"
                               onClick={() => addCheck(check)}
-                              className="relative inline-flex items-center gap-1 rounded-lg bg-white py-1 pr-2.5 pl-1.5 text-sm/5 font-medium text-neutral-800 ring-1 ring-neutral-950/10 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+                              className="relative inline-flex max-w-full items-center gap-1 rounded-lg bg-white py-1 pr-2.5 pl-1.5 text-sm/5 font-medium text-neutral-800 ring-1 ring-neutral-950/10 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
                             >
                               <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
                               <PlusIcon className="size-4 shrink-0 fill-neutral-500" />
@@ -3342,7 +3353,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
               </section>
 
               <section aria-labelledby="recipe-heading" className="border-t border-neutral-950/10 pt-6">
-                <div className="grid gap-2">
+                <div className="grid grid-cols-1 gap-2">
                   <label htmlFor="recipe-name" id="recipe-heading" className="text-xl font-semibold">4. Name and save</label>
                   {editingSavedId && (
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-teal-50 px-3 py-2 text-base/7 text-teal-900 ring-1 ring-teal-700/15 sm:text-sm/6">
@@ -3363,7 +3374,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                     type="text"
                     value={recipe.name}
                     onChange={(event) => updateRecipe({ name: event.target.value })}
-                    className="rounded-lg bg-white px-3 py-2.5 text-base/7 text-neutral-900 ring-1 ring-neutral-950/10 outline-none focus-visible:outline-2 -outline-offset-1 focus-visible:outline-teal-600 sm:py-2 sm:text-sm/6"
+                    className="min-w-0 w-full rounded-lg bg-white px-3 py-2.5 text-base/7 text-neutral-900 ring-1 ring-neutral-950/10 outline-none focus-visible:outline-2 -outline-offset-1 focus-visible:outline-teal-600 sm:py-2 sm:text-sm/6"
                   />
                   <p className="max-w-[56ch] text-pretty text-base/7 text-neutral-600 sm:text-sm/6">Save it in this browser for one-click reuse, or export safe JSON for Codex to adjust.</p>
                 </div>
@@ -3415,26 +3426,27 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
       </main>
 
       <section className={showPlayground ? 'fixed inset-0 z-50 grid bg-white' : 'hidden'} aria-label="WordPress Playground">
-        <div className="grid min-h-0 grid-rows-[2rem_1fr] overflow-hidden bg-white">
-          {/* Only the normal bar tightens below 384 px; the close confirmation keeps its buttons apart. */}
-          <div className={`relative z-20 flex min-w-0 items-center gap-1.5 bg-[#1d2327] px-2 text-white max-sm:gap-2.5 ${confirmingPlaygroundClose ? '' : 'max-xs:gap-1'}`}>
+        <div className="@container grid min-h-0 grid-rows-[minmax(2rem,auto)_1fr] overflow-hidden bg-white">
+          {/* Only the normal bar tightens below 384 px; below 20 rem (such as 320 px with 200% text)
+              the bar wraps so Close and the close confirmation stay on screen and tappable. */}
+          <div className={`relative z-20 flex min-w-0 items-center gap-1.5 bg-[#1d2327] px-2 text-white max-sm:gap-2.5 ${confirmingPlaygroundClose ? '' : 'max-xs:gap-1'} @max-[20rem]:flex-wrap @max-[20rem]:py-1 ${confirmingPlaygroundClose ? '' : '@max-[20rem]:gap-x-1 @max-[20rem]:gap-y-2'}`}>
             {confirmingPlaygroundClose ? (
               <>
-                <p className="min-w-0 flex-1 truncate text-sm/5 font-medium">Discard this temporary site?</p>
+                <p className="min-w-0 flex-1 truncate text-sm/5 font-medium @max-[20rem]:basis-full @max-[20rem]:whitespace-normal">Discard this temporary site?</p>
                 <button
                   type="button"
                   onClick={() => setConfirmingPlaygroundClose(false)}
-                  className="relative shrink-0 rounded-md px-2 py-1 text-sm/5 font-medium text-neutral-200 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
+                  className="relative max-w-full shrink-0 rounded-md px-2 py-1 text-sm/5 font-medium text-neutral-200 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
                 >
-                  <span className="absolute top-1/2 left-1/2 h-[max(100%,2.75rem)] w-[max(100%,2.75rem)] -translate-1/2" aria-hidden="true" />
+                  <span className="absolute top-1/2 left-1/2 h-[max(100%,2.75rem)] w-[max(100%,2.75rem)] -translate-1/2 @max-[20rem]:h-[max(100%,44px)] @max-[20rem]:w-[max(100%,44px)]" aria-hidden="true" />
                   Keep open
                 </button>
                 <button
                   type="button"
                   onClick={closePlayground}
-                  className="relative shrink-0 rounded-md bg-red-500/15 px-2 py-1 text-sm/5 font-medium text-red-100 ring-1 ring-red-300/20 hover:bg-red-500/25 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
+                  className="relative max-w-full shrink-0 rounded-md bg-red-500/15 px-2 py-1 text-sm/5 font-medium text-red-100 ring-1 ring-red-300/20 hover:bg-red-500/25 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
                 >
-                  <span className="absolute top-1/2 left-1/2 h-[max(100%,2.75rem)] w-[max(100%,2.75rem)] -translate-1/2" aria-hidden="true" />
+                  <span className="absolute top-1/2 left-1/2 h-[max(100%,2.75rem)] w-[max(100%,2.75rem)] -translate-1/2 @max-[20rem]:h-[max(100%,44px)] @max-[20rem]:w-[max(100%,44px)]" aria-hidden="true" />
                   Discard and close
                 </button>
               </>
@@ -3448,9 +3460,9 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
               aria-expanded={showLicenseManager}
               title="Licenses"
               onClick={() => setShowLicenseManager(true)}
-              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-md:px-2.5 max-xs:min-w-10 max-xs:justify-center max-xs:gap-1 max-xs:px-1.5 [anchor-name:--license-trigger]"
+              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-md:px-2.5 max-xs:min-w-10 max-xs:justify-center max-xs:gap-1 max-xs:px-1.5 @max-[20rem]:min-h-7 [anchor-name:--license-trigger]"
             >
-              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)] max-xs:w-[calc(100%+0.25rem)]" aria-hidden="true" />
+              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)] max-xs:w-[calc(100%+0.25rem)] @max-[20rem]:h-[calc(100%+0.5rem)] @max-[20rem]:w-[calc(100%+0.25rem)]" aria-hidden="true" />
               <KeyIcon className="size-4 shrink-0 fill-neutral-300" />
               {/* Up to 767 px the bar buttons show their icons only, so Close stays on a full bar. */}
               <span className="max-md:sr-only">Licenses</span>
@@ -3476,9 +3488,9 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
               disabled={status.step < 4 || snapshotExporting}
               title={status.step < 4 ? 'Available when setup finishes' : 'Export snapshot'}
               onClick={exportSiteSnapshot}
-              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-md:px-2.5 max-xs:min-w-10 max-xs:justify-center max-xs:gap-1 max-xs:px-1.5 disabled:cursor-not-allowed disabled:opacity-50"
+              className="relative inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/5 py-1 pr-2.5 pl-1 text-sm/5 font-medium text-white ring-1 ring-white/15 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white max-md:px-2.5 max-xs:min-w-10 max-xs:justify-center max-xs:gap-1 max-xs:px-1.5 @max-[20rem]:min-h-7 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)] max-xs:w-[calc(100%+0.25rem)]" aria-hidden="true" />
+              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)] max-xs:w-[calc(100%+0.25rem)] @max-[20rem]:h-[calc(100%+0.5rem)] @max-[20rem]:w-[calc(100%+0.25rem)]" aria-hidden="true" />
               <ArrowDownTrayIcon className="size-4 shrink-0 fill-neutral-300" />
               <span className="max-md:sr-only">{snapshotExporting ? 'Exporting…' : 'Export snapshot'}</span>
             </button>
@@ -3491,9 +3503,9 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
               type="button"
               aria-label="Close Playground"
               onClick={requestPlaygroundClose}
-              className="relative shrink-0 rounded-md p-1.5 text-neutral-300 max-sm:px-2.5 max-xs:px-3 hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
+              className="relative shrink-0 rounded-md p-1.5 text-neutral-300 max-sm:px-2.5 max-xs:px-3 @max-[20rem]:ml-auto hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
             >
-              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)] max-xs:w-[calc(100%+0.25rem)]" aria-hidden="true" />
+              <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 max-sm:h-14 max-sm:w-[calc(100%+0.625rem)] max-xs:w-[calc(100%+0.25rem)] @max-[20rem]:h-[calc(100%+0.5rem)] @max-[20rem]:w-[calc(100%+0.25rem)]" aria-hidden="true" />
               <XMarkIcon className="size-4 shrink-0 fill-current" />
             </button>
               </>

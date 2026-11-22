@@ -159,7 +159,7 @@ test('Keep open and Discard and close have 44 px tap areas on every screen', () 
   for (const label of ['Keep open', 'Discard and close']) {
     const end = app.indexOf(`${label}\n`)
     const button = app.slice(app.lastIndexOf('<button', end), end)
-    assert.match(button, /<span className="absolute top-1\/2 left-1\/2 h-\[max\(100%,2\.75rem\)\] w-\[max\(100%,2\.75rem\)\] -translate-1\/2" aria-hidden="true" \/>/, label)
+    assert.match(button, /<span className="absolute top-1\/2 left-1\/2 h-\[max\(100%,2\.75rem\)\] w-\[max\(100%,2\.75rem\)\] -translate-1\/2(?: @max-\[20rem\]:h-\[max\(100%,44px\)\] @max-\[20rem\]:w-\[max\(100%,44px\)\])?" aria-hidden="true" \/>/, label)
   }
 })
 
