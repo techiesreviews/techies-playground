@@ -69,3 +69,12 @@ test('drop queue uses the current importer after startup and recovers after a fa
   assert.deepEqual(seen, [[['during-startup'], false], [['after-startup'], true], [['failure'], true], [['next-drop'], true]])
   assert.deepEqual(errors, ['Closed site'])
 })
+
+test('runtime ZIP control names progress and failures on the control', async () => {
+  const { uploadControlLabel } = await import('./package-upload.js')
+  assert.equal(uploadControlLabel('idle'), 'Add ZIPs')
+  assert.equal(uploadControlLabel('uploading'), 'Uploading')
+  assert.equal(uploadControlLabel('installing'), 'Installing')
+  assert.equal(uploadControlLabel('failed'), 'Upload failed')
+  assert.equal(uploadControlLabel('complete'), 'Added')
+})

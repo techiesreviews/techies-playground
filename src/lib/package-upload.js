@@ -67,3 +67,7 @@ export function createPackageUploadQueue(getImport, onError) {
     return queue
   }
 }
+
+export function uploadControlLabel(state) {
+  return { uploading: 'Uploading', installing: 'Installing', failed: 'Upload failed', complete: 'Added' }[state] || 'Add ZIPs'
+}
