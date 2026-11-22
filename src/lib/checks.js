@@ -9,7 +9,7 @@ export const CHECKS = Object.freeze([
     name: 'Query Monitor',
     summary: 'Database queries, PHP errors and memory.',
     slug: 'query-monitor',
-    packageIds: Object.freeze(['query-monitor']),
+    packageIds: Object.freeze(['query-monitor', 'query-monitor-pro']),
   }),
   Object.freeze({
     id: 'code-profiler',
@@ -33,6 +33,43 @@ export function addCheckToSetup(recipe, checkId) {
   if (!check) throw new Error(`Unknown check: ${checkId}`)
   if (hasCheck(recipe, check)) return recipe
   return { ...recipe, repositoryPlugins: [...recipe.repositoryPlugins, check.slug] }
+}
+
+export function removeCheckFromSetup(recipe, checkId) {
+  const check = CHECKS.find((candidate) => candidate.id === checkId)
+  if (!check) throw new Error(`Unknown check: ${checkId}`)
+  return {
+    ...recipe,
+    plugins: recipe.plugins.filter((id) => !check.packageIds.includes(id)),
+    repositoryPlugins: recipe.repositoryPlugins.filter((slug) => !check.packageIds.includes(slug)),
+  }
+}
+
+export function selectUploadedPlugin(recipe, id) {
+  const check = CHECKS.find((candidate) => candidate.packageIds.includes(id))
+  const next = check ? removeCheckFromSetup(recipe, check.id) : recipe
+  return { ...next, plugins: [...new Set([...next.plugins, id])] }
+}
+
+export function resolveCheckPlugins(recipe) {
+  return CHECKS.reduce((next, check) => {
+    const local = check.packageIds.toReversed().find((id) => next.plugins.includes(id))
+    return local ? selectUploadedPlugin(next, local) : next
+  }, recipe)
+}
+
+// A resumed site's old tester must be inactive before another edition is loaded.
+export function checkPluginSyncCode(recipe) {
+  const selected = [...recipe.plugins, ...recipe.repositoryPlugins]
+  const disabled = CHECKS.flatMap((check) => check.packageIds).filter((id) => !selected.includes(id))
+  return `<?php
+require_once '/wordpress/wp-load.php';
+require_once '/wordpress/wp-admin/includes/plugin.php';
+$disabled = json_decode('${JSON.stringify(disabled)}', true);
+foreach (get_plugins() as $file => $data) {
+  if (in_array(explode('/', $file)[0], $disabled, true)) deactivate_plugins($file, true);
+}
+`
 }
 
 export function checkResultsPath(check, recipe, currentPath) {
