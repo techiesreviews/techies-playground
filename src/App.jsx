@@ -156,6 +156,16 @@ const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-stora
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
   {
+    version: '0.13.1',
+    date: 'November 22, 2026',
+    title: 'WordPress Playground 3.1.65',
+    summary: 'Playground runs on its newest release.',
+    changes: [
+      'Playground is updated to 3.1.65.',
+      'The update was prepared automatically from the official Playground release.',
+    ],
+  },
+  {
     version: '0.13.0',
     date: 'November 22, 2026',
     title: 'Uploaded plugins activate, and testers can be switched off',
