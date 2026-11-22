@@ -120,6 +120,18 @@ test('below 20 rem (320 px with 200% text) the Playground bar wraps so Close sta
   const closeButton = app.slice(app.indexOf('aria-label="Close Playground"'), app.indexOf('</button>', app.indexOf('aria-label="Close Playground"')))
   assert.match(closeButton.match(/className="([^"]*)"/)[1], /@max-\[20rem\]:ml-auto\b/)
 
+  // Below 20 rem (including 110–120% text), each button's minimum height covers 44 px minus the
+  // 0.5 rem row gap so every tap area stays at least 44 px tall without overlapping across rows.
+  const minHeightRule = /@max-\[20rem\]:min-h-\[max\(1\.75rem,calc\(44px-0\.5rem\)\)\]/
+  for (const [name, className] of [
+    ['Licenses', bar.match(/ref=\{licenseButtonRef\}[\s\S]*?className="([^"]*)"/)[1]],
+    ['Export snapshot', bar.match(/onClick=\{exportSiteSnapshot\}\s*className="([^"]*)"/)[1]],
+    ['BAR_BUTTON_CLASS', updatesControl.match(/export const BAR_BUTTON_CLASS = '([^']*)'/)[1]],
+    ['Close Playground', closeButton.match(/className="([^"]*)"/)[1]],
+  ]) {
+    assert.match(className, minHeightRule, `${name}: keeps >= 44 px tap height even at 110–120% text`)
+  }
+
   const tapAreas = [...`${bar}${closeButton}${updatesControl}`.matchAll(/max-sm:w-\[calc\(100%\+0\.625rem\)\]([^"]*)"/g)]
   assert.equal(tapAreas.length, 4)
   for (const [, rest] of tapAreas) {
@@ -181,4 +193,22 @@ test('at 320 px with 200% text the launcher has no 20 rem body minimum or unwrap
   assert.match(checkboxFn, /<span className="min-w-0 \[overflow-wrap:anywhere\]">/)
   const radioFn = app.slice(app.indexOf('function Radio('), app.indexOf('function GitHubStarButton('))
   assert.match(radioFn, /<span className="min-w-0 \[overflow-wrap:anywhere\]">/)
+
+  // Advanced settings summary wraps its description below the label in narrow containers instead of
+  // squeezing the label to 0 px.
+  const detailsStart = app.indexOf('<details open={Boolean(recipe.wxrUrl')
+  const summaryBlock = app.slice(detailsStart, app.indexOf('</summary>', detailsStart))
+  assert.match(summaryBlock, /(?:^|[\s"])@container\b/)
+  assert.match(summaryBlock, /<summary className="[^"]*\bflex-wrap\b/)
+  assert.match(summaryBlock, /<span className="min-w-0 flex-auto">Advanced settings<\/span>/)
+  assert.match(summaryBlock, /@max-\[20rem\]:order-last @max-\[20rem\]:basis-full/)
+
+  // LaunchSummary values start from zero width with an 8 rem floor, so long plugin lists stay
+  // beside their label at normal text and only wrap on narrow enlarged-text views.
+  const summaryFn = app.slice(app.indexOf('function LaunchSummary('), app.indexOf('function FeaturedPluginCard('))
+  const dds = [...summaryFn.matchAll(/<dd className="([^"]*)"/g)]
+  assert.equal(dds.length, 6)
+  for (const [, cls] of dds) {
+    assert.match(cls, /\bflex-1 basis-0 min-w-\[min\(100%,8rem\)\](?:\s|$)/)
+  }
 })
