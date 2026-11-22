@@ -162,7 +162,7 @@ const CHANGELOG_ENTRIES = [
     title: 'Saved uploads leave room for Close',
     summary: 'Saved uploads stay compact on medium-width bars. Problems after installation keep an accurate Added with problems headline.',
     changes: [
-      'The saved-upload control keeps its clock icon without the long label below 1041 px, so Close stays on screen.',
+      'Upload controls show their icons without labels below 1041 px, so Close stays on screen in idle, busy, added and saved states.',
       'When a plugin installs but activation, checks, licence setup or opening the plugin list has a problem, the control says Added with problems and keeps the reason beside it.',
     ],
   },
