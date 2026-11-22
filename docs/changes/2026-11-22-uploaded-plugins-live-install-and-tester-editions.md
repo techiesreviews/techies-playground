@@ -21,26 +21,28 @@ Reuse the approved key icon beside a smaller plus, install live uploads immediat
 - Abort the complete site when activation fails: hides the plugin's state and prevents testing other plugins.
 - Install with activation disabled, then activate quietly and inspect saved WordPress state in a separate request: chosen; activation redirects cannot hide success and raw vendor output does not reach launcher state.
 
-## Implementation
+## Implementation or prototype
 
-`uploaded-plugins.js` installs ZIPs, activates them and reads their active state. A site-local must-use plugin renders failed activation on the corresponding WordPress Plugins row. The launcher retains fixed safe result text per package. The sequential upload queue reads the latest React handler and recovers after rejected work. Live uploads capture their client and launch identity.
+`uploaded-plugins.js` installs ZIPs, activates them and reads their active state. A site-local must-use plugin renders failed activation on the corresponding WordPress Plugins row. The launcher retains fixed safe result text per package. The sequential upload queue reads the latest React handler and recovers after rejected work. Live uploads capture their client and launch identity before saving begins. The lead-approved Add ZIPs control in the runtime bar reuses the picker and reports progress, success and failures on itself, with details in its title and accessible name.
 
 The Checks section has Turn off controls. Uploading either tester edition deselects the other; legacy mixed selections prefer Pro at launch. A Blueprint PHP step deactivates deselected tester editions on resumed sites before directory installs. Live tester uploads deactivate the existing editions before replacement. Licence and package vault schemas are unchanged.
 
 ## Tests and evidence
 
-- Red first: `kit unit src/lib/checks.test.js src/lib/uploaded-plugins.test.js` printed `RESULT: fail unit 27/31 (2 files)` before implementation; Query Monitor Pro, tester removal, edition replacement and the missing installation helper failed.
-- Red first after review: the upload queue and live free-plugin licence tests each printed `RESULT: fail unit 3/4 (1 files)` before their new helpers were implemented.
-- `kit doctor`: `RESULT: ok doctor 17/17 checks passed`.
-- Focused PHP 8.3 tests: `RESULT: ok unit 4/4 (1 files)`. Verified free-edition deactivation, Pro activation, redirect success, inactive failure and persisted tester-off behaviour using focused WordPress stubs.
-- Latest affected suite: `RESULT: ok unit 128/128 (13 files)`. Full suite: `RESULT: ok unit 336/336 (39 files)`.
-- `kit build`: `RESULT: ok build finished`; existing large-chunk and browser externalisation warnings remain.
-- `kit ux`: `RESULT: fail ux ENOENT: .../docs/agents/features.md`. This project's extras explicitly say it has no feature list.
-- `kit shots`: `RESULT: fail unknown command shots`; no project screenshot command exists.
-- T3 browser, localhost: key-plus icon has two SVGs; fake key encrypts successfully and is absent from draft JSON; both testers add then turn off; both Pro ZIP fixtures replace their free directory selections; a fake Pro key saves through the same form.
-- T3 runtime, WordPress 7.1.5 / PHP 8.3, temporary storage, networking blocked: all three synthetic uploaded plugin fixtures reached `Active in WordPress`. Fake keys intentionally do not represent valid vendor licences.
-- The deployed host's `frame-ancestors` policy excludes localhost. Local runtime acceptance uses `VITE_PLAYGROUND_ORIGIN=https://playground.wordpress.net`; source defaults and deployment settings are unchanged. Preview-host verification remains a separate post-merge check.
-- T3 screenshot capture subsequently failed twice with `The browser is not producing screenshot frames`; standalone Playwright is used for the remaining runtime screenshots and live-drop check.
+| Environment | Procedure/command | Expected | Actual | Evidence |
+| --- | --- | --- | --- | --- |
+| Node 24, before implementation | `kit unit src/lib/checks.test.js src/lib/uploaded-plugins.test.js` | New behavior fails before it exists | `RESULT: fail unit 27/31 (2 files)` | `.scratch/tools-402/red.log` |
+| Node 24, review fixes | Queue and licence-gate focused tests, then the runtime label test | Fail before their helpers exist | Two `RESULT: fail unit 3/4 (1 files)` runs, then `RESULT: fail unit 4/5 (1 files)` | `.scratch/unit/` logs |
+| Agent Kit | `kit doctor` | Project ready | `RESULT: ok doctor 17/17 checks passed` | Doctor output |
+| PHP 8.3 with focused WordPress stubs | `kit unit src/lib/uploaded-plugins-php.test.js` | Activate Pro, tolerate redirect, keep failure inactive, turn persisted testers off | `RESULT: ok unit 4/4 (1 files)` | Committed PHP tests and `.scratch/unit/` log |
+| Node 24, final control | `kit unit`; `kit unit --affected` | Existing and new assertions pass | `RESULT: ok unit 337/337 (39 files)`; preceding affected run `RESULT: ok unit 129/129 (13 files)` | `.scratch/unit/` logs |
+| Vite | `kit build` | Build launcher | `RESULT: ok build finished`; existing chunk and browser externalisation warnings | Build output |
+| Agent Kit integration | `kit ux`; `kit shots` | Automatic UX and screenshots | `RESULT: fail ux ENOENT: .../docs/agents/features.md`; `RESULT: fail unknown command shots` | Project extras document no feature list or browser command |
+| T3 browser, localhost | Upload, save fake keys, add/turn off testers, upload Pro fixtures | Key-plus, encrypted save and mutually exclusive tester editions | All observed; key absent from recipe JSON | Initial T3 captures and browser actions |
+| Browser runtime, WordPress 7.1.5 / PHP 8.3, temporary storage, networking blocked | Start three uploaded fixtures; drop an activation-refusing plugin, then a working plugin | Startup/live plugins active; failed activation inline; queue still usable | Passed, no page errors | `.scratch/tools-402/` screenshots and `tools402-browser` log |
+| Browser layout | Check 390 px / 100% and 320 px / 200% text | Add key and Turn off remain on screen; no sideways page scroll | Both pass | `mobile-390-16.png`, `mobile-320-32.png` |
+
+The deployed host's `frame-ancestors` policy excludes localhost. Local runtime acceptance uses `VITE_PLAYGROUND_ORIGIN=https://playground.wordpress.net`; source defaults and deployment settings are unchanged. Preview verification follows the dev merge. T3 screenshot capture failed twice with `The browser is not producing screenshot frames`; standalone Playwright supplies the remaining runtime evidence. Synthetic fixtures and fake keys do not prove a real vendor licence is valid.
 
 ## Review responses
 
@@ -51,16 +53,21 @@ The Checks section has Turn off controls. Uploading either tester edition desele
 - R1-5: fixed by this dated record; executed evidence is distinguished from pending verification.
 - R1-6: fixed. Feature release version is 0.13.0.
 
-## Result and disposition
+- R2-5: fixed with the lead-approved Add ZIPs control in the runtime bar. It reuses the picker, shares the sequential queue and shows Uploading / Installing / Upload failed on the control itself, with details in its title and accessible name. No runtime toast.
+- R2-6: fixed by using the template's evidence table and separate Result and Disposition sections.
 
-Standalone Playwright acceptance passed against the built 0.13.0 launcher and official Playground runtime: WordPress 7.1.5, PHP 8.3, temporary storage, networking blocked. The three startup fixtures were active, with no free tester installed. A new ZIP dropped onto that running site installed and activated without restarting. A ZIP whose activation hook refuses activation remained installed and inactive, with the failure notice on its WordPress plugin row; the next live upload still worked. No page errors were observed. At 390 px with 100% text and 320 px with 200% text, the page width stayed 390/320 px and both Add key and Turn off stayed within the viewport; screenshots are `mobile-390-16.png` and `mobile-320-32.png`. Screenshots live under `.scratch/tools-402/`: `key-plus.png`, `testers-off.png`, `pro-uploaded.png`, `uploaded-active.png`, `activation-failed-row.png`, `live-upload-active.png`. The job printed `RESULT: ok go tools402-browser exit 0 without a RESULT line`.
+## Result
 
-Disposition: kept. The fixtures prove installation, activation and UI state, and do not claim validity for a real paid vendor's licence. Merge targets dev only; no production release or npm publication is authorised.
+Standalone Playwright acceptance passed against the built 0.13.0 launcher and official Playground runtime: WordPress 7.1.5, PHP 8.3, temporary storage, networking blocked. The three startup fixtures were active, with no free tester installed. A new ZIP dropped onto that running site installed and activated without restarting. A ZIP whose activation hook refuses activation remained installed and inactive, with the failure notice on its WordPress plugin row; the next live upload still worked. No page errors were observed. At 390 px with 100% text and 320 px with 200% text, the page width stayed 390/320 px and both Add key and Turn off stayed within the viewport; screenshots are `mobile-390-16.png` and `mobile-320-32.png`. Screenshots live under `.scratch/tools-402/`: `key-plus.png`, `testers-off.png`, `pro-uploaded.png`, `uploaded-active.png`, `activation-failed-row.png`, `live-upload-active.png`. The first job printed `RESULT: ok go tools402-browser exit 0 without a RESULT line`. The final control run printed `RESULT: ok go tools402-browser-r2 exit 0 without a RESULT line`: an invalid ZIP showed Upload failed with its detail, and choosing a valid ZIP through the same control succeeded. The runtime upload control and Close stayed on screen at 390 px and at 320 px with 200% text; captures include `runtime-upload-failed.png` and `runtime-mobile-320-32.png`.
+
+## Disposition and rationale
+
+Kept. The fixtures prove installation, activation and UI state, and do not claim validity for a real paid vendor's licence. Merge targets dev only; no production release or npm publication is authorised.
 
 ## Documentation impact
 
 Updated CONTEXT, rebuild specification, architecture, data contracts, testing documentation, changelog and matching package versions.
 
-## Follow-ups
+## Follow-ups and open questions
 
 Lex must try his actual paid ZIPs and valid vendor licences on preview-play; synthetic fixtures cannot prove vendor licence validity. The lead closes TOOLS-402 with the PR and merge SHA after landing.

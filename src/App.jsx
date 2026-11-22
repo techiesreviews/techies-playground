@@ -136,6 +136,7 @@ import {
 } from './lib/checks'
 import { runPluginUpdates, updatesAnnouncement } from './lib/plugin-updates'
 import { UpdatesControl } from './UpdatesControl'
+import { UploadControl } from './UploadControl'
 import { ChecksButton, ChecksPanel } from './ChecksPanel'
 import {
   assertZipFile,
@@ -161,7 +162,7 @@ const CHANGELOG_ENTRIES = [
     summary: 'Drop a plugin ZIP into an open site to install and activate it right away. Turn testers off or upload their Pro versions.',
     changes: [
       'Add key and Add license show a key icon with a small plus. Saved keys keep the existing key icon.',
-      'Uploaded plugins install and activate at start or when dropped onto a running site. Failed activation appears on the plugin row and keeps the site open.',
+      'Uploaded plugins install and activate at start or when dropped onto a running site. Failed activation appears on the plugin row and keeps the site open. Add ZIPs in the site bar also accepts uploads and shows progress or failures on its control.',
       'Query Monitor and Code Profiler have a Turn off button. Uploading query-monitor-pro.zip or code-profiler-pro.zip replaces the free selection; add its key through the existing encrypted vault.',
     ],
   },
@@ -1852,13 +1853,19 @@ export default function App() {
   const [isDraggingPackages, setIsDraggingPackages] = useState(false)
   const [uploadMessage, setUploadMessage] = useState('')
   const [pluginInstallResults, setPluginInstallResults] = useState({})
+  const [liveUpload, setLiveUpload] = useState({ state: 'idle', message: '' })
   const importDroppedPackagesRef = useRef(null)
   importDroppedPackagesRef.current = importDroppedPackages
+  const uploadQueueRef = useRef(null)
+  uploadQueueRef.current ??= createPackageUploadQueue(() => importDroppedPackagesRef.current, (caught) => {
+    if (caught?.name === 'AbortError') return
+    const message = 'The upload was saved, but could not be applied to the open site. Start the setup again to retry.'
+    setLiveUpload({ state: 'failed', message })
+    setError(message)
+  })
   useEffect(() => registerPackageDrop(window, {
     onActive: setIsDraggingPackages,
-    onFiles: createPackageUploadQueue(() => importDroppedPackagesRef.current, () => {
-      setError('The upload was saved, but could not be applied to the open site. Start the setup again to retry.')
-    }),
+    onFiles: uploadQueueRef.current,
   }), [])
   const iframeRef = useRef(null)
   // A new frame element per launch: a start still waiting on an old frame (closed, or
@@ -2162,9 +2169,15 @@ export default function App() {
     let pluginCount = 0
     let themeCount = 0
     const uploadedPlugins = []
+    const uploadLaunchId = launchIdRef.current
+    const uploadClient = status.step === 4 ? clientRef.current : null
+    const inOpenSite = showPlayground
     setError('')
     for (const [index, file] of files.entries()) {
-      setUploadMessage(`Uploading ${index + 1} of ${files.length}: ${file.name}`)
+      const message = `Uploading ${index + 1} of ${files.length}: ${file.name}`
+      if (inOpenSite) {
+        if (uploadLaunchId === launchIdRef.current) setLiveUpload({ state: 'uploading', message })
+      } else setUploadMessage(message)
       try {
         const type = await detectPackageType(file)
         const id = normalizePluginId(file.name)
@@ -2198,26 +2211,37 @@ export default function App() {
     } catch (caught) {
       failures.push(caught.message)
     }
-    setUploadMessage(`Uploaded ${pluginCount} plugin${pluginCount === 1 ? '' : 's'} and ${themeCount} theme${themeCount === 1 ? '' : 's'} to this browser.${failures.length ? ` ${failures.length} upload error(s). ${failures.join(' ')}` : ''}`)
+    const summary = `Uploaded ${pluginCount} plugin${pluginCount === 1 ? '' : 's'} and ${themeCount} theme${themeCount === 1 ? '' : 's'} to this browser.`
     setError(failures.join(' '))
-    await installLiveUploads(uploadedPlugins)
+    if (!inOpenSite) setUploadMessage(`${summary}${failures.length ? ` ${failures.join(' ')}` : ''}`)
+    try {
+      const installFailures = await installLiveUploads(uploadedPlugins, uploadClient, uploadLaunchId)
+      if (inOpenSite && uploadLaunchId === launchIdRef.current) {
+        failures.push(...installFailures)
+        setLiveUpload({ state: failures.length ? 'failed' : 'complete', message: failures.length ? failures.join(' ') : `${summary}${!uploadClient ? ' Start the setup again to apply these packages.' : themeCount ? ' Start the setup again to apply the theme.' : ''}` })
+      }
+    } catch (caught) {
+      if (uploadLaunchId !== launchIdRef.current) return
+      throw caught
+    }
   }
 
-  async function installLiveUploads(uploadedPlugins) {
-    const client = clientRef.current
-    if (!client || status.step !== 4) return
-    const launchId = launchIdRef.current
+  async function installLiveUploads(uploadedPlugins, client, launchId) {
+    const failures = []
+    if (!client || client !== clientRef.current || launchId !== launchIdRef.current) return failures
     const isCurrent = () => launchId === launchIdRef.current && client === clientRef.current
-    for (const plugin of uploadedPlugins) {
-      if (!isCurrent()) return
+    for (const [index, plugin] of uploadedPlugins.entries()) {
+      if (!isCurrent()) return failures
+      setLiveUpload({ state: 'installing', message: `Installing ${index + 1} of ${uploadedPlugins.length}: ${plugin.label}` })
       let result
       try {
         result = await installUploadedPlugin(client, plugin, { isCurrent })
       } catch {
         result = { status: 'failed', message: 'The uploaded plugin could not be installed. Try another ZIP.' }
       }
-      if (!isCurrent()) return
+      if (!isCurrent()) return failures
       setPluginInstallResults((current) => ({ ...current, [plugin.id]: result }))
+      if (result.status !== 'active') failures.push(`${plugin.label}: ${result.message}`)
       if (result.status === 'failed') continue
       launchedRecipeRef.current = selectUploadedPlugin(launchedRecipeRef.current, plugin.id)
       const checks = checksInSetup(launchedRecipeRef.current)
@@ -2229,14 +2253,14 @@ export default function App() {
           packages: [{ id: plugin.id, vaultId: `plugin:${plugin.id}`, label: plugin.label }],
           folders, signal: launchAbortRef.current?.signal,
         })
-        if (!isCurrent()) return
+        if (!isCurrent()) return failures
         setLicenseFill((current) => [...current.filter((entry) => entry.vaultId !== `plugin:${plugin.id}`), ...filled])
       }
       if (checks.length) {
         await client.writeFile(CHECKS_PLUGIN_PATH, CHECKS_PLUGIN)
-        if (!isCurrent()) return
+        if (!isCurrent()) return failures
         await client.writeFile(MEASURE_PLUGIN_PATH, MEASURE_PLUGIN)
-        if (!isCurrent()) return
+        if (!isCurrent()) return failures
         let needed = [plugin.id]
         let active = []
         try {
@@ -2247,41 +2271,22 @@ export default function App() {
         } catch {
           // Unknown licence state keeps checks waiting for activation.
         }
-        if (!isCurrent()) return
+        if (!isCurrent()) return failures
         setLicensedPackageIds((current) => [...current.filter((id) => id !== plugin.id && launchedRecipeRef.current.plugins.includes(id)), ...needed])
         setSiteLicensedIds((current) => [...current.filter((id) => id !== plugin.id && launchedRecipeRef.current.plugins.includes(id)), ...active])
         watchPages(client)
       }
     }
     if (isCurrent() && uploadedPlugins.length) await client.goTo('/wp-admin/plugins.php')
+    return failures
   }
 
   async function handleZipImport(event) {
-    setError('')
+    const input = event.target
     try {
-      setActiveSavedId('')
-      for (const file of event.target.files) {
-        await assertZipFile(file)
-        const id = normalizePluginId(file.name)
-        if (!id) throw new Error(`Could not create an ID for ${file.name}.`)
-        const existing = await getPlugin(id)
-        await savePlugin({
-          id,
-          label: existing?.label || pluginLabelFromFilename(file.name),
-          filename: file.name,
-          size: file.size,
-          file,
-          versionHint: extractVersionHint(file.name),
-          savedAt: Date.now(),
-        })
-        setPluginRecency((current) => markPluginSelected(current, id))
-        setRecipe((current) => validateRecipe(selectUploadedPlugin(current, id)))
-      }
-      setPlugins(await listPlugins())
-    } catch (caught) {
-      setError(caught.message)
+      await uploadQueueRef.current([...input.files])
     } finally {
-      event.target.value = ''
+      input.value = ''
     }
   }
 
@@ -2660,6 +2665,8 @@ export default function App() {
     const launchId = launchIdRef.current + 1
     launchIdRef.current = launchId
     setError('')
+    setUploadMessage('')
+    setLiveUpload({ state: 'idle', message: '' })
     setPluginInstallResults({})
     setConfirmingPlaygroundClose(false)
     setShowPlayground(true)
@@ -3584,6 +3591,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
               <ArrowDownTrayIcon className="size-4 shrink-0 fill-neutral-300" />
               <span className="max-md:sr-only">{snapshotExporting ? 'Exporting…' : 'Export snapshot'}</span>
             </button>
+            <UploadControl upload={liveUpload} siteReady={status.step >= 4} onUpload={() => zipInputRef.current?.click()} />
             <UpdatesControl updates={pluginUpdates} open={showUpdates} onOpenChange={setShowUpdates} buttonRef={updatesButtonRef} />
             <span className="sr-only" aria-live="polite">{barMessage}</span>
             <span className="sr-only" aria-live="polite">{updatesAnnouncement(pluginUpdates)}</span>
