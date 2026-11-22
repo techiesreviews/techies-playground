@@ -2,8 +2,8 @@
 
 - Date: 2026-11-22
 - Owner: fleet-lead / GPT Sol implementation worker
-- Status: in-progress
-- Disposition: pending
+- Status: complete
+- Disposition: kept
 - Related version: 0.13.0
 - Related issue: TOOLS-402
 
@@ -33,7 +33,7 @@ The Checks section has Turn off controls. Uploading either tester edition desele
 - Red first after review: the upload queue and live free-plugin licence tests each printed `RESULT: fail unit 3/4 (1 files)` before their new helpers were implemented.
 - `kit doctor`: `RESULT: ok doctor 17/17 checks passed`.
 - Focused PHP 8.3 tests: `RESULT: ok unit 4/4 (1 files)`. Verified free-edition deactivation, Pro activation, redirect success, inactive failure and persisted tester-off behaviour using focused WordPress stubs.
-- Latest affected suite: `RESULT: ok unit 128/128 (13 files)`.
+- Latest affected suite: `RESULT: ok unit 128/128 (13 files)`. Full suite: `RESULT: ok unit 336/336 (39 files)`.
 - `kit build`: `RESULT: ok build finished`; existing large-chunk and browser externalisation warnings remain.
 - `kit ux`: `RESULT: fail ux ENOENT: .../docs/agents/features.md`. This project's extras explicitly say it has no feature list.
 - `kit shots`: `RESULT: fail unknown command shots`; no project screenshot command exists.
@@ -53,7 +53,9 @@ The Checks section has Turn off controls. Uploading either tester edition desele
 
 ## Result and disposition
 
-Pending live-drop acceptance, final review and merge into dev. No production release or npm publication is authorised.
+Standalone Playwright acceptance passed against the built 0.13.0 launcher and official Playground runtime: WordPress 7.1.5, PHP 8.3, temporary storage, networking blocked. The three startup fixtures were active, with no free tester installed. A new ZIP dropped onto that running site installed and activated without restarting. A ZIP whose activation hook refuses activation remained installed and inactive, with the failure notice on its WordPress plugin row; the next live upload still worked. No page errors were observed. At 390 px with 100% text and 320 px with 200% text, the page width stayed 390/320 px and both Add key and Turn off stayed within the viewport; screenshots are `mobile-390-16.png` and `mobile-320-32.png`. Screenshots live under `.scratch/tools-402/`: `key-plus.png`, `testers-off.png`, `pro-uploaded.png`, `uploaded-active.png`, `activation-failed-row.png`, `live-upload-active.png`. The job printed `RESULT: ok go tools402-browser exit 0 without a RESULT line`.
+
+Disposition: kept. The fixtures prove installation, activation and UI state, and do not claim validity for a real paid vendor's licence. Merge targets dev only; no production release or npm publication is authorised.
 
 ## Documentation impact
 
