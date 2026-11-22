@@ -155,11 +155,11 @@ test('at 320 px with 200% text the i drops below the headline instead of coverin
   assert.ok(classOf(counts, '<ul').includes('@max-[15rem]:-ml-7.5'), 'the counts use the space under the verdict icon')
 })
 
-test('Keep open and Discard and close have 44 px tap areas on every screen', () => {
+test('Keep open and Discard and close have 44 px touch areas without catching mouse clicks outside the bar', () => {
   for (const label of ['Keep open', 'Discard and close']) {
     const end = app.indexOf(`${label}\n`)
     const button = app.slice(app.lastIndexOf('<button', end), end)
-    assert.match(button, /<span className="absolute top-1\/2 left-1\/2 h-\[max\(100%,2\.75rem\)\] w-\[max\(100%,2\.75rem\)\] -translate-1\/2(?: @max-\[20rem\]:h-\[max\(100%,44px\)\] @max-\[20rem\]:w-\[max\(100%,44px\)\])?" aria-hidden="true" \/>/, label)
+    assert.match(button, /<span className="pointer-fine:hidden absolute top-1\/2 left-1\/2 h-\[max\(100%,2\.75rem\)\] w-\[max\(100%,2\.75rem\)\] -translate-1\/2(?: @max-\[20rem\]:h-\[max\(100%,44px\)\] @max-\[20rem\]:w-\[max\(100%,44px\)\])?" aria-hidden="true" \/>/, label)
   }
 })
 

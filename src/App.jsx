@@ -156,6 +156,18 @@ const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-stora
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
   {
+    version: '0.13.2',
+    date: 'November 22, 2026',
+    title: 'ZIP uploads and tester selections',
+    summary: 'Both ZIP pickers detect plugins and themes. Upload progress keeps Close on screen on narrow bars.',
+    changes: [
+      'Both Add ZIPs pickers share the upload queue and detect plugins and themes from their headers.',
+      'Upload progress uses the existing spinner on narrow bars, and the upload button keeps keyboard focus while busy.',
+      'Starting a saved setup only switches off competing editions of a selected tester. Testers activated separately inside WordPress stay on.',
+      'Failures after installation keep the installed plugin status and name the checks, licence or page-opening step that failed.',
+    ],
+  },
+  {
     version: '0.13.1',
     date: 'November 22, 2026',
     title: 'WordPress Playground 3.1.65',

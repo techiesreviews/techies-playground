@@ -33,6 +33,11 @@ Prefer, in order:
 
 ## Index
 
+- [2026-11-22-release-review-fixes.md](2026-11-22-release-review-fixes.md) — shared ZIP queue, compact upload states, preserved external tester selections, accurate post-install failures, and saved-site boot diagnosis (TOOLS-403).
+- [2026-11-22-playground-3-1-65-and-daily-check.md](2026-11-22-playground-3-1-65-and-daily-check.md) — Playground 3.1.65 pins, daily scheduler investigation, and hosted plugin/tester acceptance (TOOLS-403).
+- [2026-11-22-uploaded-plugins-live-install-and-tester-editions.md](2026-11-22-uploaded-plugins-live-install-and-tester-editions.md) — uploaded plugins activate in open sites; free and Pro tester selections replace each other (TOOLS-402).
+- [2026-11-21-checks-panel-overview-and-open-page.md](2026-11-21-checks-panel-overview-and-open-page.md) — check-score overview and measurements follow the open WordPress page (TOOLS-388).
+- [2026-11-21-checks-spinner-delay.md](2026-11-21-checks-spinner-delay.md) — separate reveal wrappers keep spinner motion and its 200 ms reveal delay independent.
 - [2026-11-22-big-text-on-small-phones.md](2026-11-22-big-text-on-small-phones.md) — at 320 px with 200% text, the Playground top bar and close confirmation wrap below 20 rem so Close, Keep open and Discard and close stay on screen with 44 px+ non-overlapping tap areas, and the launcher has no sideways scroll (TOOLS-398).
 - [2026-10-31-land-on-dev.md](2026-10-31-land-on-dev.md) — changes land on `dev` and `main` only takes `dev` (`kit pr --release --base main`); the WordPress sync opens its PRs against `dev` once the change is released to `main`.
 
