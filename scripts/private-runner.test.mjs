@@ -27,12 +27,14 @@ test('a failed real attempt saves private JSON and escaped HTML, without retryin
   const job = await enqueue(root)
   const result = await runOnce(root, async (report) => {
     report.boot = { status: 'completed' }
+    report.queryMonitor = { status: 'running' }
     throw new Error('profiler <unsupported>')
   })
   assert.equal(result.verdict, 'no-go')
   assert.equal(result.blocker, 'profiler <unsupported>')
   const dir = path.join(root, 'runs', job.id)
   assert.equal(JSON.parse(await readFile(path.join(dir, 'report.json'))).boot.status, 'completed')
+  assert.equal(JSON.parse(await readFile(path.join(dir, 'report.json'))).queryMonitor.status, 'blocked')
   assert.match(await readFile(path.join(dir, 'report.html'), 'utf8'), /&lt;unsupported&gt;/)
   assert.equal((await stat(dir)).mode & 0o777, 0o700)
   assert.equal((await stat(path.join(dir, 'report.json'))).mode & 0o777, 0o600)
@@ -67,4 +69,6 @@ test('matches the real Code Profiler 1.9.6 artifact name from run e7783448', asy
   assert.equal(matchesProfilerArtifact('1795423599.11001', stem), false)
   assert.equal(matchesProfilerArtifact(null, stem), false)
   assert.equal(matchesProfilerArtifact('1795423599.1100', '1795423599.1100'), false)
+  assert.equal(matchesProfilerArtifact('1795423599', stem), false)
+  assert.equal(matchesProfilerArtifact('1795423599.1100', '1795423599.1100.'), false)
 })

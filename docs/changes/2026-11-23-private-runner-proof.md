@@ -50,7 +50,9 @@ are unchanged. See [the runner contract](../private-runner.md).
 | WordPress 7.1.4, PHP 8.3.36, Query Monitor 4.1.1, free Code Profiler 1.9.6 | `node scripts/private-runner.mjs enqueue`, then `kit go tools-411-proof-5 -- node scripts/private-runner.mjs once` | Both genuine testers complete | `RESULT: ok private-runner go`; native profile ID `1795423573.3250`; actual plugin/theme attribution saved | Private run `15c95b28-1e8a-429d-b5dd-4605f218d880` |
 | Same versions, another fresh context/site | Enqueue again, then `kit go tools-411-proof-repeat -- node scripts/private-runner.mjs once` | Repeat from fresh site | `RESULT: ok private-runner go`; both testers completed again | Private run `e7783448-cae4-41d6-88ac-94473c33157e` |
 | Same versions, after review fixes | Enqueue again, then `kit go tools-411-proof-reviewed -- node scripts/private-runner.mjs once` | Homepage and native ID/artifact agree; no admin text copied | `RESULT: ok private-runner go`; six collector observations and matching native profile completed | Private run `e8dccfc7-2383-4365-a877-7b94f7736273` |
+| Same versions, after diagnostic fixes | Enqueue again, then `kit go tools-411-proof-diagnostics -- node scripts/private-runner.mjs once` | Current PHP reader and native artifact guard complete | `RESULT: ok private-runner go`; all three stages completed | Private run `9c5d6211-1104-45a2-a115-fa8b211636c5` |
 | Same versions, after the real artifact fixture was added | Enqueue again, then `kit go tools-411-proof-artifact-test -- node scripts/private-runner.mjs once` | The unchanged artifact predicate works in the real runner | `RESULT: ok private-runner go`; all three stages completed | Private run `b02592e5-bddf-4849-9004-b77b7faed887` |
+| After diagnostic fixes | `kit unit` | Current full suite passes after the final test edits | 352/352 tests in 41 files | `.scratch/unit/20261123T093507-1885336.log` |
 | Before review fixes | `kit unit`; `kit build`; `kit doctor`; `git diff --check` | Existing app stays checked | 351/351 tests in 41 files; build passed with existing externalized-module/chunk-size warnings; doctor 17/17; diff check passed | `.scratch/unit/20261123T084338-491435.log`; kit output |
 
 Private run evidence stays on ubulex under
@@ -101,11 +103,29 @@ unit test. The initial real 180-second timeout already executed the deadline and
 saved a no-go; the current catch also marks in-progress stages blocked. No helper
 interface was added for this one-use proof.
 
-Done when 1: met — queued job b02592e5-bddf-4849-9004-b77b7faed887 was claimed by `node scripts/private-runner.mjs once` on ubulex and booted a fresh sandboxed headless browser Playground without Lex's tab.
+Done when 1: met — queued job 9c5d6211-1104-45a2-a115-fa8b211636c5 was claimed by `node scripts/private-runner.mjs once` on ubulex and booted a fresh sandboxed headless browser Playground without Lex's tab.
 
-Done when 2: met — run b02592e5-bddf-4849-9004-b77b7faed887 completed six Query Monitor collector observations and a genuine free Code Profiler profile with matching native plugin/theme attribution, saved in private JSON and HTML reports.
+Done when 2: met — run 9c5d6211-1104-45a2-a115-fa8b211636c5 completed six Query Monitor collector observations and a genuine free Code Profiler profile with matching native plugin/theme attribution, saved in private JSON and HTML reports.
 
-Done when 3: met — the current runner printed `RESULT: ok private-runner go` for run b02592e5-bddf-4849-9004-b77b7faed887; earlier failed harness attempts retain explicit no-go reports.
+Done when 3: met — the current runner printed `RESULT: ok private-runner go` for run 9c5d6211-1104-45a2-a115-fa8b211636c5; earlier failed harness attempts retain explicit no-go reports.
+
+The next Grok review (20261123T093307Z) no longer raised the filename claim. It
+raised the previously noted catch-all timeout diagnostic as P2. The catch now
+relabels only a Playwright `TimeoutError`; other errors retain their original
+message. Source inspection confirms this branch; detached-page failure injection
+was not run. Empty visible profiler errors now stay blocked. Missing summary,
+malformed attribution and mismatched ID failures have separate messages, with the
+native profile ID retained as partial evidence.
+
+The artifact guard now requires the complete decimal microtime ID and a nonempty
+profile name. The real-name test gained truncated-ID and empty-name rejection
+assertions, failed first (4/5, `.scratch/unit/20261123T093439-1855934.log`), then
+passed 5/5 (`.scratch/unit/20261123T093507-1884924.log`). The existing failure test
+now executes the `running` to `blocked` transition. Full suite after these edits
+passed 352/352 (`.scratch/unit/20261123T093507-1885336.log`). The fresh real run
+9c5d6211-1104-45a2-a115-fa8b211636c5 completed all stages after these changes. The
+record index now links this experiment, and the runner contract states that its
+180-second deadline begins after browser/context startup.
 
 ## Result
 
