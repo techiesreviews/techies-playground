@@ -151,7 +151,9 @@ export async function buildAndCapture({ page, context, php }, report, directory,
   await php(`<?php require '/wordpress/wp-load.php'; update_option('show_on_front','page'); update_option('page_on_front',${Number(saved.id)});`)
   report.design.step = 'open saved homepage'
   await page.evaluate(() => window.proofClient.goTo('/'))
-  await frame.locator('h1').waitFor()
+  await frame.locator('.wp-block-post-content').waitFor()
+  const titles = await frame.locator('h1').allTextContents()
+  if (!titles.some((title) => title.trim() === SAMPLE.title)) report.design.misses.push('The sample title was not rebuilt as an H1 heading.')
   const texts = [SAMPLE.name, SAMPLE.title, SAMPLE.intro, SAMPLE.footer, ...SAMPLE.cards.flatMap(([title, text]) => [title, text])]
   const actual = await frame.locator('body').innerText()
   for (const text of texts) if (!actual.includes(text)) report.design.misses.push(`Missing required text: ${text}`)

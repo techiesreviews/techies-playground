@@ -52,6 +52,8 @@ layout-A HTML report. See [the run guide](../design-runner.md).
 | Final full design pipeline | `kit go tools-417-final-proof -- node scripts/design-runner.mjs once` | Guard and report fixes preserve real run | `RESULT: ok design-runner go`; 18 valid blocks; both widths 100.00%; both testers completed | Private run `4aa54cd6-3fc9-4b1f-9f3b-6a1186f649ca` |
 | Final unit suite | `kit unit` | Full suite passes after review fixes | 390/390 in 43 files; final `kit build` passed at 0.13.4 | `.scratch/unit/20261123T130341-3961326.log` |
 | Final report | `kit go tools-417-final-shots -- node .scratch/tools-417-shots.mjs` | Final controls and images work at 1440/390 | Passed, including visible list-item disclosure markers, no overflow at normal/doubled body text | `.scratch/tools-417-shots/result-1440.png`, `.scratch/tools-417-shots/result-390.png` |
+| GPT second-look regression | `kit go tools-417-h2-red -- node .scratch/tools-417-h2.mjs` | Reproduce a valid native H2 rebuild stopping before testers | `RESULT: fail design-h2-regression stopped before testers`; the H1 wait timed out | `.scratch/kit-jobs/tools-417-h2-red/log` |
+| Real browser after heading fix | `kit go tools-417-h2-green -- node .scratch/tools-417-h2.mjs` | List the semantic miss and complete captures/testers | `RESULT: ok design-h2-regression native H2 reported as a miss; captures and both testers completed` | `.scratch/kit-jobs/tools-417-h2-green/log`, `.scratch/tools-417-h2-data/` |
 
 Private evidence root: `~/.local/share/techies-playground/design-tests/runs/a0c710a0-d35b-4d98-988d-e89295823f83/`.
 Query Monitor 4.1.1 returned six real collector observations, 18 queries, no PHP
@@ -75,6 +77,14 @@ Optional machine-status labels were also made readable. The optional plural head
 change was declined because it follows the approved layout-A prototype. The optional
 separate browser budgets were declined because this bounded proof intentionally has
 a total deadline; the final complete attempt finished in 67.4 seconds including AI.
+
+The GPT second look found that waiting for an H1 stopped valid native content with
+an H2 title before any tester could run. A real browser replay of the frozen AI tree,
+with only the title level changed to H2, reproduced the timeout. Readiness now waits
+for the post-content container and records the missing H1 as a semantic miss. The
+same real regression run then completed both captures, all Query Monitor observations
+and a native Code Profiler profile. It is explicitly a frozen-response regression
+check, not a claim of another AI generation. The affected unit suite still passed 13/13.
 
 ## Result
 
