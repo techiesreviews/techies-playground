@@ -101,6 +101,22 @@ export async function runOnce(root = DATA_DIRECTORY, execute = runBrowserProof, 
   return report
 }
 
+export async function measureHomepage(report, { prepare, request }) {
+  const capture = await prepare?.()
+  report.queryMonitor = { status: 'running', source: 'query-monitor', observations: [] }
+  for (let index = 0; index < 6; index++) {
+    const response = await request()
+    if (response.status !== 200) throw new Error(`Query Monitor target returned HTTP ${response.status}${response.redirect ? ` (redirect to ${new URL(response.redirect, PLAYGROUND).pathname})` : ''}.`)
+    const observation = parseMeasurement(response.text)
+    report.queryMonitor.observations.push({ phase: index === 0 ? 'cold' : 'warm', ...observation })
+    if (observation.source !== 'query-monitor') throw new Error('Query Monitor collectors missing; launcher fallback is not proof.')
+  }
+  const times = report.queryMonitor.observations.slice(1).map((value) => value.time).sort((a, b) => a - b)
+  Object.assign(report.queryMonitor, { status: 'completed', warmSeconds: { median: times[2], min: times[0], max: times[4] } })
+  console.log('Query Monitor: one cold + five warm collector observations saved.')
+  await capture?.()
+}
+
 export async function runBrowserProof(report, { beforeChecks } = {}) {
   const { chromium } = await import('playwright')
   const browser = await chromium.launch({ headless: true, chromiumSandbox: true })
@@ -145,23 +161,18 @@ export async function runBrowserProof(report, { beforeChecks } = {}) {
       const php = async (code) => page.evaluate(async (code) => (await window.proofClient.run({ code })).text, code)
       report.boot = { status: 'completed', ...JSON.parse(await php(`<?php require '/wordpress/wp-load.php'; require_once ABSPATH.'wp-admin/includes/plugin.php'; echo json_encode(['wordpress'=>get_bloginfo('version'),'php'=>PHP_VERSION,'plugins'=>array_map(fn($p)=>$p['Version'],get_plugins()),'active'=>get_option('active_plugins')]);`)) }
       console.log(`Booted WordPress ${report.boot.wordpress}, PHP ${report.boot.php}.`)
-      if (beforeChecks) await beforeChecks({ page, context, php })
-      report.queryMonitor = { status: 'running', source: 'query-monitor', observations: [] }
-      const homepage = await php(`<?php require '/wordpress/wp-load.php'; echo home_url('/');`)
-      for (let index = 0; index < 6; index++) {
-        const response = await page.evaluate(async (homepage) => {
-          const target = new URL(homepage); target.searchParams.set('techies-measure', '1')
-          const response = await window.proofClient.request({ url: target.href, method: 'GET' })
-          return { status: response.httpStatusCode, text: response.text, redirect: response.headers?.location?.[0] }
-        }, homepage)
-        if (response.status !== 200) throw new Error(`Query Monitor target returned HTTP ${response.status}${response.redirect ? ` (redirect to ${new URL(response.redirect, PLAYGROUND).pathname})` : ''}.`)
-        const observation = parseMeasurement(response.text)
-        report.queryMonitor.observations.push({ phase: index === 0 ? 'cold' : 'warm', ...observation })
-        if (observation.source !== 'query-monitor') throw new Error('Query Monitor collectors missing; launcher fallback is not proof.')
-      }
-      const times = report.queryMonitor.observations.slice(1).map((value) => value.time).sort((a, b) => a - b)
-      Object.assign(report.queryMonitor, { status: 'completed', warmSeconds: { median: times[2], min: times[0], max: times[4] } })
-      console.log('Query Monitor: one cold + five warm collector observations saved.')
+      let homepage
+      await measureHomepage(report, {
+        prepare: () => beforeChecks?.({ page, context, php }),
+        request: async () => {
+          homepage ??= await php(`<?php require '/wordpress/wp-load.php'; echo home_url('/');`)
+          return page.evaluate(async (homepage) => {
+            const target = new URL(homepage); target.searchParams.set('techies-measure', '1')
+            const response = await window.proofClient.request({ url: target.href, method: 'GET' })
+            return { status: response.httpStatusCode, text: response.text, redirect: response.headers?.location?.[0] }
+          }, homepage)
+        },
+      })
       report.codeProfiler = { status: 'running', tier: 'free', target: '/' }
       await page.evaluate(() => window.proofClient.goTo('/wp-admin/admin.php?page=code-profiler'))
       const frame = page.frameLocator('#site').frameLocator('iframe')

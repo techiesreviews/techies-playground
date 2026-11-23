@@ -34,6 +34,11 @@ subscription. `node scripts/design-runner.mjs enqueue`, then `once`, runs the re
 signed-in AI, Gutenberg serializer/REST/readback, captures and both testers without
 an open user tab. The 2026-11-23 proof and exact evidence are in
 `changes/2026-11-23-gutenberg-design-test.md`.
+`scripts/private-runner.test.mjs` also executes the actual measurement orchestration
+with injected requests: native save first, cold/five warm requests next, screenshot
+render last. A failed measurement must never start capture. The committed
+`scripts/design-runner-heading-check.mjs` exercises the real H2 browser regression
+with a saved AI response; see the run guide for its two private path arguments.
 
 The independent [private runner proof](private-runner.md) has queue-concurrency,
 partial-failure, permission, HTML-escaping and real-collector/artifact gate coverage in
@@ -42,7 +47,7 @@ Code Profiler compatibility. Run `node scripts/private-runner.mjs enqueue`, then
 `node scripts/private-runner.mjs once` for the separate, real headless attempt; retain
 its private reports and distinguish a completed profile from a no-go.
 
-The suite uses Node's built-in test runner and contains 390 tests in 43 files in the current working tree. `npm test` names its files (`src/**/*.test.js`, `scripts/*.test.mjs`), so a locally prepared `playground-host/dist` adds none.
+The suite uses Node's built-in test runner and contains 392 tests in 43 files in the current working tree. `npm test` names its files (`src/**/*.test.js`, `scripts/*.test.mjs`), so a locally prepared `playground-host/dist` adds none.
 
 Use the shared [Agent Kit](agents/agent-scripts.md): `scripts/agents/kit doctor`, `scripts/agents/kit unit` (the same files as `npm test`), and `scripts/agents/kit build`. The unit tests are Node tests only; browser specs and `kit shots` are not integrated. Real browser checks below use T3 separately and must not be inferred from the Node results.
 

@@ -54,6 +54,11 @@ layout-A HTML report. See [the run guide](../design-runner.md).
 | Final report | `kit go tools-417-final-shots -- node .scratch/tools-417-shots.mjs` | Final controls and images work at 1440/390 | Passed, including visible list-item disclosure markers, no overflow at normal/doubled body text | `.scratch/tools-417-shots/result-1440.png`, `.scratch/tools-417-shots/result-390.png` |
 | GPT second-look regression | `kit go tools-417-h2-red -- node .scratch/tools-417-h2.mjs` | Reproduce a valid native H2 rebuild stopping before testers | `RESULT: fail design-h2-regression stopped before testers`; the H1 wait timed out | `.scratch/kit-jobs/tools-417-h2-red/log` |
 | Real browser after heading fix | `kit go tools-417-h2-green -- node .scratch/tools-417-h2.mjs` | List the semantic miss and complete captures/testers | `RESULT: ok design-h2-regression native H2 reported as a miss; captures and both testers completed` | `.scratch/kit-jobs/tools-417-h2-green/log`, `.scratch/tools-417-h2-data/` |
+| Cold-order regression | `kit unit scripts/private-runner.test.mjs` | Reproduce screenshots warming the target before the labelled cold request | 5/7 passed, 2 failed; corrected order then passed 15/15 affected checks | `.scratch/unit/20261123T132035-4138663.log`, `.scratch/unit/20261123T132106-4139153.log` |
+| Corrected real AI pipeline | `kit go tools-417-cold-proof -- node scripts/design-runner.mjs once` | Cold/five warm measurements before captures; native rebuild and both testers complete | `RESULT: ok design-runner go`; measurement log precedes capture log; 18 valid blocks; both widths 100.00% | Private run `6dfe2937-d307-41ca-b50c-4d54170b74b8` |
+| Committed H2 regression | `kit go tools-417-cold-h2 -- node scripts/design-runner-heading-check.mjs /home/ubulex/.local/share/techies-playground/design-tests/runs/6dfe2937-d307-41ca-b50c-4d54170b74b8/answer.json .scratch/tools-417-committed-h2` | Corrected order, native H2 miss, both captures/testers | Passed | `.scratch/tools-417-committed-h2/runs/46b98cab-aed7-4955-a048-069db0f528ca/report.html` |
+| Corrected report screenshots | `kit go tools-417-cold-shots -- node .scratch/tools-417-shots.mjs` | Final report at 1440/390 with working images, tester links and disclosure markers | Passed; no overflow at normal/doubled body text and no page errors | `.scratch/tools-417-shots/result-1440.png`, `.scratch/tools-417-shots/result-390.png` |
+| Final full unit suite | `kit unit` | All checks including cold-order failures pass | 392/392 in 43 files | `.scratch/unit/20261123T132234-4141777.log` |
 
 Private evidence root: `~/.local/share/techies-playground/design-tests/runs/a0c710a0-d35b-4d98-988d-e89295823f83/`.
 Query Monitor 4.1.1 returned six real collector observations, 18 queries, no PHP
@@ -85,6 +90,25 @@ for the post-content container and records the missing H1 as a semantic miss. Th
 same real regression run then completed both captures, all Query Monitor observations
 and a native Code Profiler profile. It is explicitly a frozen-response regression
 check, not a claim of another AI generation. The affected unit suite still passed 13/13.
+
+The final landing gate found a separate measurement-order defect: earlier design
+runs rendered screenshots before the request labelled cold. Their saved images,
+native readback and profiler outcomes remain valid, but their first Query Monitor
+observation was already warmed; the cold label and associated cold-run claim are
+superseded by this correction. Preparation now returns a deferred capture callback.
+The tested orchestration saves the native page, measures its first frontend request
+and five warm requests, then captures it. Failure before six valid measurements
+never starts capture. A committed H2 replay CLI also replaces reliance on scratch
+code for reproducing the heading regression.
+
+The authoritative corrected full run is
+`~/.local/share/techies-playground/design-tests/runs/6dfe2937-d307-41ca-b50c-4d54170b74b8/`.
+It completed in 68.1 seconds including real signed-in Codex, saved 18 valid blocks,
+scored 100.00% at 1440/390, and listed three semantic/theme boundaries. Query Monitor
+measured its first frontend request at 0.103 s and five warm requests at median
+0.101 s (0.098–0.103 s). Code Profiler completed native profile `1795440132.7230`
+with three attribution rows. The final screenshot paths are regenerated from this
+corrected report; earlier numeric evidence above is retained as history.
 
 ## Result
 

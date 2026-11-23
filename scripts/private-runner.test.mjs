@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import { mkdtemp, readFile, stat, rm, readdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { enqueue, claim, runOnce, verdict, reportHTML } from './private-runner.mjs'
+import { enqueue, claim, runOnce, verdict, reportHTML, measureHomepage } from './private-runner.mjs'
+import { MEASURE_MARKER } from '../src/lib/checks.js'
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(tmpdir(), 'private-runner-'))
@@ -71,4 +72,34 @@ test('matches the real Code Profiler 1.9.6 artifact name from run e7783448', asy
   assert.equal(matchesProfilerArtifact('1795423599.1100', '1795423599.1100'), false)
   assert.equal(matchesProfilerArtifact('1795423599', stem), false)
   assert.equal(matchesProfilerArtifact('1795423599.1100', '1795423599.1100.'), false)
+})
+
+test('the saved homepage is measured cold then five times warm before screenshot rendering', async () => {
+  const events = []
+  const report = {}
+  await measureHomepage(report, {
+    prepare: async () => {
+      events.push('save-native-homepage')
+      return async () => events.push('render-homepage-and-capture')
+    },
+    request: async () => {
+      events.push('measure-homepage')
+      return { status: 200, text: `<!-- ${MEASURE_MARKER}${Buffer.from(JSON.stringify({ source: 'query-monitor', time: 0.1 })).toString('base64')} -->` }
+    },
+  })
+  assert.deepEqual(events, ['save-native-homepage', ...Array(6).fill('measure-homepage'), 'render-homepage-and-capture'])
+  assert.deepEqual(report.queryMonitor.observations.map((o) => o.phase), ['cold', ...Array(5).fill('warm')])
+  assert.equal(report.queryMonitor.status, 'completed')
+})
+
+test('a failed cold measurement never starts screenshots or fabricates completed observations', async () => {
+  let captures = 0
+  const report = {}
+  await assert.rejects(measureHomepage(report, {
+    prepare: async () => async () => { captures++ },
+    request: async () => ({ status: 503, text: 'unavailable' }),
+  }), /HTTP 503/)
+  assert.equal(captures, 0)
+  assert.equal(report.queryMonitor.status, 'running')
+  assert.equal(report.queryMonitor.observations.length, 0)
 })
