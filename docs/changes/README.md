@@ -33,7 +33,10 @@ Prefer, in order:
 
 ## Index
 
+- [2026-11-23-recipe-edit-sessions.md](2026-11-23-recipe-edit-sessions.md) — imports start separate edits; pending renames follow the last saved ID (TOOLS-374).
 - [2026-11-23-delayed-recipe-save-keeps-edit.md](2026-11-23-delayed-recipe-save-keeps-edit.md) — deferred saves and removals preserve the current edit and rename identity (TOOLS-374).
+- [2026-11-23-land-recipe-tabs-fix.md](2026-11-23-land-recipe-tabs-fix.md) — saved-recipe reconciliation rebased beside dev's shared ZIP queue (TOOLS-374).
+- [2026-11-19-recipe-tabs-and-picker-batches.md](2026-11-19-recipe-tabs-and-picker-batches.md) — original recipe and picker regression evidence, superseded by the November 23 records (TOOLS-374).
 - [2026-11-23-private-runner-proof.md](2026-11-23-private-runner-proof.md) — on-demand headless runner, private reports and genuine Query Monitor/free Code Profiler go/no-go proof (TOOLS-411).
 - [2026-11-22-mid-width-upload-control.md](2026-11-22-mid-width-upload-control.md) — saved upload labels stay icon-only below 1041 px; installed plugins with follow-up problems retain an accurate headline (TOOLS-403).
 - [2026-11-22-release-review-fixes.md](2026-11-22-release-review-fixes.md) — shared ZIP queue, compact upload states, preserved external tester selections, accurate post-install failures, and saved-site boot diagnosis (TOOLS-403).
