@@ -18,13 +18,13 @@ function normalizePackageSummary(item) {
   }
 }
 
-function normalizeSpinup(candidate) {
+function normalizeSpinup(candidate, fallbackId) {
   if (!candidate || typeof candidate !== 'object') throw new Error('Spin-up history entry must be an object.')
   const launchedAt = new Date(candidate.launchedAt)
   if (Number.isNaN(launchedAt.getTime())) throw new Error('Spin-up history entry has an invalid date.')
 
   return {
-    id: typeof candidate.id === 'string' && candidate.id ? candidate.id : crypto.randomUUID(),
+    id: typeof candidate.id === 'string' && candidate.id ? candidate.id : fallbackId || crypto.randomUUID(),
     launchedAt: launchedAt.toISOString(),
     recipe: validateRecipe(candidate.recipe),
     plugins: Array.isArray(candidate.plugins) ? candidate.plugins.map(normalizePackageSummary).filter(Boolean) : [],
@@ -48,9 +48,13 @@ export function parseSpinupHistory(serialized) {
   try {
     const parsed = JSON.parse(serialized)
     if (!Array.isArray(parsed)) throw new Error(SPINUP_HISTORY_READ_ERROR)
-    return keepLatestBrowserEnvironment(parsed.flatMap((candidate) => {
+    const ids = new Set(parsed.map((candidate) => candidate?.id))
+    return keepLatestBrowserEnvironment(parsed.flatMap((candidate, index) => {
       try {
-        return [normalizeSpinup(candidate)]
+        let fallbackId = `legacy-spinup-${index}`
+        while (ids.has(fallbackId)) fallbackId = `_${fallbackId}`
+        ids.add(fallbackId)
+        return [normalizeSpinup(candidate, fallbackId)]
       } catch {
         return []
       }

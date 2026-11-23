@@ -159,6 +159,7 @@ const CHANGELOG_ENTRIES = [
     changes: [
       'Opening Playground no longer rewrites launch history. Unreadable saved lists stay untouched, including when saving or importing a recipe or recording a launch.',
       'A short notice distinguishes an unreadable saved list from an empty one. Valid entries in readable lists still load when an individual entry is invalid.',
+      'Older past spin-ups without an ID can still be removed in one click.',
     ],
   },
   {
