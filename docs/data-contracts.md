@@ -94,6 +94,8 @@ Parsers treat malformed records as absent and drop individually invalid saved re
 
 Saved-recipe saves, imports, rename-updates and removals read the latest array immediately before writing, rather than persisting a tab's cached array from an effect. Web Locks serialize these read/modify/write operations across cooperating tabs where supported; browsers without Web Locks still read fresh storage, but simultaneous writes are not atomic. Storage events refresh the displayed library without writing it back. The record schema and normalized-name replacement rule are unchanged.
 
+`recipe-library.js` keeps row identities and per-record operation queues only in page memory. The identity follows successful renames and retains the observed record's serialized value; an older save/remove refuses to mutate a different value now stored at that ID. Selection resolves the resulting record, while external removal/clearing invalidates old identities. None of this adds fields to stored records or changes the draft/history schemas.
+
 ## Package vault IndexedDB
 
 - Database: `private-playground-launcher`.
