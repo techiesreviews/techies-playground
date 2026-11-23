@@ -45,6 +45,9 @@ the authenticated WordPress REST API saves it. The editor parses both generated
 and saved content, rejects invalid/freeform blocks, records the native inventory,
 then sets the saved page as the site's homepage. No HTML/code block or add-on block
 is allowed. The report preserves AI-reported limitations and missing required text.
+Homepage readiness waits for the saved post-content container, independently of the
+generated heading level. A missing H1 is a listed miss; it does not prevent captures
+or the two testers from examining an otherwise valid native rebuild.
 
 A usage-limit response saves `ai.status: paused` and a plain reason, without starting
 WordPress, retrying, changing accounts/models, or falling back to an API. A later
