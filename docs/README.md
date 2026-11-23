@@ -14,6 +14,9 @@ These documents are designed so an AI can understand, maintain, or rebuild Techi
 
 `license-helper.md` is a focused design note for a possible native Windows license companion. It is not part of the current application.
 
+`private-runner.md` describes the separate, on-demand TOOLS-411 compatibility proof,
+its fixed local queue and private reports. It adds no launcher page or background service.
+
 ## Sources of truth
 
 When documentation and implementation disagree, resolve the mismatch instead of silently picking one:

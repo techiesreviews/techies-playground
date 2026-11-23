@@ -12,6 +12,12 @@ Techies Playground has three important execution zones:
 
 There is no application server or shared data store.
 
+An independent [private runner proof](private-runner.md) is invoked only through
+`scripts/private-runner.mjs`. It claims fixed local jobs, creates fresh headless browser
+Playgrounds and writes private diagnostic reports in the user's data directory. It
+has no listener and is neither imported nor called by the launcher. The CLI does not
+replace the normal browser-local launch or access its stored sites and vaults.
+
 ## Module map and callers
 
 | Module | Responsibility | Main callers |
