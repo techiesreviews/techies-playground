@@ -26,7 +26,14 @@ For a deployment preparation, also run `npm run deploy:check`. Per the Release s
 
 ## Current automated suite
 
-The suite uses Node's built-in test runner and contains 347 tests in 40 files in the current working tree. `npm test` names its files (`src/**/*.test.js`, `scripts/*.test.mjs`), so a locally prepared `playground-host/dist` adds none.
+The independent [private runner proof](private-runner.md) has queue-concurrency,
+partial-failure, permission, HTML-escaping and real-collector/artifact gate coverage in
+`scripts/private-runner.test.mjs`. These unit checks do not prove hosted Playground or
+Code Profiler compatibility. Run `node scripts/private-runner.mjs enqueue`, then
+`node scripts/private-runner.mjs once` for the separate, real headless attempt; retain
+its private reports and distinguish a completed profile from a no-go.
+
+The suite uses Node's built-in test runner and contains 351 tests in 41 files in the current working tree. `npm test` names its files (`src/**/*.test.js`, `scripts/*.test.mjs`), so a locally prepared `playground-host/dist` adds none.
 
 Use the shared [Agent Kit](agents/agent-scripts.md): `scripts/agents/kit doctor`, `scripts/agents/kit unit` (the same files as `npm test`), and `scripts/agents/kit build`. The unit tests are Node tests only; browser specs and `kit shots` are not integrated. Real browser checks below use T3 separately and must not be inferred from the Node results.
 

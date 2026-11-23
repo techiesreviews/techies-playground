@@ -1,5 +1,19 @@
 # Data contracts and security boundaries
 
+## Independent private proof jobs
+
+The on-demand runner's local queue is separate from recipes and the browser's stores.
+A job contains only a generated UUID `id` and ISO `queuedAt`. There is no arbitrary
+recipe, URL, credential or package input. Atomic rename moves a complete job from
+`queued` to `running`; completion moves it to `finished`. Interrupted claims remain
+in `running` without automatic retry. This is a local claim, not a distributed lease.
+
+`~/.local/share/techies-playground/runs/<id>/report.json` has `schemaVersion: 1`, job,
+timestamps, runtime versions, stage statuses, measured data, optional blocker and
+`verdict` (`go` or `no-go`). Its escaped, self-contained `report.html` contains the same
+data. New directories use 0700; files use 0600. Profiler nonces, cookies and profiling
+keys are never copied into reports. See [private-runner.md](private-runner.md).
+
 ## Recipe schema version 1
 
 Recipes are the only supported portable configuration format. Unknown fields may be present on import but are discarded by normalization. Missing known fields receive current defaults.
