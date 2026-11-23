@@ -2004,7 +2004,6 @@ export default function App() {
   // null until the vault's key list has been read, so a launch never misses saved keys.
   const [licenseStorage, setLicenseStorage] = useState({ records: null, error: '', loading: true })
   const licenseStorageRef = useRef(licenseStorage)
-  licenseStorageRef.current = licenseStorage
   const licenseRecords = licenseStorage.records
   const licenseRecordsError = licenseStorage.error
   const licenseListUnavailable = (current = licenseStorage) => current.records === null || Boolean(current.error) || current.loading
@@ -2104,11 +2103,9 @@ export default function App() {
     const readId = licenseReadIdRef.current + 1
     licenseReadIdRef.current = readId
     const applyLicenseStorage = (update) => {
-      setLicenseStorage((current) => {
-        const next = typeof update === 'function' ? update(current) : update
-        licenseStorageRef.current = next
-        return next
-      })
+      const next = typeof update === 'function' ? update(licenseStorageRef.current) : update
+      licenseStorageRef.current = next
+      setLicenseStorage(next)
     }
     const failMessage = retry ? LICENSE_LIST_RETRY_ERROR : LICENSE_LIST_READ_ERROR
     applyLicenseStorage((current) => ({ ...current, loading: true }))

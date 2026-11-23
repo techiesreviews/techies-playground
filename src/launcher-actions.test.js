@@ -895,18 +895,75 @@ test('TOOLS-438: launch is blocked while a license refresh is still in flight an
   assert.equal(session.state.runtimeStarts.length, 1, 'uploaded-plugin launch proceeds once refresh settles')
 })
 
-test('TOOLS-438: deferred saved-recipe Start refuses to launch when a license refresh fails while waiting', async () => {
+test('TOOLS-438: deferred saved-recipe Start refuses to launch when a license refresh fails before React commits state', async () => {
   const localStorage = storage()
   await tab(localStorage).save({ name: 'Pro Stack', wordpress: '6.8', storage: 'temporary', plugins: ['sample-plugin'] })
   const locks = controlledLocks()
   const existing = [{ id: 'meta-1', pluginId: 'plugin:sample-plugin', name: 'Sample Plugin', createdAt: '2026-11-23T00:00:00.000Z' }]
-  const licenseSession = licenseTab(async () => { throw new Error('Read failed while waiting') }, existing)
-  const capturedLaunch = licenseSession.createLaunchHandler()
+  let shouldFail = true
+  const queuedStateUpdates = []
+  const licenseReadIdRef = { current: 0 }
+  const licenseStorageRef = { current: { records: existing, error: '', loading: false } }
+  let committedState = { records: existing, error: '', loading: false }
+  const runtimeStarts = []
+  const refreshScope = {
+    LICENSE_LIST_READ_ERROR,
+    LICENSE_LIST_RETRY_ERROR,
+    LICENSE_READ_TIMEOUT_MS: 10000,
+    listLicenseMetadata: async () => {
+      if (shouldFail) throw new Error('Read failed while waiting')
+      return existing
+    },
+    licenseReadIdRef,
+    licenseStorageRef,
+    // Simulate React batching: queue state updaters without running them until commit.
+    setLicenseStorage: (next) => { queuedStateUpdates.push(next) },
+  }
+  const commitReactState = () => {
+    while (queuedStateUpdates.length) {
+      const next = queuedStateUpdates.shift()
+      committedState = typeof next === 'function' ? next(committedState) : next
+    }
+  }
+  const makeLaunch = () => {
+    const launchAbortRef = { current: null }
+    const keysBlockLaunch = extractLicenseLaunchCheck()
+    const renderSnapshot = { ...committedState }
+    const runtime = {
+      ...recipes,
+      packagesWithSavedKeys: (records) => new Set((records || []).map((record) => record.pluginId)),
+      licenseRecords: renderSnapshot.records,
+      licenseRecordsError: renderSnapshot.error,
+      licenseStorageRef,
+      keysBlockLaunch: (target, current = renderSnapshot) => keysBlockLaunch(current)(target),
+      plugins: [{ id: 'sample-plugin', label: 'Sample Plugin' }],
+      themes: [],
+      resolveCheckPlugins: (recipe) => recipe,
+      launchIdRef: { current: 0 },
+      launchAbortRef,
+      launchedRecipeRef: { current: null },
+      savedKeyPackages: new Set((renderSnapshot.records || []).map((record) => record.pluginId)),
+      checksInSetup: () => [],
+      persistedSiteId: () => 'test-site',
+      createLauncherScope: () => 'test-scope',
+      readPersistedSites: () => new Set(),
+      isVaultSessionUnlocked: () => true,
+      PLAYGROUND_READY_TIMEOUT_MS: 1000,
+      startPlaygroundWithin: () => {
+        runtimeStarts.push(runtime.launchedRecipeRef.current)
+        return new Promise(() => {})
+      },
+    }
+    const launchSource = source.slice(source.indexOf('  async function launch('))
+    for (const setter of launchSource.match(/\bset[A-Z]\w+/g)) runtime[setter] = () => {}
+    return handler('launch', runtime)
+  }
   const a = tab(localStorage, locks)
   const original = a.state.records[0]
   await a.edit(original)
   await a.update({ siteTitle: 'Updated title' })
   const saving = a.saveCurrent()
+  const liveLaunch = makeLaunch()
   const startScope = {
     ...recipes,
     recipeEditRef: { current: 0 },
@@ -916,17 +973,28 @@ test('TOOLS-438: deferred saved-recipe Start refuses to launch when a license re
       await a.choose(original)
       return a.state.records[0]
     },
-    launch: capturedLaunch,
-    launchRef: { current: capturedLaunch },
+    launch: () => { throw new Error('stale launch closure must not be called') },
+    launchRef: { current: liveLaunch },
   }
   const starting = handler('startSavedRecipe', startScope)(original)
-  // A license refresh fails while Start waits for the pending save lock.
-  await licenseSession.refresh()
-  assert.equal(licenseSession.state.error, LICENSE_LIST_READ_ERROR)
+  // Refresh fails while Start waits for the save lock, and React has NOT committed queued state yet.
+  await handler('refreshLicenseRecords', refreshScope)()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  assert.equal(licenseStorageRef.current.error, LICENSE_LIST_READ_ERROR, 'ref updates synchronously before React commits')
   await locks.finishNext()
   await saving
   await starting
-  assert.equal(licenseSession.state.runtimeStarts.length, 0, 'deferred Start must read current license readiness and not launch after a failed refresh')
+  assert.equal(runtimeStarts.length, 0, 'deferred Start must block even before React commits the failed refresh state')
+
+  // Once React commits and a retry succeeds, a new deferred Start uses launchRef.current and launches.
+  commitReactState()
+  shouldFail = false
+  await handler('refreshLicenseRecords', refreshScope)()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  commitReactState()
+  startScope.launchRef.current = makeLaunch()
+  await handler('startSavedRecipe', startScope)(a.state.records[0])
+  assert.equal(runtimeStarts.length, 1, 'live launchRef.current runs once license state recovers')
 })
 
 test('TOOLS-438: a hung license list read times out to an error with retry and ignores late answers', async () => {
