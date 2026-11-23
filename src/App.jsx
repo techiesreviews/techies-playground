@@ -150,7 +150,18 @@ const DRAFT_KEY = 'private-playground-launcher:draft'
 const PERSISTED_SITES_KEY = persistedSitesKey(PLAYGROUND_ORIGIN)
 const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-storage-default-v1'
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
+const LICENSE_LIST_READ_ERROR = 'Saved license keys could not be read. Your saved keys were kept, and launch is paused so they are not skipped.'
 const CHANGELOG_ENTRIES = [
+  {
+    version: '0.13.6',
+    date: 'November 23, 2026',
+    title: 'License read errors keep your list and pause launch',
+    summary: 'If Playground cannot read saved license keys, it keeps the list and warns instead of launching without them.',
+    changes: [
+      'A read error keeps the previously loaded license list instead of hiding saved keys.',
+      'A clear error notice appears and launch pauses while saved license keys cannot be read, so launches do not silently skip saved keys.',
+    ],
+  },
   {
     version: '0.13.5',
     date: 'November 23, 2026',
@@ -842,7 +853,7 @@ function SavedRecipeRow({ record, active, editing, missingCount, keyCounts, star
               <span className="font-medium">{record.recipe.name}</span>
               <span className="text-neutral-600"> — {packageSummary}, WP {record.recipe.wordpress}, PHP {record.recipe.php}</span>
               {missingCount > 0 && <span className="text-amber-700"> — {missingCount} local ZIP{missingCount === 1 ? '' : 's'} missing</span>}
-              {keyCounts.total > 0 && (keyCounts.saved === keyCounts.total
+              {keyCounts.total > 0 && keyCounts.saved !== null && (keyCounts.saved === keyCounts.total
                 ? <span className="text-teal-700"> — keys ready</span>
                 : <span className="text-neutral-500"> — {keyCounts.total - keyCounts.saved} key{keyCounts.total - keyCounts.saved === 1 ? '' : 's'} missing</span>)}
             </span>
@@ -1630,7 +1641,7 @@ function KeyPlusIcon() {
   )
 }
 
-function PluginRow({ plugin, selected, installResult, keySaved, addingKey, onToggle, onReplace, onRemove, onAddKey, onCancelKey, onKeySaved, onKeysChanged }) {
+function PluginRow({ plugin, selected, installResult, keysLoaded = true, keySaved, addingKey, onToggle, onReplace, onRemove, onAddKey, onCancelKey, onKeySaved, onKeysChanged }) {
   const size = `${(plugin.size / 1024 / 1024).toFixed(1)} MB`
   const versionHint = plugin.versionHint || extractVersionHint(plugin.filename)
   const packageDetails = [versionHint && `version ${versionHint}`, size, 'stored only in this browser'].filter(Boolean).join(', ')
@@ -1648,7 +1659,7 @@ function PluginRow({ plugin, selected, installResult, keySaved, addingKey, onTog
         />
         {installResult && <p role="status" className={`text-pretty text-sm/6 ${installResult.status === 'active' ? 'text-teal-800' : 'text-red-700'}`}>{installResult.message}</p>}
       </div>
-      {!keySaved && !addingKey && (
+      {keysLoaded && !keySaved && !addingKey && (
         <button
           id={`add-key-button-${plugin.id}`}
           type="button"
@@ -1732,7 +1743,7 @@ function ThemeRow({ theme, selected, onSelect, onReplace, onRemove }) {
   )
 }
 
-function LaunchSummary({ recipe, selectedPackageLabel, selectedPluginLabels, keyCounts, checks, status, launchReady, error, onLaunch }) {
+function LaunchSummary({ recipe, selectedPackageLabel, selectedPluginLabels, keyCounts, checks, status, launchReady, error, licenseError = '', onLaunch }) {
   const stages = [
     ['Preparing WordPress', status.step > 0],
     ['Installing selected packages', status.step > 1],
@@ -1760,7 +1771,11 @@ function LaunchSummary({ recipe, selectedPackageLabel, selectedPluginLabels, key
           {keyCounts.total > 0 && (
             <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
               <dt className="shrink-0 font-medium text-neutral-900">Licenses</dt>
-              <dd className="flex-1 min-w-[min(100%,8rem)] text-right text-neutral-600 [overflow-wrap:anywhere]">{keyCounts.saved} of {keyCounts.total} keys saved</dd>
+              <dd className="flex-1 min-w-[min(100%,8rem)] text-right text-neutral-600 [overflow-wrap:anywhere]">
+                {keyCounts.saved === null
+                  ? (licenseError ? <span className="text-red-700">Could not be read</span> : 'Checking…')
+                  : `${keyCounts.saved} of ${keyCounts.total} keys saved`}
+              </dd>
             </div>
           )}
           <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
@@ -1802,7 +1817,10 @@ function LaunchSummary({ recipe, selectedPackageLabel, selectedPluginLabels, key
         </ol>
       )}
 
-      {error && <p role="alert" className="mx-6 mb-5 rounded-lg bg-red-50 p-3 text-base/7 text-red-800 ring-1 ring-red-700/15 sm:text-sm/6">{error}</p>}
+      <div role="alert" className="mx-6 mb-5 grid gap-2 rounded-lg bg-red-50 p-3 text-base/7 text-red-800 ring-1 ring-red-700/15 empty:hidden sm:text-sm/6">
+        {error && <p>{error}</p>}
+        {licenseError && licenseError !== error && <p>{licenseError}</p>}
+      </div>
 
       <div className="grid gap-3 px-6 pb-6 text-base/7 sm:text-sm/6">
         <div className="flex items-start gap-2">
@@ -1980,7 +1998,11 @@ export default function App() {
   const [error, setError] = useState('')
   const [wordpressVersionOptions, setWordPressVersionOptions] = useState(WORDPRESS_VERSION_FALLBACK_OPTIONS)
   // null until the vault's key list has been read, so a launch never misses saved keys.
-  const [licenseRecords, setLicenseRecords] = useState(null)
+  const [licenseStorage, setLicenseStorage] = useState({ records: null, error: '' })
+  const licenseRecords = licenseStorage.records
+  const licenseRecordsError = licenseStorage.error
+  const launchReady = licenseRecords !== null && !licenseRecordsError
+  const licenseReadIdRef = useRef(0)
   const [addingKeyFor, setAddingKeyFor] = useState('')
   const [unlockPending, setUnlockPending] = useState(false)
   const unlockResolveRef = useRef(null)
@@ -2015,7 +2037,7 @@ export default function App() {
   const savedKeyPackages = useMemo(() => packagesWithSavedKeys(licenseRecords || []), [licenseRecords])
   const keyCountsFor = (candidate) => ({
     total: candidate.plugins.length,
-    saved: candidate.plugins.filter((id) => savedKeyPackages.has(`plugin:${id}`)).length,
+    saved: licenseRecords === null ? null : candidate.plugins.filter((id) => savedKeyPackages.has(`plugin:${id}`)).length,
   })
   const activeChecks = useMemo(() => checksInSetup(recipe), [recipe])
   const fillResults = useMemo(() => new Map(licenseFill.map((result) => [result.vaultId, result])), [licenseFill])
@@ -2071,7 +2093,19 @@ export default function App() {
   }, [])
 
   function refreshLicenseRecords() {
-    listLicenseMetadata().then(setLicenseRecords).catch(() => setLicenseRecords([]))
+    const readId = licenseReadIdRef.current + 1
+    licenseReadIdRef.current = readId
+    return listLicenseMetadata()
+      .then((records) => {
+        if (readId !== licenseReadIdRef.current) return null
+        setLicenseStorage({ records, error: '' })
+        return records
+      })
+      .catch(() => {
+        if (readId !== licenseReadIdRef.current) return null
+        setLicenseStorage((current) => ({ ...current, error: LICENSE_LIST_READ_ERROR }))
+        return null
+      })
   }
 
   useEffect(() => {
@@ -2766,7 +2800,7 @@ export default function App() {
   }
 
   async function launch(candidate = recipe) {
-    if (licenseRecords === null) return
+    if (licenseRecords === null || licenseRecordsError) return
     const missingPlugins = candidate.plugins.filter((id) => !plugins.some((plugin) => plugin.id === id))
     if (missingPlugins.length) {
       setError(`Import the missing ZIP${missingPlugins.length === 1 ? '' : 's'} first: ${missingPlugins.join(', ')}`)
@@ -3239,6 +3273,11 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                   {savedRecipeStorage.error && <p>{savedRecipeStorage.error}</p>}
                   {historyStorage.error && <p>{historyStorage.error}</p>}
                 </div>
+                {licenseRecordsError && (
+                  <p className={`${savedRecipeStorage.error || historyStorage.error ? 'pt-1' : '[padding-block-start:--spacing(3)]'} text-pretty text-base/7 text-red-700 sm:text-sm/6`}>
+                    {licenseRecordsError}
+                  </p>
+                )}
 
                 {selectionMode === 'recipes' ? (
                   <div className="pt-5">
@@ -3252,7 +3291,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                             editing={editingSavedId === record.id}
                             missingCount={record.recipe.plugins.filter((id) => !plugins.some((plugin) => plugin.id === id)).length + (record.recipe.theme && !themes.some((theme) => theme.id === record.recipe.theme) ? 1 : 0)}
                             keyCounts={keyCountsFor(record.recipe)}
-                            starting={status.running || licenseRecords === null}
+                            starting={status.running || !launchReady}
                             onChoose={chooseSavedRecipe}
                             onStart={startSavedRecipe}
                             onEdit={editSavedRecipe}
@@ -3464,6 +3503,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                                 plugin={plugin}
                                 selected={recipe.plugins.includes(plugin.id)}
                                 installResult={pluginInstallResults[plugin.id]}
+                                keysLoaded={licenseRecords !== null}
                                 keySaved={savedKeyPackages.has(`plugin:${plugin.id}`)}
                                 addingKey={addingKeyFor === plugin.id}
                                 onToggle={togglePlugin}
@@ -3613,7 +3653,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                   <button
                     ref={launchButtonRef}
                     type="submit"
-                    disabled={status.running || licenseRecords === null}
+                    disabled={status.running || !launchReady}
                     className="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 py-2.5 pr-4 pl-2.5 text-sm/5 font-medium text-white ring-1 ring-teal-700 hover:bg-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <PlayIcon className="size-4 shrink-0 fill-white" />
@@ -3649,8 +3689,9 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
             keyCounts={keyCountsFor(recipe)}
             checks={activeChecks}
             status={status}
-            launchReady={licenseRecords !== null}
+            launchReady={launchReady}
             error={error}
+            licenseError={licenseRecordsError}
             onLaunch={() => launch()}
           />
         </div>
