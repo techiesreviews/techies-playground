@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import * as savedRecipes from './lib/saved-recipes.js'
+import { createRecipeLibrary } from './lib/recipe-library.js'
 import * as recipes from './lib/recipe.js'
 import { markPluginSelected } from './lib/plugin-preferences.js'
 import { BlobWriter, TextReader, ZipWriter } from '@zip.js/zip.js'
@@ -12,45 +13,92 @@ import { selectUploadedPlugin } from './lib/checks.js'
 // This tests orchestration (including the former persistence effect), without pretending to render JSX.
 const source = readFileSync(new URL('./App.jsx', import.meta.url), 'utf8')
 function handler(name, scope) {
-  const start = source.search(new RegExp(`^  (?:async )?function ${name}\\(`, 'm'))
-  assert.ok(start >= 0, `${name} exists`)
-  const end = source.indexOf('\n  }', start) + 4
+  const match = source.match(new RegExp(`^( +)(?:async )?function ${name}\\(`, 'm'))
+  assert.ok(match, `${name} exists`)
+  const start = match.index
+  const end = source.indexOf(`\n${match[1]}}`, start) + match[1].length + 2
   return Function(...Object.keys(scope), `return (${source.slice(start, end)})`)(...Object.values(scope))
 }
 function storage() {
   const values = new Map()
-  return { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) }
+  let writes = 0
+  return {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => { writes += 1; values.set(key, value) },
+    removeItem: (key) => values.delete(key), clear: () => values.clear(),
+    get writes() { return writes },
+  }
 }
 function tab(localStorage, locks) {
+  const library = createRecipeLibrary(localStorage, locks)
   const state = {
-    records: savedRecipes.parseSavedRecipes(localStorage.getItem(savedRecipes.SAVED_RECIPES_KEY)),
+    records: library.snapshot(),
     recipe: recipes.validateRecipe({ name: 'Draft' }),
-    activeSavedId: '', editingSavedId: '', selectionMode: 'plugins',
+    activeSavedId: '', editingSavedId: '', selectionMode: 'plugins', exports: [], launches: [],
   }
   const scope = {
     ...savedRecipes, ...recipes, localStorage,
-    recipe: state.recipe, recipeEditRef: { current: 0 }, recipeSessionRef: { current: { savedId: '' } },
+    recipe: state.recipe, recipeEditRef: { current: 0 }, recipeSessionRef: { current: { entry: { id: '' } } },
+    recipeLibraryRef: { current: library },
     updateSavedRecipes: (store, update) => savedRecipes.updateSavedRecipes(store, update, locks),
     setRecipe: (next) => { scope.recipe = state.recipe = typeof next === 'function' ? next(state.recipe) : next },
     setSavedRecipes: (next) => { state.records = typeof next === 'function' ? next(state.records) : next },
-    setActiveSavedId: (id) => { scope.activeSavedId = state.activeSavedId = id },
-    setEditingSavedId: (id) => { scope.editingSavedId = state.editingSavedId = id },
+    setActiveSavedId: (next) => { scope.activeSavedId = state.activeSavedId = typeof next === 'function' ? next(state.activeSavedId) : next },
+    setEditingSavedId: (next) => { scope.editingSavedId = state.editingSavedId = typeof next === 'function' ? next(state.editingSavedId) : next },
     setSelectionMode: (mode) => { state.selectionMode = mode },
     setActiveSpinupId() {},
     activeSavedId: '', editingSavedId: '', setError: (error) => { state.error = error },
+    downloadRecipe: (recipe) => state.exports.push(structuredClone(recipe)),
+    launch: (recipe) => state.launches.push(structuredClone(recipe)),
   }
   scope.saveRecipeToLibrary = (...args) => handler('saveRecipeToLibrary', scope)(...args)
+  scope.applySavedRecipes = (records) => handler('applySavedRecipes', scope)(records)
   scope.stopEditingRecipe = () => handler('stopEditingRecipe', scope)()
+  scope.loadSavedRecipe = (...args) => handler('loadSavedRecipe', scope)(...args)
+  scope.chooseSavedRecipe = (...args) => handler('chooseSavedRecipe', scope)(...args)
+  scope.refreshSavedRecipes = (...args) => handler('refreshSavedRecipes', scope)(...args)
+  const listeners = new Map()
+  const window = {
+    addEventListener: (name, callback) => listeners.set(name, callback),
+    removeEventListener: (name, callback) => { if (listeners.get(name) === callback) listeners.delete(name) },
+  }
+  const storageListener = source.indexOf("window.addEventListener('storage'")
+  const effectStart = source.lastIndexOf('  useEffect(() => {', storageListener)
+  const effectBody = source.slice(source.indexOf('{', effectStart) + 1, source.indexOf('\n  }, [])', storageListener))
+  const cleanup = Function(...Object.keys(scope), 'window', effectBody)(...Object.values(scope), window)
   const persistEffect = source.match(/useEffect\(\(\) => \{\n(    localStorage.setItem\(SAVED_RECIPES_KEY,[\s\S]*?)\n  }, \[savedRecipes\]\)/)?.[1]
   async function run(name, ...args) {
-    await handler(name, scope)(...args)
+    const result = await handler(name, scope)(...args)
     if (persistEffect) Function('localStorage', 'savedRecipes', ...Object.keys(savedRecipes), persistEffect)(localStorage, state.records, ...Object.values(savedRecipes))
+    return result
   }
   return {
-    state, save: (...args) => run('saveRecipeToLibrary', ...args), remove: (id) => run('removeSavedRecipe', id),
+    state, save: (...args) => run('saveRecipeToLibrary', ...args),
+    remove: (id) => run('removeSavedRecipe', id, state.records.find((record) => record.id === id)),
     edit: (record) => run('editSavedRecipe', record), update: (patch) => run('updateRecipe', patch),
+    choose: (record) => run('chooseSavedRecipe', record), start: (record) => run('startSavedRecipe', record),
+    export: () => run('handleRecipeExport'),
+    storageEvent: (event) => listeners.get('storage')?.(event), cleanup,
     saveCurrent: () => run('handleSaveRecipe'),
     importRecipe: (recipe) => run('handleRecipeImport', { target: { files: [{ text: async () => JSON.stringify(recipe) }], value: 'recipe.json' } }),
+  }
+}
+
+function controlledLocks() {
+  const requests = []
+  const waiting = []
+  return {
+    request(name, write) {
+      assert.equal(name, savedRecipes.SAVED_RECIPES_KEY)
+      return new Promise((resolve, reject) => {
+        requests.push(() => { try { resolve(write()) } catch (error) { reject(error) } })
+        waiting.shift()?.()
+      })
+    },
+    async finishNext() {
+      if (!requests.length) await new Promise((resolve) => waiting.push(resolve))
+      requests.shift()()
+    },
   }
 }
 
@@ -193,6 +241,268 @@ for (const queued of [false, true]) {
     assert.deepEqual(tab(localStorage).state.records.map((record) => record.id), ['final'])
   })
 }
+
+test('PG-01: Remove follows a pending rename and deletes its resulting ID', async () => {
+  const localStorage = storage()
+  await tab(localStorage).save({ name: 'Original' })
+  const locks = controlledLocks()
+  const a = tab(localStorage, locks)
+  await a.edit(a.state.records[0])
+  await a.update({ name: 'Renamed' })
+  const saving = a.saveCurrent()
+  const removing = a.remove('original')
+  await locks.finishNext()
+  await saving
+  await locks.finishNext()
+  await removing
+  assert.deepEqual(a.state.records, [])
+  assert.deepEqual(tab(localStorage).state.records, [])
+  assert.equal(a.state.editingSavedId, '')
+  assert.equal(a.state.activeSavedId, '')
+})
+
+for (const action of ['choose', 'edit', 'start']) {
+  test(`PG-01: ${action} follows the resulting record of a pending rename`, async () => {
+    const localStorage = storage()
+    await tab(localStorage).save({ name: 'Original', siteTitle: 'Old title' })
+    const locks = controlledLocks()
+    const a = tab(localStorage, locks)
+    const original = a.state.records[0]
+    await a.edit(original)
+    await a.update({ name: 'Renamed', siteTitle: 'Saved title' })
+    const saving = a.saveCurrent()
+    const acting = a[action](original)
+    await locks.finishNext()
+    await saving
+    await acting
+    assert.equal(a.state.recipe.name, 'Renamed')
+    assert.equal(a.state.recipe.siteTitle, 'Saved title')
+    assert.equal(a.state.activeSavedId, 'renamed')
+    if (action === 'edit') {
+      assert.equal(a.state.editingSavedId, 'renamed')
+      await a.update({ name: 'Final' })
+      const savingFinal = a.saveCurrent()
+      await locks.finishNext()
+      await savingFinal
+      assert.deepEqual(tab(localStorage).state.records.map((record) => record.id), ['final'])
+    }
+    if (action === 'start') assert.equal(a.state.launches[0].name, 'Renamed')
+    if (action === 'choose') {
+      await a.update({ name: 'Copy of renamed' })
+      const savingCopy = a.saveCurrent()
+      await locks.finishNext()
+      await savingCopy
+      assert.deepEqual(tab(localStorage).state.records.map((record) => record.id), ['copy-of-renamed', 'renamed'])
+    }
+  })
+}
+
+test('PG-01: typing after a queued selection keeps the newer draft', async () => {
+  const localStorage = storage()
+  await tab(localStorage).save({ name: 'Original' })
+  const locks = controlledLocks()
+  const a = tab(localStorage, locks)
+  const original = a.state.records[0]
+  await a.edit(original)
+  await a.update({ name: 'Renamed' })
+  const saving = a.saveCurrent()
+  const selecting = a.choose(original)
+  await a.update({ siteTitle: 'Keep this newer edit' })
+  await locks.finishNext()
+  await saving
+  await selecting
+  assert.equal(a.state.recipe.name, 'Renamed')
+  assert.equal(a.state.recipe.siteTitle, 'Keep this newer edit')
+})
+
+test('PG-01: editing a row queued for removal does not retain its deleted identity', async () => {
+  const localStorage = storage()
+  await tab(localStorage).save({ name: 'Original' })
+  const locks = controlledLocks()
+  const a = tab(localStorage, locks)
+  const original = a.state.records[0]
+  await a.edit(original)
+  const removing = a.remove('original')
+  const editing = a.edit(original)
+  await locks.finishNext()
+  await removing
+  await editing
+  assert.equal(a.state.editingSavedId, '')
+  assert.deepEqual(tab(localStorage).state.records, [])
+})
+
+for (const cleared of [false, true]) {
+  test(`PG-01: an external ${cleared ? 'clear' : 'deletion'} during a pending rename is never undone`, async () => {
+    const localStorage = storage()
+    await tab(localStorage).save({ name: 'Original' })
+    const locks = controlledLocks()
+    const a = tab(localStorage, locks)
+    await a.edit(a.state.records[0])
+    await a.update({ name: 'Renamed' })
+    const saving = a.saveCurrent()
+    if (cleared) localStorage.clear()
+    else localStorage.setItem(savedRecipes.SAVED_RECIPES_KEY, '[]')
+    const refreshing = a.storageEvent({ storageArea: localStorage, key: cleared ? null : savedRecipes.SAVED_RECIPES_KEY })
+    await locks.finishNext()
+    await saving
+    await refreshing
+    assert.deepEqual(a.state.records, [])
+    assert.deepEqual(tab(localStorage).state.records, [])
+    assert.equal(a.state.editingSavedId, '')
+    assert.equal(a.state.activeSavedId, '')
+  })
+}
+
+test('PG-01: storage refresh follows pending saves and never echoes or handles unrelated events', async () => {
+  const localStorage = storage()
+  await tab(localStorage).save({ name: 'Original' })
+  const locks = controlledLocks()
+  const a = tab(localStorage, locks)
+  await a.edit(a.state.records[0])
+  await a.update({ name: 'Renamed' })
+  const saving = a.saveCurrent()
+  await tab(localStorage).save({ name: 'Other tab' })
+  const refreshing = a.storageEvent({ storageArea: localStorage, key: savedRecipes.SAVED_RECIPES_KEY })
+  await locks.finishNext()
+  await saving
+  const writes = localStorage.writes
+  await refreshing
+  assert.equal(localStorage.writes, writes)
+  assert.deepEqual(a.state.records.map((record) => record.id), ['renamed', 'other-tab'])
+  localStorage.setItem(savedRecipes.SAVED_RECIPES_KEY, '[]')
+  await a.storageEvent({ storageArea: localStorage, key: 'unrelated' })
+  await a.storageEvent({ storageArea: storage(), key: savedRecipes.SAVED_RECIPES_KEY })
+  assert.equal(a.state.records.length, 2)
+  a.cleanup()
+  await a.storageEvent({ storageArea: localStorage, key: savedRecipes.SAVED_RECIPES_KEY })
+  assert.equal(a.state.records.length, 2, 'cleanup removes the actual listener')
+})
+
+test('PG-01: export during a pending save exports the current draft, without mutating the library', async () => {
+  const localStorage = storage()
+  await tab(localStorage).save({ name: 'Original' })
+  const locks = controlledLocks()
+  const a = tab(localStorage, locks)
+  await a.edit(a.state.records[0])
+  await a.update({ name: 'First' })
+  const saving = a.saveCurrent()
+  await a.update({ name: 'Exported draft' })
+  const writes = localStorage.writes
+  await a.export()
+  assert.equal(a.state.exports[0].name, 'Exported draft')
+  assert.equal(localStorage.writes, writes)
+  await locks.finishNext()
+  await saving
+  assert.equal(a.state.exports[0].name, 'Exported draft')
+})
+
+for (const action of ['save', 'remove']) {
+  test(`PG-01: a pending ${action} never overwrites another tab's replacement at the same ID`, async () => {
+    const localStorage = storage()
+    await tab(localStorage).save({ name: 'Original', siteTitle: 'Original record' })
+    const locks = controlledLocks()
+    const a = tab(localStorage, locks)
+    await a.edit(a.state.records[0])
+    await a.update({ name: 'Renamed' })
+    const acting = action === 'save' ? a.saveCurrent() : a.remove('original')
+    await tab(localStorage).save({ name: 'Original', siteTitle: 'Other tab replacement' })
+    await locks.finishNext()
+    await acting
+    const records = tab(localStorage).state.records
+    assert.deepEqual(records.map((record) => record.id), ['original'])
+    assert.equal(records[0].recipe.siteTitle, 'Other tab replacement')
+  })
+}
+
+test('PG-01: Remove follows the old row when an import reuses its previous name', async () => {
+  const localStorage = storage()
+  await tab(localStorage).save({ name: 'Original', siteTitle: 'Old record' })
+  const locks = controlledLocks()
+  const a = tab(localStorage, locks)
+  await a.edit(a.state.records[0])
+  await a.update({ name: 'Renamed' })
+  const saving = a.saveCurrent()
+  const removing = a.remove('original')
+  const importing = a.importRecipe({ name: 'Original', siteTitle: 'Imported record' })
+  await locks.finishNext()
+  await saving
+  await locks.finishNext()
+  await locks.finishNext()
+  await Promise.all([importing, removing])
+  const records = tab(localStorage).state.records
+  assert.deepEqual(records.map((record) => record.id), ['original'])
+  assert.equal(records[0].recipe.siteTitle, 'Imported record')
+})
+
+test('PG-01: an external clear cancels a new draft first save waiting for its lock', async () => {
+  const localStorage = storage()
+  const locks = controlledLocks()
+  const a = tab(localStorage, locks)
+  await a.update({ name: 'New draft' })
+  const saving = a.saveCurrent()
+  localStorage.clear()
+  const refreshing = a.storageEvent({ storageArea: localStorage, key: null })
+  await locks.finishNext()
+  await saving
+  await refreshing
+  assert.deepEqual(a.state.records, [])
+  assert.deepEqual(tab(localStorage).state.records, [])
+  assert.equal(a.state.recipe.name, 'New draft', 'the unsaved draft remains available')
+})
+
+test('PG-01: a save queued after removal never recreates the removed identity', async () => {
+  const localStorage = storage()
+  await tab(localStorage).save({ name: 'Original' })
+  const locks = controlledLocks()
+  const a = tab(localStorage, locks)
+  await a.edit(a.state.records[0])
+  await a.update({ name: 'Renamed' })
+  const saving = a.saveCurrent()
+  const removing = a.remove('original')
+  await a.update({ siteTitle: 'Keep this unsaved draft' })
+  const lateSave = a.saveCurrent()
+  await locks.finishNext()
+  await saving
+  await locks.finishNext()
+  await removing
+  await locks.finishNext()
+  await lateSave
+  assert.deepEqual(tab(localStorage).state.records, [])
+  assert.equal(a.state.recipe.siteTitle, 'Keep this unsaved draft')
+  assert.equal(a.state.editingSavedId, '')
+  assert.match(a.state.error, /removed/)
+})
+
+test('PG-01: failed save and removal preserve storage, and their queues allow retry', async () => {
+  const localStorage = storage()
+  await tab(localStorage).save({ name: 'Original' })
+  // Avoid the observed Node native-lock hang after a throwing callback; test the rejected lock promise directly.
+  const a = tab(localStorage, { request: async (_name, write) => write() })
+  await a.edit(a.state.records[0])
+  await a.update({ name: 'First' })
+  const setItem = localStorage.setItem
+  let fail = true
+  localStorage.setItem = (...args) => {
+    if (fail) { fail = false; throw new Error('The quota has been exceeded.') }
+    setItem(...args)
+  }
+  await a.saveCurrent()
+  assert.match(a.state.error, /quota/)
+  assert.deepEqual(tab(localStorage).state.records.map((record) => record.id), ['original'])
+  assert.equal(a.state.editingSavedId, 'original')
+  await a.saveCurrent()
+  assert.deepEqual(tab(localStorage).state.records.map((record) => record.id), ['first'])
+  await a.edit(a.state.records[0])
+  fail = true
+  await a.remove('first')
+  assert.match(a.state.error, /quota/)
+  assert.deepEqual(a.state.records.map((record) => record.id), ['first'])
+  assert.deepEqual(tab(localStorage).state.records.map((record) => record.id), ['first'])
+  await a.remove('first')
+  assert.deepEqual(tab(localStorage).state.records, [])
+  assert.equal(a.state.editingSavedId, '')
+  assert.equal(a.state.activeSavedId, '')
+})
 
 for (const type of ['plugin', 'theme']) {
   test(`PG-02: ${type} picker imports valid ZIPs after invalid files and resets for retry`, async () => {

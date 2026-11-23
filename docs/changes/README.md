@@ -33,6 +33,7 @@ Prefer, in order:
 
 ## Index
 
+- [2026-11-23-recipe-id-actions.md](2026-11-23-recipe-id-actions.md) — all saved-row actions follow pending renames; external replacement and clearing cannot redirect old actions (TOOLS-374).
 - [2026-11-23-recipe-edit-sessions.md](2026-11-23-recipe-edit-sessions.md) — imports start separate edits; pending renames follow the last saved ID (TOOLS-374).
 - [2026-11-23-delayed-recipe-save-keeps-edit.md](2026-11-23-delayed-recipe-save-keeps-edit.md) — deferred saves and removals preserve the current edit and rename identity (TOOLS-374).
 - [2026-11-23-land-recipe-tabs-fix.md](2026-11-23-land-recipe-tabs-fix.md) — saved-recipe reconciliation rebased beside dev's shared ZIP queue (TOOLS-374).

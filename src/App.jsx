@@ -53,13 +53,8 @@ import {
 import { fetchFeaturedWordPressOrgPlugins, searchWordPressOrgPlugins } from './lib/wordpress-org-plugins'
 import { searchWordPressOrgThemes } from './lib/wordpress-org-themes'
 import { fetchGitHubRepositoryStars } from './lib/github-repository'
-import {
-  parseSavedRecipes,
-  replaceSavedRecipe,
-  SAVED_RECIPES_KEY,
-  updateSavedRecipes,
-  upsertSavedRecipe,
-} from './lib/saved-recipes'
+import { SAVED_RECIPES_KEY } from './lib/saved-recipes'
+import { createRecipeLibrary } from './lib/recipe-library'
 import {
   forgetPluginRecency,
   markPluginSelected,
@@ -163,7 +158,7 @@ const CHANGELOG_ENTRIES = [
     summary: 'Saving or removing a recipe uses the latest library, so another open tab cannot erase newer recipes.',
     changes: [
       'Recipe saves, renames and removals read the current browser library before writing. Other open tabs refresh their lists automatically.',
-      'A save that finishes late keeps your current edit. Consecutive renames replace the last saved name, and imports never update a different recipe you were editing.',
+      'A save that finishes late keeps your current edit. Opening, editing, starting or removing a recipe follows a pending rename. Imports keep their own identity, and changes made in another tab are protected.',
     ],
   },
   {
@@ -853,7 +848,7 @@ function SavedRecipeRow({ record, active, editing, missingCount, keyCounts, star
         <button
           type="button"
           aria-label={`Remove ${record.recipe.name} from saved recipes`}
-          onClick={() => onRemove(record.id)}
+          onClick={() => onRemove(record.id, record)}
           className="absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-red-700 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 pointer-fine:pointer-events-none pointer-fine:opacity-0 pointer-fine:group-hover:pointer-events-auto pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:pointer-events-auto pointer-fine:group-focus-within:opacity-100"
         >
           <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
@@ -1947,9 +1942,9 @@ export default function App() {
     localStorage.setItem(STORAGE_DEFAULT_MIGRATION_KEY, '1')
     return migratedRecipe
   })
-  const [savedRecipes, setSavedRecipes] = useState(() => {
-    return parseSavedRecipes(localStorage.getItem(SAVED_RECIPES_KEY))
-  })
+  const recipeLibraryRef = useRef(null)
+  recipeLibraryRef.current ??= createRecipeLibrary(localStorage)
+  const [savedRecipes, setSavedRecipes] = useState(() => recipeLibraryRef.current.snapshot())
   const [spinupHistory, setSpinupHistory] = useState(() => parseSpinupHistory(localStorage.getItem(SPINUP_HISTORY_KEY)))
   const [selectionMode, setSelectionMode] = useState(() => savedRecipes.length ? 'recipes' : 'plugins')
   const [activeSavedId, setActiveSavedId] = useState(() => (
@@ -1957,7 +1952,7 @@ export default function App() {
   ))
   const [editingSavedId, setEditingSavedId] = useState('')
   const recipeEditRef = useRef(0)
-  const recipeSessionRef = useRef({ savedId: '' })
+  const recipeSessionRef = useRef({ entry: { id: '' } })
   const [activeSpinupId, setActiveSpinupId] = useState('')
   const [replacementPluginId, setReplacementPluginId] = useState('')
   const [replacementThemeId, setReplacementThemeId] = useState('')
@@ -2146,11 +2141,6 @@ export default function App() {
   }, [recipe])
 
   useEffect(() => {
-    function refreshSavedRecipes(event) {
-      if (event.storageArea === localStorage && (event.key === SAVED_RECIPES_KEY || event.key === null)) {
-        setSavedRecipes(parseSavedRecipes(localStorage.getItem(SAVED_RECIPES_KEY)))
-      }
-    }
     window.addEventListener('storage', refreshSavedRecipes)
     return () => window.removeEventListener('storage', refreshSavedRecipes)
   }, [])
@@ -2186,35 +2176,40 @@ export default function App() {
     setRecipe((current) => ({ ...current, ...patch }))
   }
 
-  async function saveRecipeToLibrary(candidate, replaceId = '', session = { savedId: replaceId }) {
+  function applySavedRecipes(records) {
+    setSavedRecipes(records)
+    const ids = new Set(records.map((record) => record.id))
+    setActiveSavedId((id) => ids.has(id) ? id : '')
+    setEditingSavedId((id) => ids.has(id) ? id : '')
+    const entry = recipeSessionRef.current.entry
+    if (recipeLibraryRef.current.isRemoved(entry) || (entry.id && !ids.has(entry.id))) {
+      recipeSessionRef.current = { entry: { id: '' } }
+      setEditingSavedId('')
+    }
+  }
+
+  async function refreshSavedRecipes(event) {
+    if (event.storageArea !== localStorage || (event.key !== SAVED_RECIPES_KEY && event.key !== null)) return
+    try {
+      applySavedRecipes(await recipeLibraryRef.current.refresh(event.key === null))
+    } catch (caught) {
+      setError(caught.message)
+    }
+  }
+
+  async function saveRecipeToLibrary(candidate, replaceId = '', session = { entry: { id: replaceId } }) {
     const edit = recipeEditRef.current
     const safeRecipe = validateRecipe(candidate)
     const id = normalizePluginId(safeRecipe.name) || 'recipe'
-    const write = async () => {
-      const records = await updateSavedRecipes(localStorage, (current) => {
-        const savedId = session.savedId || replaceId
-        return savedId ? replaceSavedRecipe(current, savedId, safeRecipe) : upsertSavedRecipe(current, safeRecipe)
-      })
-      session.savedId = id
-      return records
-    }
-    // Finish each rename before the next save reads this session's saved ID; a failed save can be retried.
-    const pending = session.pending ? session.pending.then(write, write) : write()
-    session.pending = pending
-    let records
-    try {
-      records = await pending
-    } finally {
-      if (session.pending === pending) session.pending = null
-    }
-    setSavedRecipes(records)
+    const records = await recipeLibraryRef.current.save(safeRecipe, session.entry)
+    applySavedRecipes(records)
     if (recipeSessionRef.current !== session) return
     if (recipeEditRef.current !== edit) {
-      setEditingSavedId(session.savedId)
+      setEditingSavedId(session.entry.id)
       return
     }
     recipeEditRef.current += 1
-    recipeSessionRef.current = { savedId: '' }
+    recipeSessionRef.current = { entry: { id: '' } }
     setActiveSavedId(id)
     setEditingSavedId('')
     setSelectionMode('recipes')
@@ -2225,6 +2220,7 @@ export default function App() {
       setError('')
       await saveRecipeToLibrary(recipe, editingSavedId, recipeSessionRef.current)
     } catch (caught) {
+      applySavedRecipes(recipeLibraryRef.current.snapshot())
       setError(caught instanceof Error ? caught.message : 'Review the recipe settings before saving.')
     }
   }
@@ -2448,7 +2444,7 @@ export default function App() {
       const warning = externalSetupMessage(imported)
       if (warning && !window.confirm(`${warning}\n\nImport this recipe?`)) return
       recipeEditRef.current += 1
-      recipeSessionRef.current = { savedId: '' }
+      recipeSessionRef.current = { entry: { id: '' } }
       setEditingSavedId('')
       setActiveSavedId('')
       setActiveSpinupId('')
@@ -2461,33 +2457,42 @@ export default function App() {
     }
   }
 
+  async function loadSavedRecipe(record, editing = false) {
+    const request = ++recipeEditRef.current
+    try {
+      const resolved = await recipeLibraryRef.current.resolve(record)
+      applySavedRecipes(resolved.records)
+      if (recipeEditRef.current !== request || !resolved.record) return null
+      recipeSessionRef.current = { entry: editing ? recipeLibraryRef.current.identity(resolved.record) : { id: '' } }
+      setRecipe(validateRecipe(resolved.record.recipe))
+      setActiveSavedId(resolved.record.id)
+      setEditingSavedId(editing ? resolved.record.id : '')
+      setActiveSpinupId('')
+      return resolved.record
+    } catch (caught) {
+      setError(caught.message)
+      return null
+    }
+  }
+
   function chooseSavedRecipe(record) {
-    recipeEditRef.current += 1
-    recipeSessionRef.current = { savedId: '' }
-    setRecipe(validateRecipe(record.recipe))
-    setActiveSavedId(record.id)
-    setEditingSavedId('')
-    setActiveSpinupId('')
+    return loadSavedRecipe(record)
   }
 
   function editSavedRecipe(record) {
-    recipeEditRef.current += 1
-    recipeSessionRef.current = { savedId: record.id }
-    setRecipe(validateRecipe(record.recipe))
-    setActiveSavedId(record.id)
-    setEditingSavedId(record.id)
-    setActiveSpinupId('')
+    return loadSavedRecipe(record, true)
   }
 
   function stopEditingRecipe() {
     recipeEditRef.current += 1
-    recipeSessionRef.current = { savedId: '' }
+    recipeSessionRef.current = { entry: { id: '' } }
     setEditingSavedId('')
   }
 
-  function startSavedRecipe(record) {
-    chooseSavedRecipe(record)
-    launch(validateRecipe(record.recipe))
+  async function startSavedRecipe(record) {
+    const request = recipeEditRef.current + 1
+    const selected = await chooseSavedRecipe(record)
+    if (selected && recipeEditRef.current === request) launch(validateRecipe(selected.recipe))
   }
 
   function addCheck(check) {
@@ -2622,22 +2627,18 @@ export default function App() {
 
   function chooseSpinup(record) {
     recipeEditRef.current += 1
-    recipeSessionRef.current = { savedId: '' }
+    recipeSessionRef.current = { entry: { id: '' } }
     setRecipe(validateRecipe(record.recipe))
     setActiveSavedId('')
     setEditingSavedId('')
     setActiveSpinupId(record.id)
   }
 
-  async function removeSavedRecipe(id) {
+  async function removeSavedRecipe(id, record = { id }) {
     try {
-      const edit = recipeEditRef.current
-      const records = await updateSavedRecipes(localStorage, (current) => current.filter((record) => record.id !== id))
-      setSavedRecipes(records)
-      if (recipeEditRef.current !== edit) return
-      if (activeSavedId === id) setActiveSavedId('')
-      if (editingSavedId === id) stopEditingRecipe()
+      applySavedRecipes(await recipeLibraryRef.current.remove(record))
     } catch (caught) {
+      applySavedRecipes(recipeLibraryRef.current.snapshot())
       setError(caught.message)
     }
   }
