@@ -19,12 +19,15 @@ has no listener and is neither imported nor called by the launcher. The CLI does
 replace the normal browser-local launch or access its stored sites and vaults.
 
 The [design runner](design-runner.md) reuses that browser/tester lifecycle through a
-`beforeChecks` hook. Before starting the browser, the official signed-in Codex CLI
+`beforeChecks` preparation hook that returns a deferred capture step. `measureHomepage`
+prepares the saved target, collects its first frontend request and five warm requests,
+then runs that capture step. Before starting the browser, the official signed-in Codex CLI
 returns a bounded core-block tree in an isolated private job directory. Gutenberg's
 own JavaScript serializer creates the content, the WordPress REST API saves a page,
 and editor parsing validates the saved readback. A minimal native block theme supplies
 the sample's base typography; the AI supplies its content, layout and block styles.
-Only then do the screenshot comparison and both real testers run on that homepage.
+Only then do Query Monitor, screenshot comparison and Code Profiler run, in that order,
+on that homepage. Screenshot navigation cannot warm the request labelled cold.
 The resulting layout-A page is a private local file, not a hosted launcher route.
 
 ## Module map and callers
@@ -59,6 +62,7 @@ The resulting layout-A page is a private local file, not a hosted launcher route
 | `scripts/sync-wordpress-release.mjs` | Detect a new WordPress release branch and prepare fallback/version/changelog edits. | npm script and scheduled workflow. |
 | `scripts/private-runner.mjs` | On-demand TOOLS-411 proof: fixed local queue, headless browser Playground, private reports. | Run by hand only; not imported by the launcher. |
 | `scripts/design-runner.mjs` | TOOLS-417 fixed Gutenberg sample, signed-in Codex generation, saved native readback, visual captures and standalone report. | Separate CLI; reuses private-runner, never imported by the launcher. |
+| `scripts/design-runner-heading-check.mjs` | Real browser regression replay with a saved AI response and an H2 title; requires captures and both real testers. | Explicit diagnostic CLI; never calls AI or the launcher. |
 | `scripts/configure-cloudflare-deploy.ps1` | Securely configure GitHub deployment secret/variables and trigger workflow. | One-time maintainer action. |
 
 All `*.test.js` and `*.test.mjs` files are direct Node tests for their sibling module.

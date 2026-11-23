@@ -23,6 +23,10 @@ Each capture records dimensions, reference/rebuild filenames, changed pixels, ma
 overflow and repeated/broken-capture calibration. `go` means the pipeline completed;
 it does not mean the design has no misses. A completed design can have
 `outcome: "needs-work"`. Missing stages never produce passing numbers.
+The cold observation is the first frontend request to the saved rebuilt page; five
+warm observations precede screenshot navigation. A deferred capture callback runs
+only after all six real collector responses have completed. A failed measurement
+does not start capture or fabricate observations.
 
 The AI response uses only `core/group`, `core/columns`, `core/column`, `core/heading`
 and `core/paragraph`, at most 60 blocks and depth 10. Block attributes are decoded

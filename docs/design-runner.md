@@ -67,9 +67,12 @@ must score lower. Widths with more than 1% changed pixels and horizontal overflo
 are listed as misses. This simple pixel score is not pixelmatch, SSIM or proof of
 semantic/accessibility equivalence. No repair loop or multi-builder ranking is claimed.
 
-Both real testers run afterwards, separately from visual captures. Query Monitor
-uses the canonical homepage URL, one cold and five warm collector observations,
-with warm median/range. Code Profiler uses its actual admin Start Profiling control,
+Query Monitor runs before any screenshot navigation to the saved homepage. Preparation
+only saves native blocks and sets the homepage; it returns a deferred capture step.
+The first frontend request to that rebuilt page is measured cold, followed by five
+warm requests, then the visual captures, then Code Profiler. The canonical homepage
+URL is used, with warm median/range. These are request-order labels, not a guarantee
+of flushed host, network or runtime caches. Code Profiler uses its actual admin Start Profiling control,
 waits for the result chart, and verifies the profile ID against native slugs and
 summary artifacts. The minimal block theme executes no PHP, so no theme attribution
 row is invented when the profiler reports only plugins.
@@ -79,3 +82,14 @@ both tester summaries and expandable raw evidence. `go` means all stages complet
 misses remain visible and can still mean the design needs work. Sandbox measurements
 are not production-hosting benchmarks. Hosted navigation, worker pairing, Figma,
 other builders, schedules and service installation belong to later cards.
+
+## Reproduce the H2 regression
+
+The committed check replays a saved non-secret AI response, changes only the title
+to H2, and requires native readback, an H1 miss, both captures and both real testers.
+It never starts Codex or claims another AI generation. Supply the `answer.json` from
+one completed design run and a private output directory:
+
+```sh
+node scripts/design-runner-heading-check.mjs /private/run/answer.json /private/h2-check
+```

@@ -149,6 +149,12 @@ export async function buildAndCapture({ page, context, php }, report, directory,
   await writeFile(path.join(directory, 'blocks.html'), saved.content, { mode: 0o600 })
   report.design.native = { status: 'completed', invalidBlocks: 0, inventory: saved.inventory, savedPage: saved.id }
   await php(`<?php require '/wordpress/wp-load.php'; update_option('show_on_front','page'); update_option('page_on_front',${Number(saved.id)});`)
+  // Query Monitor owns the first frontend request; screenshot navigation stays deferred.
+  return () => captureDesign({ page, context }, report, directory)
+}
+
+async function captureDesign({ page, context }, report, directory) {
+  const frame = page.frameLocator('#site').frameLocator('iframe')
   report.design.step = 'open saved homepage'
   await page.evaluate(() => window.proofClient.goTo('/'))
   await frame.locator('.wp-block-post-content').waitFor()
