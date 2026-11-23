@@ -54,7 +54,7 @@ All `*.test.js` and `*.test.mjs` files are direct Node tests for their sibling m
 
 ## State ownership
 
-`App` owns the active recipe and orchestration state. Derived views use `useMemo`; persistent data uses narrow library functions. There is no state context or reducer. Saved recipes are persisted only by explicit mutations that read current storage (under a Web Lock where available); storage events refresh other tabs without echo writes.
+`App` owns the active recipe and orchestration state. Derived views use `useMemo`; persistent data uses narrow library functions. There is no state context or reducer. Saved recipes are persisted only by explicit mutations that read current storage (under a Web Lock where available); storage events refresh other tabs without echo writes. A recipe-edit counter changes when a draft changes, a saved recipe or spin-up is loaded, an import updates the draft, or editing stops. Saves and removals always refresh the library after writing, but update selection and editing state only while their initiating edit is still current.
 
 Directory-plugin display metadata is cached in an in-memory `Map` as featured and search results arrive. Selected directory rows survive an empty or changed search, and the launch summary resolves selected plugin names from this cache or local vault metadata. Public slugs/IDs are display fallbacks when metadata is unavailable. Featured cards avoid duplicate rows at empty search. This cache is not persisted and does not alter recipes, Blueprint setup, or OPFS site identity. See [the selected-plugin regression record](changes/2026-10-17-selected-directory-plugins.md).
 
