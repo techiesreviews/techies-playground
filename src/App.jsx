@@ -159,6 +159,7 @@ const CHANGELOG_ENTRIES = [
     changes: [
       'Recipe saves, renames and removals read the current browser library before writing. Other open tabs refresh their lists automatically.',
       'A save that finishes late keeps your current edit. Opening, editing, starting or removing a recipe follows a pending rename. Imports keep their own identity, and changes made in another tab are protected.',
+      'A newer launch cancels a saved recipe start or selection that was waiting for a save.',
     ],
   },
   {
@@ -2459,10 +2460,11 @@ export default function App() {
 
   async function loadSavedRecipe(record, editing = false) {
     const request = ++recipeEditRef.current
+    const launchId = launchIdRef.current
     try {
       const resolved = await recipeLibraryRef.current.resolve(record)
       applySavedRecipes(resolved.records)
-      if (recipeEditRef.current !== request || !resolved.record) return null
+      if (recipeEditRef.current !== request || launchIdRef.current !== launchId || !resolved.record) return null
       recipeSessionRef.current = { entry: editing ? recipeLibraryRef.current.identity(resolved.record) : { id: '' } }
       setRecipe(validateRecipe(resolved.record.recipe))
       setActiveSavedId(resolved.record.id)
@@ -2491,8 +2493,9 @@ export default function App() {
 
   async function startSavedRecipe(record) {
     const request = recipeEditRef.current + 1
+    const launchId = launchIdRef.current
     const selected = await chooseSavedRecipe(record)
-    if (selected && recipeEditRef.current === request) launch(validateRecipe(selected.recipe))
+    if (selected && recipeEditRef.current === request && launchIdRef.current === launchId) launch(validateRecipe(selected.recipe))
   }
 
   function addCheck(check) {
