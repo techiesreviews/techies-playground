@@ -163,7 +163,7 @@ const CHANGELOG_ENTRIES = [
     summary: 'Saving or removing a recipe uses the latest library, so another open tab cannot erase newer recipes.',
     changes: [
       'Recipe saves, renames and removals read the current browser library before writing. Other open tabs refresh their lists automatically.',
-      'A save that finishes late keeps the recipe you are now editing, including its rename.',
+      'A save that finishes late keeps your current edit. Consecutive renames replace the last saved name, and imports never update a different recipe you were editing.',
     ],
   },
   {
@@ -1957,6 +1957,7 @@ export default function App() {
   ))
   const [editingSavedId, setEditingSavedId] = useState('')
   const recipeEditRef = useRef(0)
+  const recipeSessionRef = useRef({ savedId: '' })
   const [activeSpinupId, setActiveSpinupId] = useState('')
   const [replacementPluginId, setReplacementPluginId] = useState('')
   const [replacementThemeId, setReplacementThemeId] = useState('')
@@ -2185,16 +2186,35 @@ export default function App() {
     setRecipe((current) => ({ ...current, ...patch }))
   }
 
-  async function saveRecipeToLibrary(candidate, replaceId = '') {
+  async function saveRecipeToLibrary(candidate, replaceId = '', session = { savedId: replaceId }) {
     const edit = recipeEditRef.current
     const safeRecipe = validateRecipe(candidate)
     const id = normalizePluginId(safeRecipe.name) || 'recipe'
-    const records = await updateSavedRecipes(localStorage, (current) => replaceId
-      ? replaceSavedRecipe(current, replaceId, safeRecipe)
-      : upsertSavedRecipe(current, safeRecipe))
+    const write = async () => {
+      const records = await updateSavedRecipes(localStorage, (current) => {
+        const savedId = session.savedId || replaceId
+        return savedId ? replaceSavedRecipe(current, savedId, safeRecipe) : upsertSavedRecipe(current, safeRecipe)
+      })
+      session.savedId = id
+      return records
+    }
+    // Finish each rename before the next save reads this session's saved ID; a failed save can be retried.
+    const pending = session.pending ? session.pending.then(write, write) : write()
+    session.pending = pending
+    let records
+    try {
+      records = await pending
+    } finally {
+      if (session.pending === pending) session.pending = null
+    }
     setSavedRecipes(records)
-    if (recipeEditRef.current !== edit) return
+    if (recipeSessionRef.current !== session) return
+    if (recipeEditRef.current !== edit) {
+      setEditingSavedId(session.savedId)
+      return
+    }
     recipeEditRef.current += 1
+    recipeSessionRef.current = { savedId: '' }
     setActiveSavedId(id)
     setEditingSavedId('')
     setSelectionMode('recipes')
@@ -2203,7 +2223,7 @@ export default function App() {
   async function handleSaveRecipe() {
     try {
       setError('')
-      await saveRecipeToLibrary(recipe, editingSavedId)
+      await saveRecipeToLibrary(recipe, editingSavedId, recipeSessionRef.current)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Review the recipe settings before saving.')
     }
@@ -2428,8 +2448,12 @@ export default function App() {
       const warning = externalSetupMessage(imported)
       if (warning && !window.confirm(`${warning}\n\nImport this recipe?`)) return
       recipeEditRef.current += 1
+      recipeSessionRef.current = { savedId: '' }
+      setEditingSavedId('')
+      setActiveSavedId('')
+      setActiveSpinupId('')
       setRecipe(imported)
-      await saveRecipeToLibrary(imported)
+      await saveRecipeToLibrary(imported, '', recipeSessionRef.current)
     } catch (caught) {
       setError(caught.message)
     } finally {
@@ -2439,6 +2463,7 @@ export default function App() {
 
   function chooseSavedRecipe(record) {
     recipeEditRef.current += 1
+    recipeSessionRef.current = { savedId: '' }
     setRecipe(validateRecipe(record.recipe))
     setActiveSavedId(record.id)
     setEditingSavedId('')
@@ -2447,6 +2472,7 @@ export default function App() {
 
   function editSavedRecipe(record) {
     recipeEditRef.current += 1
+    recipeSessionRef.current = { savedId: record.id }
     setRecipe(validateRecipe(record.recipe))
     setActiveSavedId(record.id)
     setEditingSavedId(record.id)
@@ -2455,6 +2481,7 @@ export default function App() {
 
   function stopEditingRecipe() {
     recipeEditRef.current += 1
+    recipeSessionRef.current = { savedId: '' }
     setEditingSavedId('')
   }
 
@@ -2595,6 +2622,7 @@ export default function App() {
 
   function chooseSpinup(record) {
     recipeEditRef.current += 1
+    recipeSessionRef.current = { savedId: '' }
     setRecipe(validateRecipe(record.recipe))
     setActiveSavedId('')
     setEditingSavedId('')

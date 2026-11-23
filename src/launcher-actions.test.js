@@ -29,7 +29,7 @@ function tab(localStorage, locks) {
   }
   const scope = {
     ...savedRecipes, ...recipes, localStorage,
-    recipe: state.recipe, recipeEditRef: { current: 0 },
+    recipe: state.recipe, recipeEditRef: { current: 0 }, recipeSessionRef: { current: { savedId: '' } },
     updateSavedRecipes: (store, update) => savedRecipes.updateSavedRecipes(store, update, locks),
     setRecipe: (next) => { scope.recipe = state.recipe = typeof next === 'function' ? next(state.recipe) : next },
     setSavedRecipes: (next) => { state.records = typeof next === 'function' ? next(state.records) : next },
@@ -50,6 +50,7 @@ function tab(localStorage, locks) {
     state, save: (...args) => run('saveRecipeToLibrary', ...args), remove: (id) => run('removeSavedRecipe', id),
     edit: (record) => run('editSavedRecipe', record), update: (patch) => run('updateRecipe', patch),
     saveCurrent: () => run('handleSaveRecipe'),
+    importRecipe: (recipe) => run('handleRecipeImport', { target: { files: [{ text: async () => JSON.stringify(recipe) }], value: 'recipe.json' } }),
   }
 }
 
@@ -131,6 +132,67 @@ test('PG-01: a delayed removal keeps the recipe now being edited', async () => {
   assert.equal(a.state.activeSavedId, 'recipe-b')
   assert.deepEqual(tab(localStorage).state.records.map((record) => record.id), ['recipe-b'])
 })
+
+test('PG-01: importing during an edit never gives the imported draft the old editing identity', async () => {
+  const localStorage = storage()
+  await tab(localStorage).save({ name: 'Recipe A' })
+  const pending = []
+  const entered = Promise.withResolvers()
+  const locks = { request: (name, write) => {
+    assert.equal(name, savedRecipes.SAVED_RECIPES_KEY)
+    return new Promise((resolve) => {
+      pending.push(() => resolve(write()))
+      entered.resolve()
+    })
+  } }
+  const a = tab(localStorage, locks)
+  await a.edit(a.state.records[0])
+  const importingB = a.importRecipe({ name: 'Recipe B', siteTitle: 'Imported title' })
+  await entered.promise
+  await a.update({ siteTitle: 'New title while import waits' })
+  pending.shift()()
+  await importingB
+  const savingB = a.saveCurrent()
+  pending.shift()()
+  await savingB
+
+  const reloaded = tab(localStorage).state.records
+  assert.deepEqual(reloaded.map((record) => record.id), ['recipe-b', 'recipe-a'])
+  assert.equal(reloaded.find((record) => record.id === 'recipe-b').recipe.siteTitle, 'New title while import waits')
+  assert.equal(reloaded.find((record) => record.id === 'recipe-a').recipe.name, 'Recipe A')
+})
+
+for (const queued of [false, true]) {
+  test(`PG-01: consecutive renames replace the first saved ID (${queued ? 'both saves waiting' : 'save again after completion'})`, async () => {
+    const localStorage = storage()
+    await tab(localStorage).save({ name: 'Original' })
+    const pending = []
+    const finalEntered = Promise.withResolvers()
+    let requests = 0
+    const locks = { request: (name, write) => {
+      assert.equal(name, savedRecipes.SAVED_RECIPES_KEY)
+      return new Promise((resolve) => {
+        pending.push(() => resolve(write()))
+        if (++requests === 2) finalEntered.resolve()
+      })
+    } }
+    const a = tab(localStorage, locks)
+    await a.edit(a.state.records[0])
+    await a.update({ name: 'First' })
+    const savingFirst = a.saveCurrent()
+    await a.update({ name: 'Final' })
+    const queuedFinal = queued ? a.saveCurrent() : null
+    pending.shift()()
+    await savingFirst
+    assert.equal(a.state.recipe.name, 'Final')
+    const savingFinal = queuedFinal || a.saveCurrent()
+    await finalEntered.promise
+    pending.shift()()
+    await savingFinal
+    assert.deepEqual(a.state.records.map((record) => record.id), ['final'])
+    assert.deepEqual(tab(localStorage).state.records.map((record) => record.id), ['final'])
+  })
+}
 
 for (const type of ['plugin', 'theme']) {
   test(`PG-02: ${type} picker imports valid ZIPs after invalid files and resets for retry`, async () => {
