@@ -18,6 +18,15 @@ Playgrounds and writes private diagnostic reports in the user's data directory. 
 has no listener and is neither imported nor called by the launcher. The CLI does not
 replace the normal browser-local launch or access its stored sites and vaults.
 
+The [design runner](design-runner.md) reuses that browser/tester lifecycle through a
+`beforeChecks` hook. Before starting the browser, the official signed-in Codex CLI
+returns a bounded core-block tree in an isolated private job directory. Gutenberg's
+own JavaScript serializer creates the content, the WordPress REST API saves a page,
+and editor parsing validates the saved readback. A minimal native block theme supplies
+the sample's base typography; the AI supplies its content, layout and block styles.
+Only then do the screenshot comparison and both real testers run on that homepage.
+The resulting layout-A page is a private local file, not a hosted launcher route.
+
 ## Module map and callers
 
 | Module | Responsibility | Main callers |
@@ -49,6 +58,7 @@ replace the normal browser-local launch or access its stored sites and vaults.
 | `worker.js` | Serve `dist` through asset binding and add security headers. | Cloudflare Workers. |
 | `scripts/sync-wordpress-release.mjs` | Detect a new WordPress release branch and prepare fallback/version/changelog edits. | npm script and scheduled workflow. |
 | `scripts/private-runner.mjs` | On-demand TOOLS-411 proof: fixed local queue, headless browser Playground, private reports. | Run by hand only; not imported by the launcher. |
+| `scripts/design-runner.mjs` | TOOLS-417 fixed Gutenberg sample, signed-in Codex generation, saved native readback, visual captures and standalone report. | Separate CLI; reuses private-runner, never imported by the launcher. |
 | `scripts/configure-cloudflare-deploy.ps1` | Securely configure GitHub deployment secret/variables and trigger workflow. | One-time maintainer action. |
 
 All `*.test.js` and `*.test.mjs` files are direct Node tests for their sibling module.

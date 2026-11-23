@@ -1,6 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { validateDesign, classifyCodexFailure, codexArguments, designReportHTML, pixelScore } from './design-runner.mjs'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { enqueue, runOnce, verdict } from './private-runner.mjs'
+import { validateDesign, classifyCodexFailure, codexArguments, designReportHTML, pixelScore, generateDesign, runDesignProof } from './design-runner.mjs'
 
 const tree = [{ name: 'core/group', attributes: {}, innerBlocks: [{ name: 'core/heading', attributes: { content: 'Build something that lasts.', level: 1 }, innerBlocks: [] }] }]
 
@@ -40,4 +44,35 @@ test('design page escapes data, exposes both tester outcomes and never invents m
   assert.match(html, /Query Monitor/)
   assert.match(html, /Code Profiler/)
   assert.match(html, /No score/)
+})
+
+test('a CLI usage-limit fixture saves a paused report and never starts the browser or a fallback', async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), 'design-runner-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const job = await enqueue(root)
+  let invocations = 0
+  const run = async (args) => {
+    invocations++
+    if (args[0] === 'login') return { code: 0, output: 'Logged in using ChatGPT' }
+    assert.ok(args.includes('forced_login_method="chatgpt"'))
+    return { code: 1, output: 'ERROR: You have hit your usage limit. Try again later.' }
+  }
+  const report = await runOnce(root, (report, directory) => runDesignProof(report, directory, {
+    generate: (report, directory) => generateDesign(report, directory, run),
+    browser: () => assert.fail('a paused run must not start WordPress'),
+  }), designReportHTML)
+  assert.equal(invocations, 2)
+  assert.equal(report.ai.status, 'paused')
+  assert.equal(report.verdict, 'no-go')
+  assert.equal(report.design.status, 'not-run')
+  const html = await readFile(path.join(root, 'runs', job.id, 'report.html'), 'utf8')
+  assert.match(html, /Paused · AI limit/)
+  assert.match(html, /No paid fallback was used/)
+  assert.equal(JSON.parse(await readFile(path.join(root, 'runs', job.id, 'report.json'))).ai.status, 'paused')
+})
+
+test('a design run cannot pass on the tester results alone', () => {
+  const report = { kind: 'design-test', boot: { status: 'completed' }, queryMonitor: { status: 'completed', source: 'query-monitor', observations: Array(6).fill({ source: 'query-monitor' }) }, codeProfiler: { status: 'completed', profileId: 'real', attribution: [{}] } }
+  assert.equal(verdict(report), 'no-go')
+  assert.equal(verdict({ ...report, ai: { status: 'completed' }, design: { status: 'blocked' } }), 'no-go')
 })
