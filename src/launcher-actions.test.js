@@ -32,8 +32,9 @@ function storage() {
 }
 function tab(localStorage, locks, actualLaunch = false) {
   const library = createRecipeLibrary(localStorage, locks)
+  const initial = library.read()
   const state = {
-    records: library.read().records,
+    records: initial.records, storageError: initial.error,
     recipe: recipes.validateRecipe({ name: 'Draft' }),
     activeSavedId: '', editingSavedId: '', selectionMode: 'plugins', exports: [], launches: [], runtimeStarts: [],
   }
@@ -54,7 +55,8 @@ function tab(localStorage, locks, actualLaunch = false) {
     launch: (recipe) => state.launches.push(structuredClone(recipe)),
   }
   scope.saveRecipeToLibrary = (...args) => handler('saveRecipeToLibrary', scope)(...args)
-  scope.applySavedRecipes = (records) => handler('applySavedRecipes', scope)(records)
+  scope.applySavedRecipes = (...args) => handler('applySavedRecipes', scope)(...args)
+  scope.reloadSavedRecipes = () => handler('reloadSavedRecipes', scope)()
   scope.stopEditingRecipe = () => handler('stopEditingRecipe', scope)()
   scope.loadSavedRecipe = (...args) => handler('loadSavedRecipe', scope)(...args)
   scope.chooseSavedRecipe = (...args) => handler('chooseSavedRecipe', scope)(...args)
@@ -138,8 +140,29 @@ test('damaged recipes load with a notice and Save leaves their raw storage intac
   assert.deepEqual(library.read(), { records: [], error: savedRecipes.SAVED_RECIPES_READ_ERROR })
   const a = tab(localStorage, null)
   await a.saveCurrent()
-  assert.match(a.state.error, /Saved recipes could not be read/)
+  assert.match(a.state.error, /Recipe not saved/)
+  assert.equal(a.state.storageError, savedRecipes.SAVED_RECIPES_READ_ERROR)
   assert.equal(localStorage.getItem(savedRecipes.SAVED_RECIPES_KEY), '{damaged recipes')
+  await a.importRecipe({ name: 'Imported' })
+  assert.match(a.state.error, /Recipe not saved/)
+  assert.equal(a.state.storageError, savedRecipes.SAVED_RECIPES_READ_ERROR)
+  await a.remove('missing')
+  assert.equal(a.state.storageError, savedRecipes.SAVED_RECIPES_READ_ERROR)
+  assert.equal(localStorage.getItem(savedRecipes.SAVED_RECIPES_KEY), '{damaged recipes')
+})
+
+test('a damaged external library clears saved edit identity and shows only its inline notice', async () => {
+  const localStorage = storage()
+  const a = tab(localStorage, null)
+  await a.save({ name: 'Original' })
+  await a.edit(a.state.records[0])
+  localStorage.setItem(savedRecipes.SAVED_RECIPES_KEY, '{damaged recipes')
+  await a.storageEvent({ storageArea: localStorage, key: savedRecipes.SAVED_RECIPES_KEY })
+  assert.equal(a.state.editingSavedId, '')
+  assert.equal(a.state.activeSavedId, '')
+  assert.equal(a.state.recipe.name, 'Original')
+  assert.equal(a.state.storageError, savedRecipes.SAVED_RECIPES_READ_ERROR)
+  assert.ok(!a.state.error)
 })
 
 test('page mount keeps damaged history without writing an empty list', () => {
@@ -163,6 +186,29 @@ test('page mount keeps damaged history without writing an empty list', () => {
   assert.match(state.error, /Past spin-ups could not be read/)
   assert.equal(localStorage.getItem(history.SPINUP_HISTORY_KEY), '{damaged history')
   assert.equal(localStorage.writes, writes, 'a failed history append does not throw through launch cleanup')
+  assert.doesNotMatch(source, /SPINUP_HISTORY_KEY|serializeSpinupHistory/)
+  assert.equal((source.match(/\bupdateSpinupHistory\(/g) || []).length, 1)
+})
+
+test('a failed readable history write keeps rows and the active selection with a plain notice', () => {
+  const records = history.appendSpinup([], { recipe: recipes.DEFAULT_RECIPE, plugins: [] }, '2026-08-01T12:00:00.000Z', 'active')
+  const raw = history.serializeSpinupHistory(records)
+  let state = { records, error: '' }
+  let activeId = 'active'
+  const localStorage = { getItem: () => raw, setItem: () => { throw new DOMException('quota', 'QuotaExceededError') } }
+  const scope = {
+    ...history, localStorage, activeSpinupId: activeId,
+    setActiveSpinupId: (id) => { activeId = id },
+    setHistoryStorage: (next) => { state = typeof next === 'function' ? next(state) : next },
+  }
+  scope.saveSpinupHistory = handler('saveSpinupHistory', scope)
+  assert.equal(scope.saveSpinupHistory((current) => history.appendSpinup(current, { recipe: recipes.DEFAULT_RECIPE, plugins: [] })), false)
+  assert.deepEqual(state.records, records)
+  assert.equal(state.error, 'Past spin-ups could not be saved. Stored data was kept.')
+  handler('removeSpinup', scope)('active')
+  assert.equal(activeId, 'active')
+  assert.deepEqual(state.records, records)
+  assert.equal(localStorage.getItem(history.SPINUP_HISTORY_KEY), raw)
 })
 
 test('PG-01: two stale libraries without Web Locks retain both recipes after reload', async () => {
