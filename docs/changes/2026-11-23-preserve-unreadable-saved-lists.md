@@ -23,7 +23,7 @@ Distinguishing unreadable whole lists from missing keys, refusing writes over un
 
 ## Implementation or prototype
 
-The saved-recipe and history parsers throw for invalid JSON and non-array roots. Missing keys still mean empty lists. UI reads expose `{ records, error }`; the recipe library catches initial read failures, while writes parse again under its existing lock. History reads never persist; appends/removals read current storage and validate before writing. History persistence failures remain notices rather than throwing through launch cleanup. The setup controls show existing amber inline notice styling across tabs and suppress misleading empty-state copy.
+The saved-recipe and history parsers throw for invalid JSON and non-array roots. Missing keys still mean empty lists. UI reads expose `{ records, error }`; the recipe library catches initial read failures, while writes parse again under its existing lock. History reads never persist; appends/removals read current storage and validate before writing. History persistence failures remain notices rather than throwing through launch cleanup. The setup controls show existing amber inline notice styling across tabs and suppress misleading empty-state copy and unknown counts. A mounted status region contains the notices. Refused saves/imports explicitly say the recipe was not saved; external library damage clears stale selection/edit identity while preserving the draft. History write failures use a fixed plain-language notice.
 
 Preserved policies: individual invalid/unsafe entries are dropped from readable arrays, valid siblings remain usable, history stays capped at 30 and deduplicates browser-saved environments, saved-recipe normalization/locking stays intact, and WordPress's offline version fallback is unchanged. Licence, key, vault and OPFS behavior is outside this change.
 
@@ -40,6 +40,9 @@ Preserved policies: individual invalid/unsafe entries are dropped from readable 
 | Node, affected suite | `ASE_OWNER=fleet-lead scripts/agents/kit unit --affected` | Existing URL safety and list behavior preserved | 58/58 in 4 files | `.scratch/unit/20261123T180312-207700.log` |
 | Node, full suite | `ASE_OWNER=fleet-lead scripts/agents/kit unit` | All existing and regression tests pass | 396/396 in 43 files | `.scratch/unit/20261123T180553-216973.log` |
 | Node, expanded assertions | `ASE_OWNER=fleet-lead scripts/agents/kit unit --affected` | Valid sibling/missing-key behavior, readable append/removal and non-throwing App history failure | 58/58 in 4 files | `.scratch/unit/20261123T180618-217709.log` |
+| Review fixes, before | `ASE_OWNER=fleet-lead scripts/agents/kit unit src/launcher-actions.test.js` | Save wording, stale editing identity and plain write-error regressions fail | 31/34; all three failures reproduced | `.scratch/unit/20261123T181029-230198.log` |
+| Review fixes, affected | `ASE_OWNER=fleet-lead scripts/agents/kit unit --affected` | All revised paths pass, including import/remove and persistent notices | 60/60 in 4 files | `.scratch/unit/20261123T181109-231549.log` |
+| Review fixes, full | `ASE_OWNER=fleet-lead scripts/agents/kit unit` | All tests pass | 398/398 in 43 files | `.scratch/unit/20261123T181141-233151.log` |
 | Vite | `ASE_OWNER=fleet-lead scripts/agents/kit build` | Production build succeeds | Passed; existing externalized-module and bundle-size warnings | `dist/` |
 | Kit UX | `ASE_OWNER=fleet-lead scripts/agents/kit ux` | Feature-based check if configured | Cannot run: project has no `docs/agents/features.md` | `RESULT: fail ux ENOENT` |
 | T3 browser, before | Seed damaged recipe/history strings and reload | Reproduce loss | History becomes `[]`; recipe raw string survives until Save | Before screenshots below |
@@ -47,6 +50,8 @@ Preserved policies: individual invalid/unsafe entries are dropped from readable 
 | Headless Chromium, after | `node .scratch/tools-437/browser.mjs` | Notices, guarded Save and no overflow at all four settings | 4/4; no page errors or horizontal overflow | After screenshots below |
 
 Before captures used T3; after captures used Playwright because T3 subsequently returned “The browser is not producing screenshot frames.” Both use a 900 px viewport height. The app retains its existing light palette under a dark preference; this change adds no dark theme.
+
+The first Claude review identified R1-1 through R1-9: misleading zero counts, ambiguous failed-save wording, stale editing identity, raw history write errors, notice spacing/live region, evidence wording, and three coverage gaps. All were addressed. The browser count assertion first failed with `Saved recipes (0)` rather than `Saved recipes`; the updated four-setting browser run then passed, and all after captures were replaced. A fresh production build passed. Repeating `kit ux` still reports the same missing feature-list configuration.
 
 Screenshots in the worktree (untracked evidence):
 
@@ -73,7 +78,7 @@ Screenshots in the worktree (untracked evidence):
 
 Targeted tests, the full suite and browser checks preserve damaged raw values and distinguish unreadable lists from empty lists. Main and second-look review artifacts are recorded separately by Agent Kit before landing.
 
-Done when 1: met — the actual App history initializer and former mount effect run against damaged history without changing the raw value; browser reload also leaves it intact.
+Done when 1: met — the actual App history initializer runs against damaged history without writing; source inspection/assertions show no load-time history write remains, and browser reload leaves the raw value intact.
 
 Done when 2: met — the write regression first failed, then passed with corrupt JSON and non-array roots; clicking Save recipe in Chromium shows an error and keeps the original raw recipe string.
 

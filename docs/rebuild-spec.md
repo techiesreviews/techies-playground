@@ -65,7 +65,7 @@ Four tabs share one recipe:
 
 If saved recipes exist, that tab is initially active; otherwise plugins is active.
 
-When saved recipes or past spin-ups cannot be read, show a short inline notice beside the setup controls in every tab. Keep the unreadable stored value unchanged; do not label it as an empty list or overwrite it during recipe saves/imports/removals or history appends/removals. History is never persisted just because the page loaded. History storage failure does not block launching WordPress. Readable arrays continue to drop individual invalid entries while retaining valid siblings.
+When saved recipes or past spin-ups cannot be read, show a short inline notice beside the setup controls in every tab and omit that tab's unknown count. Keep the unreadable stored value unchanged; do not label it as an empty list or overwrite it during recipe saves/imports/removals or history appends/removals. A refused save/import explicitly says the recipe was not saved. An unreadable external recipe list clears saved selection/edit identity while keeping draft fields. History is never persisted just because the page loaded. History storage failure does not block launching WordPress and uses a plain notice rather than a raw browser error. Readable arrays continue to drop individual invalid entries while retaining valid siblings.
 
 #### Saved recipes
 

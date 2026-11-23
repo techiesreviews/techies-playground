@@ -53,7 +53,7 @@ import {
 import { fetchFeaturedWordPressOrgPlugins, searchWordPressOrgPlugins } from './lib/wordpress-org-plugins'
 import { searchWordPressOrgThemes } from './lib/wordpress-org-themes'
 import { fetchGitHubRepositoryStars } from './lib/github-repository'
-import { SAVED_RECIPES_KEY } from './lib/saved-recipes'
+import { SAVED_RECIPES_KEY, SAVED_RECIPES_READ_ERROR } from './lib/saved-recipes'
 import { createRecipeLibrary } from './lib/recipe-library'
 import {
   forgetPluginRecency,
@@ -66,6 +66,7 @@ import {
 import {
   appendSpinup,
   readSpinupHistory,
+  SPINUP_HISTORY_READ_ERROR,
   updateSpinupHistory,
 } from './lib/spinup-history'
 import {
@@ -2184,8 +2185,8 @@ export default function App() {
     setRecipe((current) => ({ ...current, ...patch }))
   }
 
-  function applySavedRecipes(records) {
-    setSavedRecipeStorage({ records, error: '' })
+  function applySavedRecipes(records, error = '') {
+    setSavedRecipeStorage({ records, error })
     const ids = new Set(records.map((record) => record.id))
     setActiveSavedId((id) => ids.has(id) ? id : '')
     setEditingSavedId((id) => ids.has(id) ? id : '')
@@ -2196,13 +2197,17 @@ export default function App() {
     }
   }
 
+  function reloadSavedRecipes() {
+    const { records, error } = recipeLibraryRef.current.read()
+    applySavedRecipes(records, error)
+  }
+
   async function refreshSavedRecipes(event) {
     if (event.storageArea !== localStorage || (event.key !== SAVED_RECIPES_KEY && event.key !== null)) return
     try {
       applySavedRecipes(await recipeLibraryRef.current.refresh(event.key === null))
-    } catch (caught) {
-      setSavedRecipeStorage(recipeLibraryRef.current.read())
-      setError(caught.message)
+    } catch {
+      reloadSavedRecipes()
     }
   }
 
@@ -2229,8 +2234,8 @@ export default function App() {
       setError('')
       await saveRecipeToLibrary(recipe, editingSavedId, recipeSessionRef.current)
     } catch (caught) {
-      setSavedRecipeStorage(recipeLibraryRef.current.read())
-      setError(caught instanceof Error ? caught.message : 'Review the recipe settings before saving.')
+      reloadSavedRecipes()
+      setError(caught.message === SAVED_RECIPES_READ_ERROR ? 'Recipe not saved. Saved recipes could not be read.' : caught instanceof Error ? caught.message : 'Review the recipe settings before saving.')
     }
   }
 
@@ -2460,7 +2465,8 @@ export default function App() {
       setRecipe(imported)
       await saveRecipeToLibrary(imported, '', recipeSessionRef.current)
     } catch (caught) {
-      setError(caught.message)
+      if (caught.message === SAVED_RECIPES_READ_ERROR) reloadSavedRecipes()
+      setError(caught.message === SAVED_RECIPES_READ_ERROR ? 'Recipe not saved. Saved recipes could not be read.' : caught.message)
     } finally {
       event.target.value = ''
     }
@@ -2649,7 +2655,7 @@ export default function App() {
     try {
       applySavedRecipes(await recipeLibraryRef.current.remove(record))
     } catch (caught) {
-      setSavedRecipeStorage(recipeLibraryRef.current.read())
+      reloadSavedRecipes()
       setError(caught.message)
     }
   }
@@ -2664,7 +2670,7 @@ export default function App() {
       setHistoryStorage({ records, error: '' })
       return true
     } catch (caught) {
-      setHistoryStorage((current) => ({ ...current, error: caught.message }))
+      setHistoryStorage((current) => ({ ...current, error: caught.message === SPINUP_HISTORY_READ_ERROR ? SPINUP_HISTORY_READ_ERROR : 'Past spin-ups could not be saved. Stored data was kept.' }))
       return false
     }
   }
@@ -3196,7 +3202,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                     onClick={() => setSelectionMode('recipes')}
                     className={`shrink-0 rounded-t-lg px-3 py-2 text-sm/5 font-medium focus-visible:outline-2 -outline-offset-1 focus-visible:outline-teal-600 ${selectionMode === 'recipes' ? 'bg-neutral-200/70 text-neutral-950' : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950'}`}
                   >
-                    Saved recipes ({savedRecipes.length})
+                    Saved recipes{savedRecipeStorage.error ? '' : ` (${savedRecipes.length})`}
                   </button>
                   <button
                     type="button"
@@ -3223,12 +3229,14 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                     onClick={() => setSelectionMode('history')}
                     className={`shrink-0 rounded-t-lg px-3 py-2 text-sm/5 font-medium focus-visible:outline-2 -outline-offset-1 focus-visible:outline-teal-600 ${selectionMode === 'history' ? 'bg-neutral-200/70 text-neutral-950' : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950'}`}
                   >
-                    Past spin-ups ({spinupHistory.length})
+                    Past spin-ups{historyStorage.error ? '' : ` (${spinupHistory.length})`}
                   </button>
                 </div>
 
-                {savedRecipeStorage.error && <p role="status" className="text-pretty text-base/7 text-amber-700 sm:text-sm/6">{savedRecipeStorage.error}</p>}
-                {historyStorage.error && <p role="status" className="text-pretty text-base/7 text-amber-700 sm:text-sm/6">{historyStorage.error}</p>}
+                <div role="status" className="grid gap-1 [padding-block-start:--spacing(3)] text-pretty text-base/7 text-amber-700 empty:hidden sm:text-sm/6">
+                  {savedRecipeStorage.error && <p>{savedRecipeStorage.error}</p>}
+                  {historyStorage.error && <p>{historyStorage.error}</p>}
+                </div>
 
                 {selectionMode === 'recipes' ? (
                   <div className="pt-5">
