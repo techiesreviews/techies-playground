@@ -1,12 +1,13 @@
 import { normalizePluginId, validateRecipe } from './recipe.js'
 
 export const SAVED_RECIPES_KEY = 'private-playground-launcher:saved-recipes'
+export const SAVED_RECIPES_READ_ERROR = 'Saved recipes could not be read. Stored data was kept.'
 
 export function parseSavedRecipes(serialized) {
-  if (!serialized) return []
+  if (serialized == null) return []
   try {
     const records = JSON.parse(serialized)
-    if (!Array.isArray(records)) return []
+    if (!Array.isArray(records)) throw new Error(SAVED_RECIPES_READ_ERROR)
     return records.flatMap((record) => {
       try {
         if (!record || typeof record !== 'object') return []
@@ -20,7 +21,7 @@ export function parseSavedRecipes(serialized) {
       }
     })
   } catch {
-    return []
+    throw new Error(SAVED_RECIPES_READ_ERROR)
   }
 }
 

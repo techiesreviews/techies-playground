@@ -65,9 +65,8 @@ import {
 } from './lib/plugin-preferences'
 import {
   appendSpinup,
-  parseSpinupHistory,
-  serializeSpinupHistory,
-  SPINUP_HISTORY_KEY,
+  readSpinupHistory,
+  updateSpinupHistory,
 } from './lib/spinup-history'
 import {
   migrateStorageDefault,
@@ -151,6 +150,16 @@ const PERSISTED_SITES_KEY = persistedSitesKey(PLAYGROUND_ORIGIN)
 const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-storage-default-v1'
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
+  {
+    version: '0.13.5',
+    date: 'November 23, 2026',
+    title: 'Damaged saved lists stay in your browser',
+    summary: 'Unreadable recipes and past spin-ups show a notice and keep their stored data.',
+    changes: [
+      'Opening Playground no longer rewrites launch history. Unreadable saved lists stay untouched, including when saving or importing a recipe or recording a launch.',
+      'A short notice distinguishes an unreadable saved list from an empty one. Valid entries in readable lists still load when an individual entry is invalid.',
+    ],
+  },
   {
     version: '0.13.4',
     date: 'November 23, 2026',
@@ -1945,8 +1954,10 @@ export default function App() {
   })
   const recipeLibraryRef = useRef(null)
   recipeLibraryRef.current ??= createRecipeLibrary(localStorage)
-  const [savedRecipes, setSavedRecipes] = useState(() => recipeLibraryRef.current.snapshot())
-  const [spinupHistory, setSpinupHistory] = useState(() => parseSpinupHistory(localStorage.getItem(SPINUP_HISTORY_KEY)))
+  const [savedRecipeStorage, setSavedRecipeStorage] = useState(() => recipeLibraryRef.current.read())
+  const savedRecipes = savedRecipeStorage.records
+  const [historyStorage, setHistoryStorage] = useState(() => readSpinupHistory(localStorage))
+  const spinupHistory = historyStorage.records
   const [selectionMode, setSelectionMode] = useState(() => savedRecipes.length ? 'recipes' : 'plugins')
   const [activeSavedId, setActiveSavedId] = useState(() => (
     savedRecipes.find((record) => JSON.stringify(record.recipe) === JSON.stringify(recipe))?.id || ''
@@ -2147,10 +2158,6 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    localStorage.setItem(SPINUP_HISTORY_KEY, serializeSpinupHistory(spinupHistory))
-  }, [spinupHistory])
-
-  useEffect(() => {
     localStorage.setItem(PLUGIN_RECENCY_KEY, JSON.stringify(pluginRecency))
   }, [pluginRecency])
 
@@ -2178,7 +2185,7 @@ export default function App() {
   }
 
   function applySavedRecipes(records) {
-    setSavedRecipes(records)
+    setSavedRecipeStorage({ records, error: '' })
     const ids = new Set(records.map((record) => record.id))
     setActiveSavedId((id) => ids.has(id) ? id : '')
     setEditingSavedId((id) => ids.has(id) ? id : '')
@@ -2194,6 +2201,7 @@ export default function App() {
     try {
       applySavedRecipes(await recipeLibraryRef.current.refresh(event.key === null))
     } catch (caught) {
+      setSavedRecipeStorage(recipeLibraryRef.current.read())
       setError(caught.message)
     }
   }
@@ -2221,7 +2229,7 @@ export default function App() {
       setError('')
       await saveRecipeToLibrary(recipe, editingSavedId, recipeSessionRef.current)
     } catch (caught) {
-      applySavedRecipes(recipeLibraryRef.current.snapshot())
+      setSavedRecipeStorage(recipeLibraryRef.current.read())
       setError(caught instanceof Error ? caught.message : 'Review the recipe settings before saving.')
     }
   }
@@ -2641,14 +2649,24 @@ export default function App() {
     try {
       applySavedRecipes(await recipeLibraryRef.current.remove(record))
     } catch (caught) {
-      applySavedRecipes(recipeLibraryRef.current.snapshot())
+      setSavedRecipeStorage(recipeLibraryRef.current.read())
       setError(caught.message)
     }
   }
 
   function removeSpinup(id) {
-    setSpinupHistory((current) => current.filter((record) => record.id !== id))
-    if (activeSpinupId === id) setActiveSpinupId('')
+    if (saveSpinupHistory((current) => current.filter((record) => record.id !== id)) && activeSpinupId === id) setActiveSpinupId('')
+  }
+
+  function saveSpinupHistory(update) {
+    try {
+      const records = updateSpinupHistory(localStorage, update)
+      setHistoryStorage({ records, error: '' })
+      return true
+    } catch (caught) {
+      setHistoryStorage((current) => ({ ...current, error: caught.message }))
+      return false
+    }
   }
 
   function replacePluginZip(id) {
@@ -2994,7 +3012,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
       const historyRecipe = launchedRecipe.wordpress === 'latest'
         ? { ...launchedRecipe, wordpress: launchedWordPressVersion }
         : launchedRecipe
-      setSpinupHistory((current) => appendSpinup(current, { recipe: historyRecipe, plugins: installedPlugins, theme: installedTheme }))
+      saveSpinupHistory((current) => appendSpinup(current, { recipe: historyRecipe, plugins: installedPlugins, theme: installedTheme }))
       if (checksInSetup(launchedRecipe).length) {
         watchPages(client)
         if (checksGate(checksLicenseIds, licenseResults, siteActiveIds).ready) runChecks(client, { auto: true })
@@ -3209,9 +3227,12 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                   </button>
                 </div>
 
+                {savedRecipeStorage.error && <p role="status" className="text-pretty text-base/7 text-amber-700 sm:text-sm/6">{savedRecipeStorage.error}</p>}
+                {historyStorage.error && <p role="status" className="text-pretty text-base/7 text-amber-700 sm:text-sm/6">{historyStorage.error}</p>}
+
                 {selectionMode === 'recipes' ? (
                   <div className="pt-5">
-                    {savedRecipes.length ? (
+                    {savedRecipeStorage.error ? null : savedRecipes.length ? (
                       <div className="rounded-[min(1vw,var(--radius-xl))] bg-white p-4 ring-1 ring-neutral-950/8">
                         {savedRecipes.map((record) => (
                           <SavedRecipeRow
@@ -3247,7 +3268,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                   </div>
                 ) : selectionMode === 'history' ? (
                   <div className="pt-5">
-                    {spinupHistory.length ? (
+                    {historyStorage.error && !spinupHistory.length ? null : spinupHistory.length ? (
                       <div className="grid gap-1 rounded-[min(1vw,var(--radius-xl))] bg-white p-2 ring-1 ring-neutral-950/8">
                         {spinupHistory.map((record) => (
                           <SpinupHistoryRow

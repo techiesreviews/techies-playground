@@ -113,7 +113,9 @@ Example: `Acme-Pro_v2.4.0-beta.7.zip` becomes `acme-pro`. This is why Replace ZI
 | `private-playground-launcher:browser-storage-default-v1` | One-time migration marker `1`. |
 | `private-playground-launcher:changelog-seen-version` | Newest version the user opened. |
 
-Parsers treat malformed records as absent and drop individually invalid saved recipes/history entries.
+Missing saved-list keys are empty lists. Invalid JSON (including a present empty string) or a non-array root is an unreadable list, not an empty one. The parsers throw a contextual read error; UI reads return records plus an error notice and leave raw storage intact. Both lists refuse mutations while their current stored value is unreadable. There is no automatic reset or repair. Individually invalid or unsafe records inside a readable array are still dropped while valid siblings remain usable.
+
+History is read without a mount-time write. Only a successful launch append or an explicit row removal reads the latest stored list, validates it and writes history. A history read/write failure shows a non-blocking notice and does not fail an otherwise successful launch. The cap of 30 and browser-site deduplication remain unchanged. History read/modify/write is synchronous within a tab; unlike saved recipes, it does not add Web Locks across tabs.
 
 Saved-recipe saves, imports, rename-updates and removals read the latest array immediately before writing, rather than persisting a tab's cached array from an effect. Web Locks serialize these read/modify/write operations across cooperating tabs where supported; browsers without Web Locks still read fresh storage, but simultaneous writes are not atomic. Storage events refresh the displayed library without writing it back. The record schema and normalized-name replacement rule are unchanged.
 

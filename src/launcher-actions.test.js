@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import * as savedRecipes from './lib/saved-recipes.js'
+import * as history from './lib/spinup-history.js'
 import { createRecipeLibrary } from './lib/recipe-library.js'
 import * as recipes from './lib/recipe.js'
 import { markPluginSelected } from './lib/plugin-preferences.js'
@@ -32,7 +33,7 @@ function storage() {
 function tab(localStorage, locks, actualLaunch = false) {
   const library = createRecipeLibrary(localStorage, locks)
   const state = {
-    records: library.snapshot(),
+    records: library.read().records,
     recipe: recipes.validateRecipe({ name: 'Draft' }),
     activeSavedId: '', editingSavedId: '', selectionMode: 'plugins', exports: [], launches: [], runtimeStarts: [],
   }
@@ -43,7 +44,7 @@ function tab(localStorage, locks, actualLaunch = false) {
     launchIdRef: { current: 0 }, launchAbortRef: { current: null },
     updateSavedRecipes: (store, update) => savedRecipes.updateSavedRecipes(store, update, locks),
     setRecipe: (next) => { scope.recipe = state.recipe = typeof next === 'function' ? next(state.recipe) : next },
-    setSavedRecipes: (next) => { state.records = typeof next === 'function' ? next(state.records) : next },
+    setSavedRecipeStorage: (next) => { state.records = next.records; state.storageError = next.error },
     setActiveSavedId: (next) => { scope.activeSavedId = state.activeSavedId = typeof next === 'function' ? next(state.activeSavedId) : next },
     setEditingSavedId: (next) => { scope.editingSavedId = state.editingSavedId = typeof next === 'function' ? next(state.editingSavedId) : next },
     setSelectionMode: (mode) => { state.selectionMode = mode },
@@ -128,6 +129,40 @@ test('PG-01: two stale tabs saving distinct recipes keep both after reload', asy
   await a.save({ name: 'Tab A' })
   await b.save({ name: 'Tab B' })
   assert.deepEqual(tab(localStorage).state.records.map((record) => record.id), ['tab-b', 'tab-a'])
+})
+
+test('damaged recipes load with a notice and Save leaves their raw storage intact', async () => {
+  const localStorage = storage()
+  localStorage.setItem(savedRecipes.SAVED_RECIPES_KEY, '{damaged recipes')
+  const library = createRecipeLibrary(localStorage, null)
+  assert.deepEqual(library.read(), { records: [], error: savedRecipes.SAVED_RECIPES_READ_ERROR })
+  const a = tab(localStorage, null)
+  await a.saveCurrent()
+  assert.match(a.state.error, /Saved recipes could not be read/)
+  assert.equal(localStorage.getItem(savedRecipes.SAVED_RECIPES_KEY), '{damaged recipes')
+})
+
+test('page mount keeps damaged history without writing an empty list', () => {
+  const localStorage = storage()
+  localStorage.setItem(history.SPINUP_HISTORY_KEY, '{damaged history')
+  const writes = localStorage.writes
+  const stateStart = source.search(/^  const \[(?:spinupHistory|historyStorage),/m)
+  const stateEnd = source.indexOf('\n', stateStart)
+  const init = source.slice(stateStart, stateEnd)
+  const effect = source.match(/  useEffect\(\(\) => \{\n(    localStorage.setItem\(SPINUP_HISTORY_KEY,[\s\S]*?)\n  }, \[spinupHistory\]\)/)?.[0] || ''
+  const useState = (initialize) => [initialize(), () => {}]
+  Function('localStorage', 'useState', 'useEffect', ...Object.keys(history), `${init}\n${effect}`)(localStorage, useState, (run) => run(), ...Object.values(history))
+  assert.equal(localStorage.getItem(history.SPINUP_HISTORY_KEY), '{damaged history')
+  assert.equal(localStorage.writes, writes)
+  let state = { records: [], error: '' }
+  const save = handler('saveSpinupHistory', {
+    ...history, localStorage,
+    setHistoryStorage: (next) => { state = typeof next === 'function' ? next(state) : next },
+  })
+  assert.equal(save((records) => history.appendSpinup(records, { recipe: recipes.DEFAULT_RECIPE, plugins: [] })), false)
+  assert.match(state.error, /Past spin-ups could not be read/)
+  assert.equal(localStorage.getItem(history.SPINUP_HISTORY_KEY), '{damaged history')
+  assert.equal(localStorage.writes, writes, 'a failed history append does not throw through launch cleanup')
 })
 
 test('PG-01: two stale libraries without Web Locks retain both recipes after reload', async () => {

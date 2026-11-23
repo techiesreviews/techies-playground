@@ -6,6 +6,7 @@ import {
   parseSpinupHistory,
   serializeSpinupHistory,
 } from './spinup-history.js'
+import * as history from './spinup-history.js'
 import { validateRecipe } from './recipe.js'
 
 const recipe = validateRecipe({
@@ -52,6 +53,29 @@ test('round trips history and drops unsafe entries', () => {
   const parsed = parseSpinupHistory(JSON.stringify([...safe, unsafe]))
 
   assert.deepEqual(parseSpinupHistory(serializeSpinupHistory(parsed)), safe)
+})
+
+test('unreadable history is kept on load and on append or removal', () => {
+  for (const raw of ['{damaged', '{}', 'null', '42', '"history"', '']) {
+    let stored = raw
+    const storage = { getItem: () => stored, setItem: (_key, value) => { stored = value } }
+    assert.throws(() => parseSpinupHistory(raw), /Past spin-ups could not be read/)
+    assert.deepEqual(history.readSpinupHistory(storage), {
+      records: [], error: 'Past spin-ups could not be read. Stored data was kept.',
+    })
+    for (const update of [(records) => appendSpinup(records, { recipe, plugins: [] }), () => []]) {
+      assert.throws(() => history.updateSpinupHistory(storage, update), /Past spin-ups could not be read/)
+      assert.equal(stored, raw)
+    }
+  }
+  let stored = null
+  const storage = { getItem: () => stored, setItem: (_key, value) => { stored = value } }
+  assert.deepEqual(history.readSpinupHistory(storage), { records: [], error: '' })
+  const added = history.updateSpinupHistory(storage, (records) => appendSpinup(records, { recipe, plugins: [] }, '2026-08-01T12:00:00.000Z', 'new'))
+  assert.equal(added[0].id, 'new')
+  assert.deepEqual(history.readSpinupHistory(storage), { records: added, error: '' })
+  assert.deepEqual(history.updateSpinupHistory(storage, (records) => records.filter((record) => record.id !== 'new')), [])
+  assert.equal(stored, '[]')
 })
 
 test('records the active premium theme without its ZIP', () => {
