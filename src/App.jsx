@@ -2009,6 +2009,8 @@ export default function App() {
   const licenseListUnavailable = (current = licenseStorage) => current.records === null || Boolean(current.error) || current.loading
   const keysBlockLaunch = (candidate, current = licenseStorage) => Boolean(candidate?.plugins?.length) && licenseListUnavailable(current)
   const licenseReadIdRef = useRef(0)
+  const retryLicenseButtonRef = useRef(null)
+  const activeSetupTabRef = useRef(null)
   const launchRef = useRef(null)
   const [addingKeyFor, setAddingKeyFor] = useState('')
   const [unlockPending, setUnlockPending] = useState(false)
@@ -2118,7 +2120,9 @@ export default function App() {
       .then((records) => {
         clearTimeout(timer)
         if (readId !== licenseReadIdRef.current) return null
+        const hadRetryFocus = typeof document !== 'undefined' && retryLicenseButtonRef.current && document.activeElement === retryLicenseButtonRef.current
         applyLicenseStorage({ records, error: '', loading: false })
+        if (hadRetryFocus) window.requestAnimationFrame(() => activeSetupTabRef.current?.focus())
         return records
       })
       .catch(() => {
@@ -3256,6 +3260,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
 
                 <div role="tablist" aria-label="Setup source" className="flex max-w-full gap-1 overflow-x-auto border-b border-neutral-950/10 pt-5">
                   <button
+                    ref={selectionMode === 'recipes' ? activeSetupTabRef : undefined}
                     type="button"
                     role="tab"
                     aria-selected={selectionMode === 'recipes'}
@@ -3265,6 +3270,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                     Saved recipes{savedRecipeStorage.error ? '' : ` (${savedRecipes.length})`}
                   </button>
                   <button
+                    ref={selectionMode === 'plugins' ? activeSetupTabRef : undefined}
                     type="button"
                     role="tab"
                     aria-selected={selectionMode === 'plugins'}
@@ -3274,6 +3280,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                     Choose plugins ({selectedCount} selected)
                   </button>
                   <button
+                    ref={selectionMode === 'themes' ? activeSetupTabRef : undefined}
                     type="button"
                     role="tab"
                     aria-selected={selectionMode === 'themes'}
@@ -3283,6 +3290,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                     Choose themes ({recipe.theme || recipe.repositoryTheme ? 1 : 0} selected)
                   </button>
                   <button
+                    ref={selectionMode === 'history' ? activeSetupTabRef : undefined}
                     type="button"
                     role="tab"
                     aria-selected={selectionMode === 'history'}
@@ -3300,6 +3308,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                     <p className="flex flex-wrap items-center gap-x-3 gap-y-2 text-red-700">
                       <span>{licenseRecordsError}</span>
                       <button
+                        ref={retryLicenseButtonRef}
                         type="button"
                         aria-disabled={licenseStorage.loading}
                         onClick={() => { if (!licenseStorage.loading) refreshLicenseRecords({ retry: true }) }}

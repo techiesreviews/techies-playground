@@ -772,6 +772,8 @@ function licenseTab(listLicenseMetadata, initialRecords = null, timeoutMs = 1000
     listLicenseMetadata,
     licenseReadIdRef,
     licenseStorageRef,
+    retryLicenseButtonRef: { current: null },
+    activeSetupTabRef: { current: null },
     setLicenseStorage: (next) => {
       const updated = typeof next === 'function'
         ? next({ records: state.records, error: state.error, loading: state.loading })
@@ -916,6 +918,8 @@ test('TOOLS-438: deferred saved-recipe Start refuses to launch when a license re
     },
     licenseReadIdRef,
     licenseStorageRef,
+    retryLicenseButtonRef: { current: null },
+    activeSetupTabRef: { current: null },
     // Simulate React batching: queue state updaters without running them until commit.
     setLicenseStorage: (next) => { queuedStateUpdates.push(next) },
   }
