@@ -213,6 +213,28 @@ test('a failed readable history write keeps rows and the active selection with a
   assert.equal(localStorage.getItem(history.SPINUP_HISTORY_KEY), raw)
 })
 
+test('legacy history rows without IDs can be removed on the first click', () => {
+  for (const id of [undefined, '']) {
+    const localStorage = storage()
+    const record = { id, launchedAt: '2026-08-01T12:00:00.000Z', recipe: { ...recipes.DEFAULT_RECIPE, storage: 'temporary' }, plugins: [] }
+    const sibling = { ...record, id: 'legacy-spinup-0' }
+    localStorage.setItem(history.SPINUP_HISTORY_KEY, JSON.stringify([record, sibling]))
+    let state = history.readSpinupHistory(localStorage)
+    const displayedId = state.records[0].id
+    assert.notEqual(displayedId, sibling.id)
+    const scope = {
+      ...history, localStorage, activeSpinupId: displayedId,
+      setActiveSpinupId() {},
+      setHistoryStorage: (next) => { state = typeof next === 'function' ? next(state) : next },
+    }
+    scope.saveSpinupHistory = handler('saveSpinupHistory', scope)
+    handler('removeSpinup', scope)(displayedId)
+    assert.equal(state.records.length, 1)
+    assert.equal(state.records[0].id, sibling.id)
+    assert.deepEqual(history.readSpinupHistory(localStorage).records, state.records)
+  }
+})
+
 test('PG-01: two stale libraries without Web Locks retain both recipes after reload', async () => {
   const localStorage = storage()
   const a = tab(localStorage, null)
