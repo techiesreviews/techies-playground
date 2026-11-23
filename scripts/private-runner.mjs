@@ -2,7 +2,7 @@
 // A deliberately fixed, secret-free proof. No listener, recipe input or browser vault.
 import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises'
-import { homedir } from 'node:os'
+import { homedir, hostname } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { MEASURE_PLUGIN, MEASURE_PLUGIN_PATH, parseMeasurement } from '../src/lib/checks.js'
@@ -74,7 +74,7 @@ export async function runOnce(root = DATA_DIRECTORY, execute = runBrowserProof) 
   await mkdir(directory, { mode: 0o700 })
   const report = {
     schemaVersion: 1, job, startedAt: new Date().toISOString(),
-    environment: { runtime: 'browser-playground', host: 'ubulex', platform: process.platform, architecture: process.arch, node: process.version, target: '/' },
+    environment: { runtime: 'browser-playground', host: hostname(), platform: process.platform, architecture: process.arch, node: process.version, target: '/' },
     boot: { status: 'not-run' }, queryMonitor: { status: 'not-run' }, codeProfiler: { status: 'not-run' },
   }
   try {
@@ -155,23 +155,25 @@ async function runBrowserProof(report) {
       await page.evaluate(() => window.proofClient.goTo('/wp-admin/admin.php?page=code-profiler'))
       const frame = page.frameLocator('#site').frameLocator('iframe')
       await frame.locator('#start-profile').waitFor()
+      const target = new URL(await frame.locator('#id-frontend').inputValue())
+      if (await frame.locator('input[name="x_end"]:checked').inputValue() !== 'frontend' || target.search || target.hash || target.pathname.replace(/^\/scope:[^/]+/, '') !== '/') {
+        throw new Error('Code Profiler is not configured for the homepage; refusing another target.')
+      }
       await frame.locator('#start-profile').click()
       // A client URL read is asynchronous. Wait for the native result chart in
       // the actual WordPress frame, so a pending call cannot count as success.
       const outcome = await Promise.race([
         frame.locator('#code-profiler-error').waitFor({ state: 'visible', timeout: 90_000 }).then(async () => ({ error: await frame.locator('#code-profiler-error').innerText() })),
         frame.locator('#myChart').waitFor({ state: 'visible', timeout: 90_000 }).then(() => ({ completed: true })),
-      ])
+      ]).catch(() => { throw new Error('Code Profiler showed neither a result nor an error within 90 seconds.') })
       if (outcome.error) {
         Object.assign(report.codeProfiler, { status: 'blocked', error: outcome.error })
         throw new Error(`Free Code Profiler failed: ${outcome.error}`)
       }
-      report.codeProfiler.requestedProfileId = await page.evaluate(async () => new URL(await window.proofClient.getCurrentURL(), location.origin).searchParams.get('id'))
-      report.codeProfiler.nativeResult = (await frame.locator('body').innerText()).slice(0, 3000)
-      const profile = JSON.parse(await php(`<?php require '/wordpress/wp-load.php'; $files=code_profiler_glob(CODE_PROFILER_UPLOAD_DIR,'[.]slugs[.]profile$',true); $f=end($files); if (!$f || !is_file(str_replace('.slugs.profile','.summary.profile',$f))) { echo json_encode(['uploadDirectory'=>CODE_PROFILER_UPLOAD_DIR,'artifacts'=>code_profiler_glob(CODE_PROFILER_UPLOAD_DIR,'[.]profile$')]); return; } $rows=[]; foreach(file($f,FILE_IGNORE_NEW_LINES) as $line) { $v=explode("\t",$line); $rows[]=['slug'=>$v[0],'seconds'=>(float)$v[1],'name'=>$v[2],'type'=>$v[3]]; } echo json_encode(['profileId'=>basename($f,'.slugs.profile'),'attribution'=>$rows]);`))
-      Object.assign(report.codeProfiler, profile)
-      if (!profile.profileId || !profile.attribution?.length) throw new Error('Profiler returned no saved summary and plugin/theme attribution.')
-      Object.assign(report.codeProfiler, profile, { status: 'completed', export: 'Parsed native .slugs.profile; matching .summary.profile verified. No Pro export requested.' })
+      const nativeProfileId = await page.evaluate(async () => new URL(await window.proofClient.getCurrentURL(), location.origin).searchParams.get('id'))
+      const profile = JSON.parse(await php(`<?php require '/wordpress/wp-load.php'; $files=code_profiler_glob(CODE_PROFILER_UPLOAD_DIR,'[.]slugs[.]profile$',true); $f=end($files); if (!$f || !is_file(str_replace('.slugs.profile','.summary.profile',$f))) { echo '{}'; return; } $rows=[]; foreach(file($f,FILE_IGNORE_NEW_LINES) as $line) { $v=explode("\t",$line); if(count($v)!==4) { echo '{}'; return; } $rows[]=['slug'=>$v[0],'seconds'=>(float)$v[1],'name'=>$v[2],'type'=>$v[3]]; } echo json_encode(['artifact'=>basename($f,'.slugs.profile'),'attribution'=>$rows]);`))
+      if (!nativeProfileId || !profile.artifact?.startsWith(nativeProfileId + '.') || !profile.attribution?.length) throw new Error('Profiler returned no matching saved summary and plugin/theme attribution.')
+      Object.assign(report.codeProfiler, { profileId: nativeProfileId, attribution: profile.attribution, status: 'completed', export: 'Parsed native .slugs.profile; matching .summary.profile verified. No Pro export requested.' })
     })()
     await Promise.race([work, new Promise((_, reject) => {
       timeout = setTimeout(() => reject(new Error('Browser proof exceeded 180 seconds; unfinished stages are not completed.')), DEADLINE_MS)

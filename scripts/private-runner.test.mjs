@@ -11,9 +11,10 @@ async function fixture(t) {
   return root
 }
 
-test('two workers cannot claim the same queued job; a claimed job survives a restart', async (t) => {
+test('two workers cannot claim the same queued job; a claimed job stays in running', async (t) => {
   const root = await fixture(t)
   const job = await enqueue(root)
+  assert.equal((await stat(path.join(root, 'queued', `${job.id}.json`))).mode & 0o777, 0o600)
   const claims = await Promise.all([claim(root), claim(root)])
   assert.equal(claims.filter(Boolean).length, 1)
   assert.equal(claims.find(Boolean).id, job.id)
@@ -35,8 +36,11 @@ test('a failed real attempt saves private JSON and escaped HTML, without retryin
   assert.match(await readFile(path.join(dir, 'report.html'), 'utf8'), /&lt;unsupported&gt;/)
   assert.equal((await stat(dir)).mode & 0o777, 0o700)
   assert.equal((await stat(path.join(dir, 'report.json'))).mode & 0o777, 0o600)
+  assert.equal((await stat(path.join(dir, 'report.html'))).mode & 0o777, 0o600)
   assert.equal(await runOnce(root, () => assert.fail('must not retry')), null)
   assert.deepEqual(await readdir(path.join(root, 'running')), [])
+  assert.deepEqual(await readdir(path.join(root, 'finished')), [`${job.id}.json`])
+  assert.equal((await stat(path.join(root, 'finished', `${job.id}.json`))).mode & 0o777, 0o600)
 })
 
 test('go requires real Query Monitor collectors and a completed attributed profiler artifact', () => {

@@ -47,6 +47,7 @@ replace the normal browser-local launch or access its stored sites and vaults.
 | `src/styles.css` | Tailwind import/theme, body defaults, selection color, license-popover positioning/animation, Checks panel slide-in, its two views, the "i", rolling numbers and the delayed spinner, reduced motion. | `src/main.jsx`. |
 | `worker.js` | Serve `dist` through asset binding and add security headers. | Cloudflare Workers. |
 | `scripts/sync-wordpress-release.mjs` | Detect a new WordPress release branch and prepare fallback/version/changelog edits. | npm script and scheduled workflow. |
+| `scripts/private-runner.mjs` | On-demand TOOLS-411 proof: fixed local queue, headless browser Playground, private reports. | Run by hand only; not imported by the launcher. |
 | `scripts/configure-cloudflare-deploy.ps1` | Securely configure GitHub deployment secret/variables and trigger workflow. | One-time maintainer action. |
 
 All `*.test.js` and `*.test.mjs` files are direct Node tests for their sibling module.
