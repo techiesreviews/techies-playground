@@ -29,17 +29,19 @@ const allowed = {
   'core/paragraph': ['content', 'align'],
 }
 export function validateDesign(value) {
-  if (!Array.isArray(value?.blocks) || !value.blocks.length || !Array.isArray(value.misses) || value.misses.some((v) => typeof v !== 'string' || v.length > 1000)) throw new Error('Invalid AI design response.')
+  if (!Array.isArray(value?.blocks) || !value.blocks.length || !Array.isArray(value.misses) || value.misses.length > 50 || value.misses.some((v) => typeof v !== 'string' || v.length > 1000)) throw new Error('Invalid AI design response.')
   let count = 0
   const visit = (block, depth) => {
-    if (++count > 60 || depth > 10 || !allowed[block.name] || !Array.isArray(block.innerBlocks) || !block.attributes || typeof block.attributes !== 'object' || Array.isArray(block.attributes)) throw new Error('Only a bounded tree of supported Gutenberg core blocks is allowed.')
+    if (++count > 60 || depth > 10 || !Object.hasOwn(allowed, block.name) || !Array.isArray(block.innerBlocks) || !block.attributes || typeof block.attributes !== 'object' || Array.isArray(block.attributes)) throw new Error('Only a bounded tree of supported Gutenberg core blocks is allowed.')
     for (const [key, data] of Object.entries(block.attributes)) {
       if (![...allowed[block.name], 'style', 'anchor'].includes(key)) throw new Error(`Unsupported block attribute: ${key}`)
-      if (JSON.stringify(data).length > 4000 || /[<>]|url\s*\(|expression\s*\(|javascript:|https?:|@import/i.test(JSON.stringify(data))) throw new Error('Executable markup or external resources are not allowed in blocks.')
+      if (JSON.stringify(data).length > 4000 || /[<>]|url\s*\(|expression\s*\(|javascript:|https?:|data:|file:|\/\/|@import/i.test(JSON.stringify(data))) throw new Error('Executable markup or external resources are not allowed in blocks.')
+      if (key === 'tagName' && !['div', 'header', 'main', 'section', 'article', 'aside', 'footer'].includes(data)) throw new Error('Unsupported group tag.')
+      if (key === 'style' && (!data || typeof data !== 'object' || Array.isArray(data) || Object.keys(data).some((name) => !['spacing', 'border', 'color', 'typography'].includes(name)))) throw new Error('Only native spacing, border, color and typography styles are allowed.')
     }
     block.innerBlocks.forEach((child) => visit(child, depth + 1))
   }
-  value.blocks.forEach((block) => visit(block, 0))
+  value.blocks.forEach((block) => visit(block, 1))
   return value
 }
 
@@ -62,12 +64,15 @@ function command(args, prompt, directory, deadline = 180_000) {
     // Only ordinary process settings are inherited. No API-key fallback or custom provider config.
     const env = Object.fromEntries(['PATH', 'HOME', 'USER', 'LANG', 'LC_ALL', 'XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS', 'CODEX_HOME', 'TMPDIR'].filter((key) => process.env[key]).map((key) => [key, process.env[key]]))
     const child = spawn('codex', args, { cwd: directory, env, stdio: ['pipe', 'pipe', 'pipe'] })
-    let output = '', expired = false
+    let output = '', expired = false, hardStop
     child.stdout.on('data', (chunk) => { output = (output + chunk).slice(-32000) })
     child.stderr.on('data', (chunk) => { output = (output + chunk).slice(-32000) })
     child.on('error', reject)
-    const timer = setTimeout(() => { expired = true; child.kill('SIGTERM') }, deadline)
-    child.on('close', (code) => { clearTimeout(timer); resolve({ code, output, expired }) })
+    const timer = setTimeout(() => {
+      expired = true; child.kill('SIGTERM')
+      hardStop = setTimeout(() => child.kill('SIGKILL'), 1000)
+    }, deadline)
+    child.on('close', (code) => { clearTimeout(timer); clearTimeout(hardStop); resolve({ code, output, expired }) })
     child.stdin.on('error', () => {})
     child.stdin.end(prompt)
   })
@@ -87,12 +92,14 @@ export async function generateDesign(report, directory, run = command) {
   const prompt = `Return only the requested JSON. Rebuild this fixed sample as an editable Gutenberg core block tree, no tools or file changes. Use core/group, columns, column, heading, paragraph only. Attributes are a JSON string per node. Use native style attributes, no classes, HTML, custom CSS, external resources or shortcodes. Preserve all text. List every unsupported detail in misses. The supplied theme sets Arial 16px/1.5, text #213d30, background #f2f0e8, zero block gap, heading weight 700. Give the outer group a constrained layout contentSize 1120px; its children must fill that width. Use native padding, borders, margins, typography and background style attributes to match the reference, columns gap24px and mobile stacking. Header and footer are groups with paragraph children, hero a group with heading and paragraph; cards use columns with three columns each with background, padding and heading/paragraph. Do not use any other attributes than style, tagName, layout, isStackedOnMobile, width, content, level, textAlign, align, anchor. Set heading margins to zero; paragraphs top margin16px except header/footer zero. Put header fontSize22px/fontWeight700 on its paragraph. Use border.top/bottom objects for individual edges. Keep h1 fontSize52px/lineHeight1.1, h2 fontSize24px/lineHeight1.2.\nReference HTML:\n${sampleHTML()}`
   console.log('Generating native Gutenberg blocks with signed-in Codex…')
   const result = await run(codexArguments(directory), prompt, directory)
+  await chmod(path.join(directory, 'answer.json'), 0o600).catch((error) => { if (error.code !== 'ENOENT') throw error })
   if (result.code !== 0 || result.expired) {
-    Object.assign(report.ai, classifyCodexFailure(result.output))
+    Object.assign(report.ai, result.expired
+      ? { status: 'blocked', reason: 'Codex did not answer within 180 seconds. Start a new attempt. No paid fallback was used.' }
+      : classifyCodexFailure(result.output))
     throw new Error(report.ai.reason)
   }
   const answer = JSON.parse(await readFile(path.join(directory, 'answer.json'), 'utf8'))
-  await chmod(path.join(directory, 'answer.json'), 0o600)
   const decode = (block) => ({ ...block, attributes: JSON.parse(block.attributes), innerBlocks: block.innerBlocks.map(decode) })
   const design = validateDesign({ ...answer, blocks: answer.blocks.map(decode) })
   report.ai.status = 'completed'
@@ -207,6 +214,7 @@ export function designReportHTML(report) {
   const design = report.design || {}, ai = report.ai || {}
   const rows = (value) => `<pre>${escape(JSON.stringify(value, null, 2))}</pre>`
   const qm = report.queryMonitor || {}, profiler = report.codeProfiler || {}
+  const stageLabel = (status) => ({ completed: 'Completed', running: 'Running', blocked: 'Stopped', paused: 'Paused', 'not-run': 'Not run' })[status] || 'Not run'
   const status = ai.status === 'paused' ? 'Paused · AI limit' : report.verdict === 'go' ? design.misses?.length ? 'Completed · misses listed' : 'Completed' : 'Needs attention'
   const captures = design.captures?.length ? design.captures.map((c) => `
     <div><h3>${c.width} px</h3><p class="metric">${c.match.toFixed(2)}% match</p>
@@ -217,6 +225,7 @@ export function designReportHTML(report) {
     </div></div>`).join('') : '<p>No score · design capture has not completed.</p>'
   return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Design test · The Long View</title><style>
 :root{--ink:oklch(21% .01 180);--muted:oklch(45% .01 180);--line:oklch(91% 0 none);--teal:oklch(45% .08 190);--surface:oklch(98% 0 none)}*{box-sizing:border-box}body{margin:0;font:16px/1.5 Arial,sans-serif;color:var(--ink);background:var(--surface)}header{padding:20px 24px;border-block-end:1px solid var(--line);background:white;font-weight:700}main{max-inline-size:1200px;margin-inline:auto;padding:24px;display:grid;gap:24px}nav,.row{display:flex;flex-wrap:wrap;gap:16px;align-items:center}a{color:var(--teal);text-underline-offset:4px}a,summary{min-block-size:44px;display:inline-flex;align-items:center}a:active,summary:active{opacity:.7}:focus-visible{outline:2px solid var(--ink);outline-offset:4px}h1,h2,h3,p{margin:0}h1{font-size:clamp(28px,4vw,40px);line-height:1.2}h2{font-size:24px}p{max-inline-size:70ch}.muted{color:var(--muted)}section{padding:24px;background:white;border:1px solid var(--line);border-radius:12px;display:grid;gap:16px;min-inline-size:0}.compare{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:16px}figure{margin:0;min-inline-size:0}figcaption{padding-block:8px;font-weight:700}img{display:block;inline-size:100%;block-size:auto;border:1px solid var(--line)}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:14px/1.5 monospace;margin:0}.metric{font-size:32px;font-weight:700;font-variant-numeric:tabular-nums}li{overflow-wrap:anywhere}.badge{color:var(--teal);font-weight:700}details{min-inline-size:0}summary{cursor:pointer;font-weight:700}@media(max-width:500px){main{padding:16px}section{padding:16px}}
+summary{display:list-item;min-block-size:44px;padding-block:10px}
 </style><header>Techies Playground</header><main>
 <nav aria-label="Main"><a href="https://play.techies.tools">Playground</a><a href="#runs" aria-current="page">Automated tests</a></nav>
 <div id="runs"><p class="muted">PRIVATE RUN ON UBULEX</p><h1>Your design runs</h1><p>The Long View · Gutenberg</p></div>
@@ -226,11 +235,11 @@ export function designReportHTML(report) {
 <nav aria-label="Report sections"><a href="#design">Design</a><a href="#query">Query Monitor</a><a href="#profiler">Code Profiler</a><a href="#native">Native elements</a></nav></section>
 <section id="design"><h2>Design</h2><p class="muted">Fixed sample v1 · same Chromium, Arial, viewport and device scale. Match = unchanged pixels / all pixels; channel tolerance 10%. This is not SSIM or a design-quality verdict.</p>
 ${captures}<h3>Misses</h3>${design.misses?.length ? `<ul>${design.misses.map((m) => `<li>${escape(m)}</li>`).join('')}</ul>` : `<p>${design.status === 'completed' ? 'No missing text or unsupported details reported. Inspect the captures for visual differences.' : 'Not assessed.'}</p>`}</section>
-<section id="query"><div class="row"><h2>Query Monitor</h2><span class="badge">${escape(qm.status)}</span></div>
+<section id="query"><div class="row"><h2>Query Monitor</h2><span class="badge">${stageLabel(qm.status)}</span></div>
 ${qm.warmSeconds ? `<p class="metric">${qm.warmSeconds.median.toFixed(3)} s</p><p>Warm PHP time · median of five requests</p><p>Range ${qm.warmSeconds.min.toFixed(3)}–${qm.warmSeconds.max.toFixed(3)} s · ${qm.observations.length} collector observations</p>` : '<p>No completed measurements.</p>'}
 <p class="muted">One cold + five warm requests to the rebuilt homepage. Playground / WebAssembly / SQLite sandbox diagnostics.</p>
 <details><summary>All Query Monitor measurements</summary>${rows(qm)}</details></section>
-<section id="profiler"><div class="row"><h2>Code Profiler</h2><span class="badge">${escape(profiler.status)}</span></div>
+<section id="profiler"><div class="row"><h2>Code Profiler</h2><span class="badge">${stageLabel(profiler.status)}</span></div>
 <p>Profile ${escape(profiler.profileId || 'not available')}</p>
 ${profiler.attribution?.map((entry) => `<div class="row"><strong>${escape(entry.name)}</strong><span>${Number(entry.seconds).toFixed(4)} s · ${escape(entry.type)}</span></div>`).join('') || '<p>No completed profile.</p>'}
 <p class="muted">Separate free-edition profile of the rebuilt homepage.</p>

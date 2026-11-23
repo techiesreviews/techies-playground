@@ -4,7 +4,7 @@
 - Owner: fleet-lead
 - Status: complete
 - Disposition: kept
-- Related version: 0.14.0
+- Related version: 0.13.4 (private runner only; no hosted behavior change)
 - Related commit/issue: TOOLS-417; extends TOOLS-411 / PR #70
 
 ## Context
@@ -47,6 +47,11 @@ layout-A HTML report. See [the run guide](../design-runner.md).
 | Node | `kit unit` | Full suite passes | 388/388 passed in 43 files | `.scratch/unit/20261123T125638-3642028.log` |
 | Vite | `kit build` | Production bundle builds | `RESULT: ok build finished`; existing externalized-module and chunk-size warnings | Build command output |
 | Kit UX | `kit ux` | Report missing project integration | `RESULT: fail ux ENOENT` for absent `docs/agents/features.md`; repository extras explicitly declare no feature list | Build thread; real browser checks above |
+| Review regression tests | `kit unit scripts/design-runner.test.mjs` before fixes | Attribute, timeout and disclosure defects reproduced | 5/8 passed, 3 failed; after fixes affected suite passed 13/13 | `.scratch/unit/20261123T130122-3808272.log`, `.scratch/unit/20261123T130158-3850316.log` |
+| Original TOOLS-411 pipeline | `kit go tools-417-original-proof -- node scripts/private-runner.mjs once` | Shared canonical-homepage change preserves original proof | `RESULT: ok private-runner go` | Private run `d06864a9-8ea6-4baa-8858-e3ef5ee2ebdf` |
+| Final full design pipeline | `kit go tools-417-final-proof -- node scripts/design-runner.mjs once` | Guard and report fixes preserve real run | `RESULT: ok design-runner go`; 18 valid blocks; both widths 100.00%; both testers completed | Private run `4aa54cd6-3fc9-4b1f-9f3b-6a1186f649ca` |
+| Final unit suite | `kit unit` | Full suite passes after review fixes | 390/390 in 43 files; final `kit build` passed at 0.13.4 | `.scratch/unit/20261123T130341-3961326.log` |
+| Final report | `kit go tools-417-final-shots -- node .scratch/tools-417-shots.mjs` | Final controls and images work at 1440/390 | Passed, including visible list-item disclosure markers, no overflow at normal/doubled body text | `.scratch/tools-417-shots/result-1440.png`, `.scratch/tools-417-shots/result-390.png` |
 
 Private evidence root: `~/.local/share/techies-playground/design-tests/runs/a0c710a0-d35b-4d98-988d-e89295823f83/`.
 Query Monitor 4.1.1 returned six real collector observations, 18 queries, no PHP
@@ -54,6 +59,22 @@ errors, and warm PHP median 0.104 s (0.103–0.107 s). Code Profiler 1.9.6 compl
 profile `1795438449.0710` with three native plugin attribution rows and a matching
 summary artifact. Reference repeat calibration scored 100%; altered fixtures scored
 99.3056% / 97.4359%. Both widths had no horizontal overflow.
+
+The final run after review fixes is
+`~/.local/share/techies-playground/design-tests/runs/4aa54cd6-3fc9-4b1f-9f3b-6a1186f649ca/`.
+It again saved 18 valid blocks and scored 100.00% at both widths. Query Monitor's
+warm median was 0.106 s (0.104–0.108 s), with 18 queries and no PHP errors. Code
+Profiler completed native profile `1795439063.7970` with three attribution rows.
+Its report is the source of the final screenshots.
+
+Main review R1-1 through R1-5 led to strict native tag/style checks, a ten-level tree
+limit, an explicit timeout reason, private failure-output permissions, removal of the
+public changelog/version bump and restored disclosure markers. Gaps R1-6 through
+R1-10 gained timeout/API-login/completed-report coverage and a fresh original proof.
+Optional machine-status labels were also made readable. The optional plural heading
+change was declined because it follows the approved layout-A prototype. The optional
+separate browser budgets were declined because this bounded proof intentionally has
+a total deadline; the final complete attempt finished in 67.4 seconds including AI.
 
 ## Result
 
@@ -72,7 +93,8 @@ and both testers. The remaining limitations are explicit in the report and run g
 ## Documentation impact
 
 Updated context, documentation index, architecture, rebuild specification, data
-contracts, testing, private run guide, changelog and version.
+contracts, testing and private run guide. The hosted changelog/version stay unchanged:
+this private CLI has no hosted launcher integration, matching the earlier TOOLS-411 proof.
 
 ## Follow-ups and open questions
 
