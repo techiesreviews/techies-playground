@@ -162,6 +162,7 @@ const CHANGELOG_ENTRIES = [
     changes: [
       'A read error keeps the previously loaded license list instead of hiding saved keys.',
       'A clear error notice with a Try again action appears, and launch pauses for setups with uploaded plugins while saved license keys cannot be read, so launches do not silently skip saved keys.',
+      'Dropping a plugin into an open site while saved license keys cannot be read installs the plugin, fills no key, and warns you to copy the key from Licenses or restart.',
     ],
   },
   {
@@ -2378,6 +2379,7 @@ export default function App() {
     const outcome = { failures: [], problems: [] }
     const { failures, problems } = outcome
     let installedCount = 0
+    let licenseNoticeAdded = false
     if (!client || client !== clientRef.current || launchId !== launchIdRef.current) return outcome
     const isCurrent = () => launchId === launchIdRef.current && client === clientRef.current
     for (const [index, plugin] of uploadedPlugins.entries()) {
@@ -2410,7 +2412,12 @@ export default function App() {
         const liveLicenseUnavailable = licenseListUnavailable(currentLicenses)
         const liveSavedKeyPackages = liveLicenseUnavailable ? new Set() : packagesWithSavedKeys(currentLicenses.records || [])
         if (liveLicenseUnavailable) {
-          problems.push(`${plugin.label}: Saved license keys could not be read, so no saved key was filled in. Use Try again, then add it from Licenses.`)
+          if (!licenseNoticeAdded) {
+            licenseNoticeAdded = true
+            problems.push(currentLicenses.loading && !currentLicenses.error
+              ? 'Saved license keys are still loading, so no saved key was filled in. Copy the key from Licenses and activate it in WordPress, or start the setup again.'
+              : 'Saved license keys could not be read, so no saved key was filled in. Copy the key from Licenses and activate it in WordPress, or start the setup again.')
+          }
         } else if (liveSavedKeyPackages.has(`plugin:${plugin.id}`) && isVaultSessionUnlocked()) {
           const filled = await fillSavedLicenseKeys({
             client, getVaultKey: getVaultSessionKey, readKeys: readLicenseKeysForPackages,
