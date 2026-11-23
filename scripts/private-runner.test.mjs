@@ -57,3 +57,14 @@ test('the report is self-contained and does not interpret captured markup', () =
   assert.doesNotMatch(html, /<script>/)
   assert.match(html, /&lt;script&gt;/)
 })
+
+test('matches the real Code Profiler 1.9.6 artifact name from run e7783448', async () => {
+  const { matchesProfilerArtifact } = await import('./private-runner.mjs')
+  const filename = '1795423599.1100.2026-11-23_423597.slugs.profile'
+  const stem = path.basename(filename, '.slugs.profile')
+  assert.equal(matchesProfilerArtifact('1795423599.1100', stem), true)
+  assert.equal(matchesProfilerArtifact('1795423599.9999', stem), false)
+  assert.equal(matchesProfilerArtifact('1795423599.11001', stem), false)
+  assert.equal(matchesProfilerArtifact(null, stem), false)
+  assert.equal(matchesProfilerArtifact('1795423599.1100', '1795423599.1100'), false)
+})

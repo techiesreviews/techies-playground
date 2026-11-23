@@ -33,12 +33,13 @@ Code Profiler compatibility. Run `node scripts/private-runner.mjs enqueue`, then
 `node scripts/private-runner.mjs once` for the separate, real headless attempt; retain
 its private reports and distinguish a completed profile from a no-go.
 
-The suite uses Node's built-in test runner and contains 351 tests in 41 files in the current working tree. `npm test` names its files (`src/**/*.test.js`, `scripts/*.test.mjs`), so a locally prepared `playground-host/dist` adds none.
+The suite uses Node's built-in test runner and contains 352 tests in 41 files in the current working tree. `npm test` names its files (`src/**/*.test.js`, `scripts/*.test.mjs`), so a locally prepared `playground-host/dist` adds none.
 
 Use the shared [Agent Kit](agents/agent-scripts.md): `scripts/agents/kit doctor`, `scripts/agents/kit unit` (the same files as `npm test`), and `scripts/agents/kit build`. The unit tests are Node tests only; browser specs and `kit shots` are not integrated. Real browser checks below use T3 separately and must not be inferred from the Node results.
 
 | Test module | Coverage |
 | --- | --- |
+| `private-runner.test.mjs` | Fixed queue claims, partial-failure reports, private file permissions, escaped HTML, go/no-go gates and the real Code Profiler 1.9.6 artifact filename. |
 | `freemius-plugin.test.js` | Runs the Freemius must-use plugin in PHP 8.3 (php-wasm) against stubbed WordPress functions: `auth_date` from the `Date` header, the proxy opt-in for Authorization, calls sent straight to `/cors-proxy.php` on the site's scheme, host and port (direct to Freemius without a usable site address), only `api.`, `sandbox-api.` and `wp.freemius.com`, no double stamping, untouched string headers and preempted answers. |
 | `recipe.test.js` | Stable IDs, version hints, labels, default storage, validation, advanced settings, Blueprint output (the Freemius plugin written before installs), directory installs, secret-field rejection, credential URL aliases, safe/unsafe persistence boundaries, public URL controls and external setup warnings. |
 | `wordpress-versions.test.js` | Live version normalization, exact latest resolution, preserved saved versions, fetch contract. |

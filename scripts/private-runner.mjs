@@ -62,6 +62,11 @@ export function verdict(report) {
     && report.codeProfiler.attribution?.length > 0 ? 'go' : 'no-go'
 }
 
+export function matchesProfilerArtifact(profileId, artifactStem) {
+  // Code Profiler 1.9.6 lib/class-report.php writes {$microtime}.{$profile_name}.slugs.profile.
+  return Boolean(profileId && artifactStem?.startsWith(profileId + '.'))
+}
+
 export function reportHTML(report) {
   const escaped = JSON.stringify(report, null, 2).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char])
   return `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Private runner proof</title><h1>Private runner: ${report.verdict === 'go' ? 'go' : 'no-go'}</h1><p>Playground / WebAssembly / SQLite sandbox diagnostics. No production hosting comparison.</p><pre>${escaped}</pre>\n`
@@ -172,7 +177,7 @@ async function runBrowserProof(report) {
       }
       const nativeProfileId = await page.evaluate(async () => new URL(await window.proofClient.getCurrentURL(), location.origin).searchParams.get('id'))
       const profile = JSON.parse(await php(`<?php require '/wordpress/wp-load.php'; $files=code_profiler_glob(CODE_PROFILER_UPLOAD_DIR,'[.]slugs[.]profile$',true); $f=end($files); if (!$f || !is_file(str_replace('.slugs.profile','.summary.profile',$f))) { echo '{}'; return; } $rows=[]; foreach(file($f,FILE_IGNORE_NEW_LINES) as $line) { $v=explode("\t",$line); if(count($v)!==4) { echo '{}'; return; } $rows[]=['slug'=>$v[0],'seconds'=>(float)$v[1],'name'=>$v[2],'type'=>$v[3]]; } echo json_encode(['artifact'=>basename($f,'.slugs.profile'),'attribution'=>$rows]);`))
-      if (!nativeProfileId || !profile.artifact?.startsWith(nativeProfileId + '.') || !profile.attribution?.length) throw new Error('Profiler returned no matching saved summary and plugin/theme attribution.')
+      if (!matchesProfilerArtifact(nativeProfileId, profile.artifact) || !profile.attribution?.length) throw new Error('Profiler returned no matching saved summary and plugin/theme attribution.')
       Object.assign(report.codeProfiler, { profileId: nativeProfileId, attribution: profile.attribution, status: 'completed', export: 'Parsed native .slugs.profile; matching .summary.profile verified. No Pro export requested.' })
     })()
     await Promise.race([work, new Promise((_, reject) => {

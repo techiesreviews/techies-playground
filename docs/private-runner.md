@@ -47,7 +47,8 @@ The report includes each observation and warm PHP-time median/range. These are
 Playground/WebAssembly/SQLite sandbox diagnostics, not production hosting rankings.
 
 The separate profiler pass opens Code Profiler's real WordPress admin screen and clicks
-Start Profiling. An error is a no-go. A success requires the plugin's completed-profile
+Start Profiling. The selected target must be the homepage with no query or fragment;
+any other target is a no-go. An error is a no-go. A success requires the plugin's completed-profile
 navigation and its native `.slugs.profile` with a matching `.summary.profile` in the
 disposable filesystem. Only profile ID and plugin/theme attribution are copied out;
 nonces, temporary profiling keys, cookies and rerun parameters are not exported.

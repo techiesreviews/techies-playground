@@ -50,13 +50,31 @@ are unchanged. See [the runner contract](../private-runner.md).
 | WordPress 7.1.4, PHP 8.3.36, Query Monitor 4.1.1, free Code Profiler 1.9.6 | `node scripts/private-runner.mjs enqueue`, then `kit go tools-411-proof-5 -- node scripts/private-runner.mjs once` | Both genuine testers complete | `RESULT: ok private-runner go`; native profile ID `1795423573.3250`; actual plugin/theme attribution saved | Private run `15c95b28-1e8a-429d-b5dd-4605f218d880` |
 | Same versions, another fresh context/site | Enqueue again, then `kit go tools-411-proof-repeat -- node scripts/private-runner.mjs once` | Repeat from fresh site | `RESULT: ok private-runner go`; both testers completed again | Private run `e7783448-cae4-41d6-88ac-94473c33157e` |
 | Same versions, after review fixes | Enqueue again, then `kit go tools-411-proof-reviewed -- node scripts/private-runner.mjs once` | Homepage and native ID/artifact agree; no admin text copied | `RESULT: ok private-runner go`; six collector observations and matching native profile completed | Private run `e8dccfc7-2383-4365-a877-7b94f7736273` |
-| Same worktree | `kit unit`; `kit build`; `kit doctor`; `git diff --check` | Existing app stays checked | 351/351 tests in 41 files; build passed with existing externalized-module/chunk-size warnings; doctor 17/17; diff check passed | `.scratch/unit/20261123T084338-491435.log`; kit output |
+| Same versions, after the real artifact fixture was added | Enqueue again, then `kit go tools-411-proof-artifact-test -- node scripts/private-runner.mjs once` | The unchanged artifact predicate works in the real runner | `RESULT: ok private-runner go`; all three stages completed | Private run `b02592e5-bddf-4849-9004-b77b7faed887` |
+| Before review fixes | `kit unit`; `kit build`; `kit doctor`; `git diff --check` | Existing app stays checked | 351/351 tests in 41 files; build passed with existing externalized-module/chunk-size warnings; doctor 17/17; diff check passed | `.scratch/unit/20261123T084338-491435.log`; kit output |
 
 Private run evidence stays on ubulex under
 `~/.local/share/techies-playground/runs/<id>/report.json` and `report.html`; it is
 intentionally not committed or published. The completed native `.slugs.profile`
 attribution is copied to the report only after the matching `.summary.profile` exists.
 No profiling keys, cookies, nonces or rerun parameters are exported.
+
+Declined: Grok's 20261123T091259Z P1 filename claim. Free Code Profiler 1.9.6
+`lib/class-report.php` writes `{$microtime}.{$profile_name}.slugs.profile`, not
+`{id}.slugs.profile`. Run e7783448 saved the stem
+`1795423599.1100.2026-11-23_423597`. The runner correctly requires the numeric native
+ID followed by a dot and the profile name. A new test feeds that exact artifact name
+through the same matching function used by the runner, accepts its real ID and
+rejects different IDs and the reviewer's unsupported bare-ID stem. The predicate
+was extracted without changing its behavior. This is direct executed evidence;
+accepting the proposed bare-ID form would not fix an observed defect.
+
+The new artifact test failed first with `matchesProfilerArtifact is not a function`
+(4/5, `.scratch/unit/20261123T091411-614686.log`), then passed 5/5 after extraction
+(`.scratch/unit/20261123T091420-615030.log`). The full suite after every test edit
+passed 352/352 in 41 files (`kit unit`, `.scratch/unit/20261123T091421-615173.log`).
+This newer result supersedes the pre-review full-suite citation for the current
+code; the historical result above remains unchanged.
 
 The first Opus review found one P2 privacy mismatch (R1-1): successful reports also
 copied visible WordPress admin text. That diagnostic text and the failure-only
@@ -83,11 +101,11 @@ unit test. The initial real 180-second timeout already executed the deadline and
 saved a no-go; the current catch also marks in-progress stages blocked. No helper
 interface was added for this one-use proof.
 
-Done when 1: met — two final queued jobs were claimed by the on-demand script on ubulex; each booted a fresh sandboxed headless browser Playground without Lex's tab.
+Done when 1: met — queued job b02592e5-bddf-4849-9004-b77b7faed887 was claimed by `node scripts/private-runner.mjs once` on ubulex and booted a fresh sandboxed headless browser Playground without Lex's tab.
 
-Done when 2: met — both final runs completed six Query Monitor collector observations and a genuine free Code Profiler profile with native plugin/theme attribution, saved in private JSON and HTML reports.
+Done when 2: met — run b02592e5-bddf-4849-9004-b77b7faed887 completed six Query Monitor collector observations and a genuine free Code Profiler profile with matching native plugin/theme attribution, saved in private JSON and HTML reports.
 
-Done when 3: met — both final invocations printed `RESULT: ok private-runner go`; failed harness attempts retained explicit no-go reports instead of claiming missing data passed.
+Done when 3: met — the current runner printed `RESULT: ok private-runner go` for run b02592e5-bddf-4849-9004-b77b7faed887; earlier failed harness attempts retain explicit no-go reports.
 
 ## Result
 
