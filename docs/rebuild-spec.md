@@ -63,7 +63,11 @@ Each row shows name, plugin/theme count, WordPress/PHP versions, missing local Z
 
 Importing a recipe starts its own edit session before storage is awaited; saving the imported draft never replaces the recipe edited before the import. If a name changes while a rename save is pending, the current edit follows the ID that save writes. The next save replaces that ID, including when both saves were queued before the first finished. Completion from a different session leaves the current edit alone.
 
+The same identity rule applies to the first save of a new draft: save Foo, change its name to Bar before that save finishes, and the draft remains Bar while its edit identity follows Foo. The next Update recipe replaces Foo with Bar; only Bar remains after reload. Once a save fully finishes without further field edits, editing ends and a later Save recipe starts a new identity.
+
 Remove, Select, Edit and Start on a row with a pending rename wait for its operations and follow the resulting ID and content. Removed rows cannot be loaded or restored by a save already queued on that identity. A newer user action cancels a deferred selection or start. Another tab's changed record at the same ID is preserved rather than overwritten or deleted by an older action; the existing error area asks the user to select its latest version. External deletion or clearing clears missing selection/edit IDs and cannot be undone by a pending update. There is no Duplicate or Clear library control: copying uses Select, a different name and Save. Export always downloads the current draft, even while a save is waiting.
+
+A newer main Launch also cancels waiting saved-row selection and Start. Releasing the pending save must not replace the launched draft, start the runtime again or abort the newer launch.
 
 #### Plugins
 

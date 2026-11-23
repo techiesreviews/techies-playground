@@ -29,17 +29,18 @@ function storage() {
     get writes() { return writes },
   }
 }
-function tab(localStorage, locks) {
+function tab(localStorage, locks, actualLaunch = false) {
   const library = createRecipeLibrary(localStorage, locks)
   const state = {
     records: library.snapshot(),
     recipe: recipes.validateRecipe({ name: 'Draft' }),
-    activeSavedId: '', editingSavedId: '', selectionMode: 'plugins', exports: [], launches: [],
+    activeSavedId: '', editingSavedId: '', selectionMode: 'plugins', exports: [], launches: [], runtimeStarts: [],
   }
   const scope = {
     ...savedRecipes, ...recipes, localStorage,
     recipe: state.recipe, recipeEditRef: { current: 0 }, recipeSessionRef: { current: { entry: { id: '' } } },
     recipeLibraryRef: { current: library },
+    launchIdRef: { current: 0 }, launchAbortRef: { current: null },
     updateSavedRecipes: (store, update) => savedRecipes.updateSavedRecipes(store, update, locks),
     setRecipe: (next) => { scope.recipe = state.recipe = typeof next === 'function' ? next(state.recipe) : next },
     setSavedRecipes: (next) => { state.records = typeof next === 'function' ? next(state.records) : next },
@@ -57,6 +58,23 @@ function tab(localStorage, locks) {
   scope.loadSavedRecipe = (...args) => handler('loadSavedRecipe', scope)(...args)
   scope.chooseSavedRecipe = (...args) => handler('chooseSavedRecipe', scope)(...args)
   scope.refreshSavedRecipes = (...args) => handler('refreshSavedRecipes', scope)(...args)
+  if (actualLaunch) {
+    const runtime = {
+      ...recipes, licenseRecords: [], plugins: [], themes: [], resolveCheckPlugins: (recipe) => recipe,
+      launchIdRef: scope.launchIdRef, launchAbortRef: scope.launchAbortRef, launchedRecipeRef: { current: null },
+      savedKeyPackages: new Set(), checksInSetup: () => [], persistedSiteId: () => 'test-site',
+      createLauncherScope: () => 'test-scope', readPersistedSites: () => new Set(),
+      PLAYGROUND_READY_TIMEOUT_MS: 1000,
+      startPlaygroundWithin: () => {
+        state.runtimeStarts.push({ recipe: runtime.launchedRecipeRef.current, signal: runtime.launchAbortRef.current.signal })
+        return new Promise(() => {})
+      },
+    }
+    // Render setters are irrelevant here; execute the real launch counter, abort controller and runtime-start path.
+    const launchSource = source.slice(source.indexOf('  async function launch('))
+    for (const setter of launchSource.match(/\bset[A-Z]\w+/g)) runtime[setter] = () => {}
+    scope.launch = (candidate) => handler('launch', runtime)(candidate)
+  }
   const listeners = new Map()
   const window = {
     addEventListener: (name, callback) => listeners.set(name, callback),
@@ -78,6 +96,7 @@ function tab(localStorage, locks) {
     edit: (record) => run('editSavedRecipe', record), update: (patch) => run('updateRecipe', patch),
     choose: (record) => run('chooseSavedRecipe', record), start: (record) => run('startSavedRecipe', record),
     export: () => run('handleRecipeExport'),
+    mainLaunch: () => scope.launch(scope.recipe),
     storageEvent: (event) => listeners.get('storage')?.(event), cleanup,
     saveCurrent: () => run('handleSaveRecipe'),
     importRecipe: (recipe) => run('handleRecipeImport', { target: { files: [{ text: async () => JSON.stringify(recipe) }], value: 'recipe.json' } }),
@@ -109,6 +128,15 @@ test('PG-01: two stale tabs saving distinct recipes keep both after reload', asy
   await a.save({ name: 'Tab A' })
   await b.save({ name: 'Tab B' })
   assert.deepEqual(tab(localStorage).state.records.map((record) => record.id), ['tab-b', 'tab-a'])
+})
+
+test('PG-01: two stale libraries without Web Locks retain both recipes after reload', async () => {
+  const localStorage = storage()
+  const a = tab(localStorage, null)
+  const b = tab(localStorage, null)
+  await a.save({ name: 'Tab A' })
+  await b.save({ name: 'Tab B' })
+  assert.deepEqual(tab(localStorage, null).state.records.map((record) => record.id), ['tab-b', 'tab-a'])
 })
 
 test('PG-01: rename from a stale tab keeps another tab’s new recipe', async () => {
@@ -241,6 +269,51 @@ for (const queued of [false, true]) {
     assert.deepEqual(tab(localStorage).state.records.map((record) => record.id), ['final'])
   })
 }
+
+for (const action of ['start', 'choose']) {
+  test(`PG-01: main Launch cancels a deferred ${action} without aborting its runtime`, async () => {
+    const localStorage = storage()
+    await tab(localStorage).save({ name: 'Original', wordpress: '6.8', storage: 'temporary' })
+    const locks = controlledLocks()
+    const a = tab(localStorage, locks, true)
+    const original = a.state.records[0]
+    await a.edit(original)
+    await a.update({ name: 'Renamed' })
+    const saving = a.saveCurrent()
+    const deferred = a[action](original)
+    a.mainLaunch()
+    assert.equal(a.state.runtimeStarts.length, 1)
+    const firstSignal = a.state.runtimeStarts[0].signal
+    await locks.finishNext()
+    await saving
+    await deferred
+    assert.equal(a.state.runtimeStarts.length, 1, 'the real launch handler must start the runtime only once')
+    assert.equal(firstSignal.aborted, false, 'the newer main launch must remain active')
+    assert.equal(a.state.activeSavedId, '', 'the old deferred selection must not apply')
+    assert.equal(a.state.editingSavedId, 'renamed')
+    assert.equal(a.state.recipe.name, 'Renamed')
+  })
+}
+
+test('PG-01: typing during a fresh save follows its saved identity without losing the draft', async () => {
+  const localStorage = storage()
+  const locks = controlledLocks()
+  const a = tab(localStorage, locks)
+  await a.update({ name: 'Foo' })
+  const savingFoo = a.saveCurrent()
+  await a.update({ name: 'Bar' })
+  await locks.finishNext()
+  await savingFoo
+  assert.equal(a.state.recipe.name, 'Bar')
+  assert.equal(a.state.editingSavedId, 'foo')
+  assert.deepEqual(a.state.records.map((record) => record.id), ['foo'])
+  const savingBar = a.saveCurrent()
+  await locks.finishNext()
+  await savingBar
+  assert.deepEqual(tab(localStorage).state.records.map((record) => record.id), ['bar'])
+  assert.equal(a.state.editingSavedId, '')
+  assert.equal(a.state.activeSavedId, 'bar')
+})
 
 test('PG-01: Remove follows a pending rename and deletes its resulting ID', async () => {
   const localStorage = storage()
