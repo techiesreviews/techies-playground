@@ -43,6 +43,8 @@ Preserved policies: individual invalid/unsafe entries are dropped from readable 
 | Review fixes, before | `ASE_OWNER=fleet-lead scripts/agents/kit unit src/launcher-actions.test.js` | Save wording, stale editing identity and plain write-error regressions fail | 31/34; all three failures reproduced | `.scratch/unit/20261123T181029-230198.log` |
 | Review fixes, affected | `ASE_OWNER=fleet-lead scripts/agents/kit unit --affected` | All revised paths pass, including import/remove and persistent notices | 60/60 in 4 files | `.scratch/unit/20261123T181109-231549.log` |
 | Review fixes, full | `ASE_OWNER=fleet-lead scripts/agents/kit unit` | All tests pass | 398/398 in 43 files | `.scratch/unit/20261123T181141-233151.log` |
+| Final nits, before | `ASE_OWNER=fleet-lead scripts/agents/kit unit src/launcher-actions.test.js` | Refused removal must name its outcome | 33/34; removal still had the read-only message | `.scratch/unit/20261123T181514-239716.log` |
+| Final nits, after | `ASE_OWNER=fleet-lead scripts/agents/kit unit --affected` | Refused removal and existing paths pass | 60/60 in 4 files | `.scratch/unit/20261123T181547-240350.log` |
 | Vite | `ASE_OWNER=fleet-lead scripts/agents/kit build` | Production build succeeds | Passed; existing externalized-module and bundle-size warnings | `dist/` |
 | Kit UX | `ASE_OWNER=fleet-lead scripts/agents/kit ux` | Feature-based check if configured | Cannot run: project has no `docs/agents/features.md` | `RESULT: fail ux ENOENT` |
 | T3 browser, before | Seed damaged recipe/history strings and reload | Reproduce loss | History becomes `[]`; recipe raw string survives until Save | Before screenshots below |
@@ -52,6 +54,8 @@ Preserved policies: individual invalid/unsafe entries are dropped from readable 
 Before captures used T3; after captures used Playwright because T3 subsequently returned “The browser is not producing screenshot frames.” Both use a 900 px viewport height. The app retains its existing light palette under a dark preference; this change adds no dark theme.
 
 The first Claude review identified R1-1 through R1-9: misleading zero counts, ambiguous failed-save wording, stale editing identity, raw history write errors, notice spacing/live region, evidence wording, and three coverage gaps. All were addressed. The browser count assertion first failed with `Saved recipes (0)` rather than `Saved recipes`; the updated four-setting browser run then passed, and all after captures were replaced. A fresh production build passed. Repeating `kit ux` still reports the same missing feature-list configuration.
+
+The second Claude review confirmed every R1 finding resolved and ended the loop with P3/test gaps only (R2-1 through R2-4). The small follow-ups were fixed directly: readable history keeps its count/empty state after a write failure, and refused removal says the recipe was not removed. `node .scratch/tools-437/write-failure.mjs` first failed because the count disappeared, then passed: an actual Chromium removal with `setItem` rejecting kept its row, count, raw data and plain notice. This browser check uses removal, not a WordPress launch; the App handler test separately exercises append failure without throwing. The obsolete persistence-effect probe was removed; the test executes the actual initializer and keeps explicit source guards on persistence. All eight after screenshots were refreshed again.
 
 Screenshots in the worktree (untracked evidence):
 

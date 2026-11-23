@@ -148,6 +148,7 @@ test('damaged recipes load with a notice and Save leaves their raw storage intac
   assert.equal(a.state.storageError, savedRecipes.SAVED_RECIPES_READ_ERROR)
   await a.remove('missing')
   assert.equal(a.state.storageError, savedRecipes.SAVED_RECIPES_READ_ERROR)
+  assert.match(a.state.error, /Recipe not removed/)
   assert.equal(localStorage.getItem(savedRecipes.SAVED_RECIPES_KEY), '{damaged recipes')
 })
 
@@ -172,9 +173,8 @@ test('page mount keeps damaged history without writing an empty list', () => {
   const stateStart = source.search(/^  const \[(?:spinupHistory|historyStorage),/m)
   const stateEnd = source.indexOf('\n', stateStart)
   const init = source.slice(stateStart, stateEnd)
-  const effect = source.match(/  useEffect\(\(\) => \{\n(    localStorage.setItem\(SPINUP_HISTORY_KEY,[\s\S]*?)\n  }, \[spinupHistory\]\)/)?.[0] || ''
   const useState = (initialize) => [initialize(), () => {}]
-  Function('localStorage', 'useState', 'useEffect', ...Object.keys(history), `${init}\n${effect}`)(localStorage, useState, (run) => run(), ...Object.values(history))
+  Function('localStorage', 'useState', ...Object.keys(history), init)(localStorage, useState, ...Object.values(history))
   assert.equal(localStorage.getItem(history.SPINUP_HISTORY_KEY), '{damaged history')
   assert.equal(localStorage.writes, writes)
   let state = { records: [], error: '' }
@@ -195,7 +195,9 @@ test('a failed readable history write keeps rows and the active selection with a
   const raw = history.serializeSpinupHistory(records)
   let state = { records, error: '' }
   let activeId = 'active'
-  const localStorage = { getItem: () => raw, setItem: () => { throw new DOMException('quota', 'QuotaExceededError') } }
+  const localStorage = storage()
+  localStorage.setItem(history.SPINUP_HISTORY_KEY, raw)
+  localStorage.setItem = () => { throw new DOMException('quota', 'QuotaExceededError') }
   const scope = {
     ...history, localStorage, activeSpinupId: activeId,
     setActiveSpinupId: (id) => { activeId = id },
