@@ -53,7 +53,9 @@ function tab(localStorage, locks, actualLaunch = false) {
     activeSavedId: '', editingSavedId: '', setError: (error) => { state.error = error },
     downloadRecipe: (recipe) => state.exports.push(structuredClone(recipe)),
     launch: (recipe) => state.launches.push(structuredClone(recipe)),
+    launchRef: { current: null },
   }
+  scope.launchRef.current = scope.launch
   scope.saveRecipeToLibrary = (...args) => handler('saveRecipeToLibrary', scope)(...args)
   scope.applySavedRecipes = (...args) => handler('applySavedRecipes', scope)(...args)
   scope.reloadSavedRecipes = () => handler('reloadSavedRecipes', scope)()
@@ -63,7 +65,10 @@ function tab(localStorage, locks, actualLaunch = false) {
   scope.refreshSavedRecipes = (...args) => handler('refreshSavedRecipes', scope)(...args)
   if (actualLaunch) {
     const runtime = {
-      ...recipes, keysBlockLaunch: () => false, plugins: [], themes: [], resolveCheckPlugins: (recipe) => recipe,
+      ...recipes,
+      packagesWithSavedKeys: () => new Set(),
+      licenseStorageRef: { current: { records: [], error: '', loading: false } },
+      keysBlockLaunch: () => false, plugins: [], themes: [], resolveCheckPlugins: (recipe) => recipe,
       launchIdRef: scope.launchIdRef, launchAbortRef: scope.launchAbortRef, launchedRecipeRef: { current: null },
       savedKeyPackages: new Set(), checksInSetup: () => [], persistedSiteId: () => 'test-site',
       createLauncherScope: () => 'test-scope', readPersistedSites: () => new Set(),
@@ -77,6 +82,7 @@ function tab(localStorage, locks, actualLaunch = false) {
     const launchSource = source.slice(source.indexOf('  async function launch('))
     for (const setter of launchSource.match(/\bset[A-Z]\w+/g)) runtime[setter] = () => {}
     scope.launch = (candidate) => handler('launch', runtime)(candidate)
+    scope.launchRef.current = scope.launch
   }
   const listeners = new Map()
   const window = {
@@ -734,8 +740,23 @@ for (const type of ['plugin', 'theme']) {
 }
 
 const LICENSE_LIST_READ_ERROR = source.match(/^const LICENSE_LIST_READ_ERROR = '([^']+)'/m)?.[1] || ''
+const LICENSE_LIST_RETRY_ERROR = source.match(/^const LICENSE_LIST_RETRY_ERROR = '([^']+)'/m)?.[1] || ''
 
-function licenseTab(listLicenseMetadata, initialRecords = null) {
+function extractLicenseLaunchCheck() {
+  const unavailableMatch = source.match(/^  const licenseListUnavailable = ([^\n]+)/m)
+  const blockMatch = source.match(/^  const keysBlockLaunch = ([^\n]+)/m)
+  assert.ok(unavailableMatch && blockMatch, 'licenseListUnavailable and keysBlockLaunch exist in App.jsx')
+  return Function(
+    'licenseStorage',
+    `const licenseRecords = licenseStorage.records
+     const licenseRecordsError = licenseStorage.error
+     const licenseListUnavailable = ${unavailableMatch[1]}
+     const keysBlockLaunch = ${blockMatch[1]}
+     return keysBlockLaunch`,
+  )
+}
+
+function licenseTab(listLicenseMetadata, initialRecords = null, timeoutMs = 10000) {
   const state = {
     records: initialRecords,
     error: '',
@@ -743,10 +764,14 @@ function licenseTab(listLicenseMetadata, initialRecords = null) {
     runtimeStarts: [],
   }
   const licenseReadIdRef = { current: 0 }
+  const licenseStorageRef = { current: { records: initialRecords, error: '', loading: false } }
   const scope = {
     LICENSE_LIST_READ_ERROR,
+    LICENSE_LIST_RETRY_ERROR,
+    LICENSE_READ_TIMEOUT_MS: timeoutMs,
     listLicenseMetadata,
     licenseReadIdRef,
+    licenseStorageRef,
     setLicenseStorage: (next) => {
       const updated = typeof next === 'function'
         ? next({ records: state.records, error: state.error, loading: state.loading })
@@ -754,28 +779,35 @@ function licenseTab(listLicenseMetadata, initialRecords = null) {
       state.records = updated.records
       state.error = updated.error
       state.loading = Boolean(updated.loading)
+      licenseStorageRef.current = { records: state.records, error: state.error, loading: state.loading }
     },
   }
   const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
-  async function refresh() {
-    await handler('refreshLicenseRecords', scope)()
+  async function refresh(options) {
+    await handler('refreshLicenseRecords', scope)(options)
     await flush()
   }
-  function launchWith(candidate) {
+  function startRefresh(options) {
+    return handler('refreshLicenseRecords', scope)(options)
+  }
+  function createLaunchHandler() {
     const launchAbortRef = { current: null }
-    const licenseListUnavailable = state.records === null || Boolean(state.error) || state.loading
+    const keysBlockLaunch = extractLicenseLaunchCheck()
+    const renderSnapshot = { records: state.records, error: state.error, loading: state.loading }
     const runtime = {
       ...recipes,
-      licenseRecords: state.records,
-      licenseRecordsError: state.error,
-      keysBlockLaunch: (target) => Boolean(target?.plugins?.length) && licenseListUnavailable,
+      packagesWithSavedKeys: (records) => new Set((records || []).map((record) => record.pluginId)),
+      licenseRecords: renderSnapshot.records,
+      licenseRecordsError: renderSnapshot.error,
+      licenseStorageRef,
+      keysBlockLaunch: (target, current = renderSnapshot) => keysBlockLaunch(current)(target),
       plugins: [{ id: 'sample-plugin', label: 'Sample Plugin' }],
       themes: [],
       resolveCheckPlugins: (recipe) => recipe,
       launchIdRef: { current: 0 },
       launchAbortRef,
       launchedRecipeRef: { current: null },
-      savedKeyPackages: new Set((state.records || []).map((record) => record.pluginId)),
+      savedKeyPackages: new Set((renderSnapshot.records || []).map((record) => record.pluginId)),
       checksInSetup: () => [],
       persistedSiteId: () => 'test-site',
       createLauncherScope: () => 'test-scope',
@@ -789,9 +821,12 @@ function licenseTab(listLicenseMetadata, initialRecords = null) {
     }
     const launchSource = source.slice(source.indexOf('  async function launch('))
     for (const setter of launchSource.match(/\bset[A-Z]\w+/g)) runtime[setter] = () => {}
-    return handler('launch', runtime)(candidate)
+    return handler('launch', runtime)
   }
-  return { state, refresh, launchWith }
+  function launchWith(candidate) {
+    return createLaunchHandler()(candidate)
+  }
+  return { state, refresh, startRefresh, launchWith, createLaunchHandler, licenseStorageRef }
 }
 
 test('TOOLS-438: initial license list read failure keeps null state, sets a clear error and blocks uploaded-plugin launch', async () => {
@@ -831,14 +866,83 @@ test('TOOLS-438: subsequent license list refresh failure keeps previous records,
   assert.deepEqual(session.state.records, existing, 'refresh failure must keep previous license records intact')
   assert.equal(session.state.error, LICENSE_LIST_READ_ERROR)
 
+  await session.refresh({ retry: true })
+  assert.equal(session.state.error, LICENSE_LIST_RETRY_ERROR, 'a failed retry updates the message so the user sees it tried')
+
   await session.launchWith(recipes.validateRecipe({ name: 'With plugin', wordpress: '6.8', storage: 'temporary', plugins: ['sample-plugin'] }))
   assert.equal(session.state.runtimeStarts.length, 0, 'launch must not silently proceed after a failed license list refresh')
 
   shouldFail = false
-  await session.refresh()
+  await session.refresh({ retry: true })
   assert.deepEqual(session.state.records, updated, 'a subsequent successful read updates records')
   assert.equal(session.state.error, '', 'a subsequent successful read clears the read error')
   assert.equal(session.state.loading, false)
+})
+
+test('TOOLS-438: launch is blocked while a license refresh is still in flight and allowed once it resolves', async () => {
+  const existing = [{ id: 'meta-1', pluginId: 'plugin:sample-plugin', name: 'Sample Plugin', createdAt: '2026-11-23T00:00:00.000Z' }]
+  let finishRead
+  const session = licenseTab(() => new Promise((resolve) => { finishRead = resolve }), existing)
+  const pending = session.startRefresh()
+  assert.equal(session.state.loading, true)
+  const candidate = recipes.validateRecipe({ name: 'With plugin', wordpress: '6.8', storage: 'temporary', plugins: ['sample-plugin'] })
+  await session.launchWith(candidate)
+  assert.equal(session.state.runtimeStarts.length, 0, 'uploaded-plugin launch must wait while a license refresh is in flight')
+  finishRead(existing)
+  await pending
+  assert.equal(session.state.loading, false)
+  session.launchWith(candidate)
+  assert.equal(session.state.runtimeStarts.length, 1, 'uploaded-plugin launch proceeds once refresh settles')
+})
+
+test('TOOLS-438: deferred saved-recipe Start refuses to launch when a license refresh fails while waiting', async () => {
+  const localStorage = storage()
+  await tab(localStorage).save({ name: 'Pro Stack', wordpress: '6.8', storage: 'temporary', plugins: ['sample-plugin'] })
+  const locks = controlledLocks()
+  const existing = [{ id: 'meta-1', pluginId: 'plugin:sample-plugin', name: 'Sample Plugin', createdAt: '2026-11-23T00:00:00.000Z' }]
+  const licenseSession = licenseTab(async () => { throw new Error('Read failed while waiting') }, existing)
+  const capturedLaunch = licenseSession.createLaunchHandler()
+  const a = tab(localStorage, locks)
+  const original = a.state.records[0]
+  await a.edit(original)
+  await a.update({ siteTitle: 'Updated title' })
+  const saving = a.saveCurrent()
+  const startScope = {
+    ...recipes,
+    recipeEditRef: { current: 0 },
+    launchIdRef: { current: 0 },
+    chooseSavedRecipe: async () => {
+      startScope.recipeEditRef.current += 1
+      await a.choose(original)
+      return a.state.records[0]
+    },
+    launch: capturedLaunch,
+    launchRef: { current: capturedLaunch },
+  }
+  const starting = handler('startSavedRecipe', startScope)(original)
+  // A license refresh fails while Start waits for the pending save lock.
+  await licenseSession.refresh()
+  assert.equal(licenseSession.state.error, LICENSE_LIST_READ_ERROR)
+  await locks.finishNext()
+  await saving
+  await starting
+  assert.equal(licenseSession.state.runtimeStarts.length, 0, 'deferred Start must read current license readiness and not launch after a failed refresh')
+})
+
+test('TOOLS-438: a hung license list read times out to an error with retry and ignores late answers', async () => {
+  let lateResolve
+  const existing = [{ id: 'meta-1', pluginId: 'plugin:sample-plugin', name: 'Sample Plugin', createdAt: '2026-11-23T00:00:00.000Z' }]
+  const session = licenseTab(() => new Promise((resolve) => { lateResolve = resolve }), existing, 20)
+  const pending = session.startRefresh()
+  assert.equal(session.state.loading, true)
+  await new Promise((resolve) => setTimeout(resolve, 40))
+  assert.equal(session.state.loading, false, 'hung read clears loading on timeout')
+  assert.deepEqual(session.state.records, existing, 'timeout preserves previous records')
+  assert.equal(session.state.error, LICENSE_LIST_READ_ERROR)
+  lateResolve([])
+  await pending
+  assert.deepEqual(session.state.records, existing, 'late answer after timeout is ignored')
+  assert.equal(session.state.error, LICENSE_LIST_READ_ERROR)
 })
 
 test('TOOLS-438: out-of-order license list reads never let an older call overwrite newer state and track in-flight loading', async () => {
@@ -870,6 +974,21 @@ test('TOOLS-438: out-of-order license list reads never let an older call overwri
   assert.equal(session.state.loading, false)
 })
 
+test('TOOLS-438: extracted App licenseListUnavailable and keysBlockLaunch enforce every state combination', () => {
+  const makeCheck = extractLicenseLaunchCheck()
+  const cases = [
+    [{ records: null, error: '', loading: false }, true],
+    [{ records: [], error: '', loading: true }, true],
+    [{ records: [], error: 'read failed', loading: false }, true],
+    [{ records: [], error: '', loading: false }, false],
+  ]
+  for (const [licenseStorage, expectedBlocked] of cases) {
+    const check = makeCheck(licenseStorage)
+    assert.equal(check({ plugins: [] }), false)
+    assert.equal(check({ plugins: ['a'] }), expectedBlocked)
+  }
+})
+
 test('TOOLS-438: keyCountsFor reports null saved count while unloaded and exact counts once loaded', () => {
   const match = source.match(/^  const keyCountsFor = (\([\s\S]*?\n  \}\))/m)
   assert.ok(match, 'keyCountsFor exists')
@@ -882,11 +1001,12 @@ test('TOOLS-438: keyCountsFor reports null saved count while unloaded and exact 
   assert.deepEqual(runKeyCounts([{ pluginId: 'plugin:sample-plugin' }], ['plugin:sample-plugin'])(candidate), { total: 2, saved: 1 })
 })
 
-test('TOOLS-438: launcher gates only uploaded-plugin launches on license readiness and exposes retry', () => {
+test('TOOLS-438: launcher gates only uploaded-plugin launches on license readiness and exposes accessible retry', () => {
   assert.doesNotMatch(source, /catch\(\(\)\s*=>\s*setLicenseRecords\(\[\]\)\)/)
-  assert.match(source, /const keysBlockLaunch = \(candidate\) => Boolean\(candidate\?\.plugins\?\.length\) && licenseListUnavailable/)
+  assert.match(source, /const keysBlockLaunch = \(candidate, current = licenseStorage\) => Boolean\(candidate\?\.plugins\?\.length\) && licenseListUnavailable\(current\)/)
   assert.match(source, /starting=\{status\.running \|\| keysBlockLaunch\(record\.recipe\)\}/)
   assert.match(source, /disabled=\{status\.running \|\| keysBlockLaunch\(recipe\)\}/)
   assert.match(source, /launchReady=\{!keysBlockLaunch\(recipe\)\}/)
-  assert.match(source, /onClick=\{refreshLicenseRecords\}/)
+  assert.match(source, /aria-disabled=\{licenseStorage\.loading\}/)
+  assert.match(source, /any-pointer-coarse:min-h-11[^<]*>\s*\{licenseStorage\.loading \? 'Retrying…' : 'Try again'\}/)
 })

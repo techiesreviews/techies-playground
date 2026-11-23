@@ -151,6 +151,8 @@ const PERSISTED_SITES_KEY = persistedSitesKey(PLAYGROUND_ORIGIN)
 const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-storage-default-v1'
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const LICENSE_LIST_READ_ERROR = 'Saved license keys could not be read. Launch is paused for setups with uploaded plugins so saved keys are not skipped.'
+const LICENSE_LIST_RETRY_ERROR = 'Saved license keys still could not be read. Launch is paused for setups with uploaded plugins so saved keys are not skipped.'
+const LICENSE_READ_TIMEOUT_MS = 10000
 const CHANGELOG_ENTRIES = [
   {
     version: '0.13.6',
@@ -2001,11 +2003,14 @@ export default function App() {
   const [wordpressVersionOptions, setWordPressVersionOptions] = useState(WORDPRESS_VERSION_FALLBACK_OPTIONS)
   // null until the vault's key list has been read, so a launch never misses saved keys.
   const [licenseStorage, setLicenseStorage] = useState({ records: null, error: '', loading: true })
+  const licenseStorageRef = useRef(licenseStorage)
+  licenseStorageRef.current = licenseStorage
   const licenseRecords = licenseStorage.records
   const licenseRecordsError = licenseStorage.error
-  const licenseListUnavailable = licenseRecords === null || Boolean(licenseRecordsError) || licenseStorage.loading
-  const keysBlockLaunch = (candidate) => Boolean(candidate?.plugins?.length) && licenseListUnavailable
+  const licenseListUnavailable = (current = licenseStorage) => current.records === null || Boolean(current.error) || current.loading
+  const keysBlockLaunch = (candidate, current = licenseStorage) => Boolean(candidate?.plugins?.length) && licenseListUnavailable(current)
   const licenseReadIdRef = useRef(0)
+  const launchRef = useRef(null)
   const [addingKeyFor, setAddingKeyFor] = useState('')
   const [unlockPending, setUnlockPending] = useState(false)
   const unlockResolveRef = useRef(null)
@@ -2095,19 +2100,34 @@ export default function App() {
     refreshLicenseRecords()
   }, [])
 
-  function refreshLicenseRecords() {
+  function refreshLicenseRecords({ retry = false } = {}) {
     const readId = licenseReadIdRef.current + 1
     licenseReadIdRef.current = readId
-    setLicenseStorage((current) => ({ ...current, loading: true }))
+    const applyLicenseStorage = (update) => {
+      setLicenseStorage((current) => {
+        const next = typeof update === 'function' ? update(current) : update
+        licenseStorageRef.current = next
+        return next
+      })
+    }
+    const failMessage = retry ? LICENSE_LIST_RETRY_ERROR : LICENSE_LIST_READ_ERROR
+    applyLicenseStorage((current) => ({ ...current, loading: true }))
+    const timer = setTimeout(() => {
+      if (readId !== licenseReadIdRef.current) return
+      licenseReadIdRef.current += 1
+      applyLicenseStorage((current) => ({ ...current, error: failMessage, loading: false }))
+    }, LICENSE_READ_TIMEOUT_MS)
     return listLicenseMetadata()
       .then((records) => {
+        clearTimeout(timer)
         if (readId !== licenseReadIdRef.current) return null
-        setLicenseStorage({ records, error: '', loading: false })
+        applyLicenseStorage({ records, error: '', loading: false })
         return records
       })
       .catch(() => {
+        clearTimeout(timer)
         if (readId !== licenseReadIdRef.current) return null
-        setLicenseStorage((current) => ({ ...current, error: LICENSE_LIST_READ_ERROR, loading: false }))
+        applyLicenseStorage((current) => ({ ...current, error: failMessage, loading: false }))
         return null
       })
   }
@@ -2549,7 +2569,7 @@ export default function App() {
     const request = recipeEditRef.current + 1
     const launchId = launchIdRef.current
     const selected = await chooseSavedRecipe(record)
-    if (selected && recipeEditRef.current === request && launchIdRef.current === launchId) launch(validateRecipe(selected.recipe))
+    if (selected && recipeEditRef.current === request && launchIdRef.current === launchId) launchRef.current(validateRecipe(selected.recipe))
   }
 
   function addCheck(check) {
@@ -2804,7 +2824,8 @@ export default function App() {
   }
 
   async function launch(candidate = recipe) {
-    if (keysBlockLaunch(candidate)) return
+    const currentLicenses = licenseStorageRef.current
+    if (keysBlockLaunch(candidate, currentLicenses)) return
     const missingPlugins = candidate.plugins.filter((id) => !plugins.some((plugin) => plugin.id === id))
     if (missingPlugins.length) {
       setError(`Import the missing ZIP${missingPlugins.length === 1 ? '' : 's'} first: ${missingPlugins.join(', ')}`)
@@ -2843,7 +2864,8 @@ export default function App() {
     launchAbortRef.current?.abort()
     const launchAbort = new AbortController()
     launchAbortRef.current = launchAbort
-    let keyPackageIds = launchedRecipe.plugins.filter((id) => savedKeyPackages.has(`plugin:${id}`))
+    const currentSavedKeyPackages = packagesWithSavedKeys(currentLicenses.records || [])
+    let keyPackageIds = launchedRecipe.plugins.filter((id) => currentSavedKeyPackages.has(`plugin:${id}`))
     // Captured before a skip: a skipped unlock leaves these licenses inactive, and the
     // checks wait for them.
     const neededLicenseIds = keyPackageIds
@@ -3075,6 +3097,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
       setStatus((current) => ({ ...current, running: false }))
     }
   }
+  launchRef.current = launch
 
   async function exportSiteSnapshot() {
     if (!clientRef.current) return
@@ -3281,11 +3304,10 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                       <span>{licenseRecordsError}</span>
                       <button
                         type="button"
-                        disabled={licenseStorage.loading}
-                        onClick={refreshLicenseRecords}
-                        className="relative inline-flex shrink-0 items-center rounded-lg bg-white px-2.5 py-1 text-sm/5 font-medium text-neutral-800 ring-1 ring-neutral-950/10 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
+                        aria-disabled={licenseStorage.loading}
+                        onClick={() => { if (!licenseStorage.loading) refreshLicenseRecords({ retry: true }) }}
+                        className="inline-flex shrink-0 items-center rounded-lg bg-white px-2.5 py-1 text-sm/5 font-medium text-neutral-800 ring-1 ring-neutral-950/10 any-pointer-coarse:min-h-11 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
                       >
-                        <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
                         {licenseStorage.loading ? 'Retrying…' : 'Try again'}
                       </button>
                     </p>
