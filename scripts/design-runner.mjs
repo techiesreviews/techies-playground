@@ -73,9 +73,9 @@ function command(args, prompt, directory, deadline = 180_000) {
   })
 }
 
-async function generateDesign(report, directory) {
+export async function generateDesign(report, directory, run = command) {
   report.ai = { status: 'running', route: 'signed-in Codex CLI / ChatGPT', model: 'gpt-6.1-sol', paidFallback: false, cost: 'Included allowance used; exact cash cost unavailable.' }
-  const login = await command(['login', 'status'], '', directory, 15_000)
+  const login = await run(['login', 'status'], '', directory, 15_000)
   if (login.code !== 0 || !/Logged in using ChatGPT/.test(login.output)) throw new Error('Codex must already be signed in using ChatGPT. API-key login is not accepted.')
   const schema = { type: 'object', additionalProperties: false, required: ['blocks', 'misses'], properties: {
     blocks: { type: 'array', items: { $ref: '#/$defs/block' } }, misses: { type: 'array', items: { type: 'string' } },
@@ -86,7 +86,7 @@ async function generateDesign(report, directory) {
   await writeFile(path.join(directory, 'sample.html'), sampleHTML(), { mode: 0o600 })
   const prompt = `Return only the requested JSON. Rebuild this fixed sample as an editable Gutenberg core block tree, no tools or file changes. Use core/group, columns, column, heading, paragraph only. Attributes are a JSON string per node. Use native style attributes, no classes, HTML, custom CSS, external resources or shortcodes. Preserve all text. List every unsupported detail in misses. The supplied theme sets Arial 16px/1.5, text #213d30, background #f2f0e8, zero block gap, heading weight 700. Give the outer group a constrained layout contentSize 1120px; its children must fill that width. Use native padding, borders, margins, typography and background style attributes to match the reference, columns gap24px and mobile stacking. Header and footer are groups with paragraph children, hero a group with heading and paragraph; cards use columns with three columns each with background, padding and heading/paragraph. Do not use any other attributes than style, tagName, layout, isStackedOnMobile, width, content, level, textAlign, align, anchor. Set heading margins to zero; paragraphs top margin16px except header/footer zero. Put header fontSize22px/fontWeight700 on its paragraph. Use border.top/bottom objects for individual edges. Keep h1 fontSize52px/lineHeight1.1, h2 fontSize24px/lineHeight1.2.\nReference HTML:\n${sampleHTML()}`
   console.log('Generating native Gutenberg blocks with signed-in Codex…')
-  const result = await command(codexArguments(directory), prompt, directory)
+  const result = await run(codexArguments(directory), prompt, directory)
   if (result.code !== 0 || result.expired) {
     Object.assign(report.ai, classifyCodexFailure(result.output))
     throw new Error(report.ai.reason)
@@ -239,14 +239,17 @@ ${profiler.attribution?.map((entry) => `<div class="row"><strong>${escape(entry.
 <details><summary>Run details · ${escape(report.job?.id)}</summary>${rows(report)}</details></main></html>`
 }
 
+export async function runDesignProof(report, directory, { generate = generateDesign, browser = runBrowserProof } = {}) {
+  report.kind = 'design-test'
+  report.design = { status: 'not-run' }
+  const design = await generate(report, directory)
+  await browser(report, { beforeChecks: (browser) => buildAndCapture(browser, report, directory, design) })
+}
+
 async function main() {
   if (process.argv.length !== 3 || !['enqueue', 'once'].includes(process.argv[2])) throw new Error('Usage: node scripts/design-runner.mjs enqueue|once')
   if (process.argv[2] === 'enqueue') { console.log(`Queued design test ${(await enqueue(DESIGN_DIRECTORY)).id}`); return }
-  const report = await runOnce(DESIGN_DIRECTORY, async (report, directory) => {
-    report.kind = 'design-test'; report.design = { status: 'not-run' }
-    const design = await generateDesign(report, directory)
-    await runBrowserProof(report, { beforeChecks: (browser) => buildAndCapture(browser, report, directory, design) })
-  }, designReportHTML)
+  const report = await runOnce(DESIGN_DIRECTORY, runDesignProof, designReportHTML)
   if (!report) { console.log('No queued design tests.'); return }
   console.log(`Report: ${path.join(DESIGN_DIRECTORY, 'runs', report.job.id, 'report.html')}`)
   console.log(`RESULT: ${report.verdict === 'go' ? 'ok' : 'fail'} design-runner ${report.verdict}${report.blocker ? `: ${report.blocker}` : ''}`)

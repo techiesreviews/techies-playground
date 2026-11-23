@@ -33,6 +33,8 @@ Prefer, in order:
 
 ## Index
 
+- [2026-11-23-gutenberg-design-test.md](2026-11-23-gutenberg-design-test.md) — signed-in Codex rebuilds a fixed native Gutenberg sample, captures desktop/phone comparisons and runs both real testers in a standalone private report.
+
 - [2026-11-23-launch-cancels-waiting-recipe.md](2026-11-23-launch-cancels-waiting-recipe.md) — newer launches cancel deferred saved-row actions; explicit fallback and fresh-save behavior checks (TOOLS-374).
 - [2026-11-23-recipe-id-actions.md](2026-11-23-recipe-id-actions.md) — all saved-row actions follow pending renames; external replacement and clearing cannot redirect old actions (TOOLS-374).
 - [2026-11-23-recipe-edit-sessions.md](2026-11-23-recipe-edit-sessions.md) — imports start separate edits; pending renames follow the last saved ID (TOOLS-374).

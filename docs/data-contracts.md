@@ -14,6 +14,25 @@ timestamps, runtime versions, stage statuses, measured data, optional blocker an
 data. New directories use 0700; files use 0600. Profiler nonces, cookies and profiling
 keys are never copied into reports. See [private-runner.md](private-runner.md).
 
+Design jobs use the same fixed job shape in a separate `design-tests/` subtree.
+Their reports add `kind: "design-test"`, `ai` and `design`. AI statuses include
+`running`, `completed`, `paused` and `blocked`; a limit is a finished attempt with a
+paused result, not an automatic retry. `design` records misses, the saved page ID,
+native block inventory, zero-invalid-block readback, and 1440/390 pixel captures.
+Each capture records dimensions, reference/rebuild filenames, changed pixels, match,
+overflow and repeated/broken-capture calibration. `go` means the pipeline completed;
+it does not mean the design has no misses. A completed design can have
+`outcome: "needs-work"`. Missing stages never produce passing numbers.
+
+The AI response uses only `core/group`, `core/columns`, `core/column`, `core/heading`
+and `core/paragraph`, at most 60 blocks and depth 10. Block attributes are decoded
+from the CLI's strict JSON response, allowlisted, and rejected for markup or external
+resource references before entering WordPress. The CLI inherits only ordinary process
+settings, ignores provider/MCP user configuration for generation, forces ChatGPT login
+and the OpenAI provider, and uses a read-only sandbox with shell tools disabled.
+There is no API-key input, credential extraction, paid fallback or custom provider.
+Exact cash cost is unavailable; the report does not claim an audited zero charge.
+
 ## Recipe schema version 1
 
 Recipes are the only supported portable configuration format. Unknown fields may be present on import but are discarded by normalization. Missing known fields receive current defaults.

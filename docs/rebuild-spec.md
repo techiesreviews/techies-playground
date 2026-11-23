@@ -2,6 +2,14 @@
 
 This document describes the product independently of its current code layout. A conforming rebuild should satisfy these behaviors and the contracts in [data-contracts.md](data-contracts.md).
 
+The separate [local design-test proof](design-runner.md) is outside the hosted launcher.
+Its standalone layout-A report has an Automated tests navigation entry, one fixed
+Gutenberg run, sample/rebuild comparisons and measured scores at 1440 and 390 CSS px,
+listed misses, both tester results and native-block inventory. It uses real results
+only; a paused or blocked attempt shows its reason and no invented score. Report
+section links and expandable raw evidence work without JavaScript or a live runner.
+It has no Figma input, other builders, scheduling, public endpoint or hosted pairing.
+
 ## 1. Application shell
 
 The page title is **Techies Playground**. The document description explains that premium plugins and themes are tested privately in the browser on the official WordPress Playground stack.

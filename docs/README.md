@@ -17,6 +17,10 @@ These documents are designed so an AI can understand, maintain, or rebuild Techi
 `private-runner.md` describes the separate, on-demand TOOLS-411 compatibility proof,
 its fixed local queue and private reports. It adds no launcher page or background service.
 
+`design-runner.md` describes TOOLS-417: the fixed Gutenberg sample, signed-in Codex
+generation, native-block readback, pixel comparison and standalone layout-A report.
+This is also a local CLI, with no hosted worker or launcher pairing.
+
 ## Sources of truth
 
 When documentation and implementation disagree, resolve the mismatch instead of silently picking one:

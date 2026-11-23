@@ -152,6 +152,17 @@ const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-stora
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
 const CHANGELOG_ENTRIES = [
   {
+    version: '0.14.0',
+    date: 'November 23, 2026',
+    title: 'Private Gutenberg design-test proof',
+    summary: 'A local runner on ubulex rebuilds a sample page with signed-in Codex and saves a private design and tester report.',
+    changes: [
+      'The separate local command builds editable Gutenberg blocks, reads them back from WordPress, and compares sample and rebuild screenshots at desktop and phone widths.',
+      'Its private report shows the match score, listed misses, Query Monitor measurements and a completed free Code Profiler profile.',
+      'Codex uses the existing ChatGPT sign-in. A usage limit saves a paused result without an API-key fallback. Hosted navigation and worker pairing are separate future work.',
+    ],
+  },
+  {
     version: '0.13.4',
     date: 'November 23, 2026',
     title: 'Recipe saves keep changes from other tabs',
