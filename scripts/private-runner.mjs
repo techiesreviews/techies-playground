@@ -202,6 +202,7 @@ async function main() {
   process.exitCode = report.verdict === 'go' ? 0 : 1
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+const calledDirectly = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])
+if (calledDirectly) {
   main().catch((error) => { console.error(error.message); process.exitCode = 1 })
 }
