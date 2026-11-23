@@ -64,7 +64,9 @@ export function verdict(report) {
 
 export function matchesProfilerArtifact(profileId, artifactStem) {
   // Code Profiler 1.9.6 lib/class-report.php writes {$microtime}.{$profile_name}.slugs.profile.
-  return Boolean(profileId && artifactStem?.startsWith(profileId + '.'))
+  return typeof profileId === 'string' && /^\d{10}\.\d+$/.test(profileId)
+    && typeof artifactStem === 'string' && artifactStem.startsWith(profileId + '.')
+    && artifactStem.length > profileId.length + 1
 }
 
 export function reportHTML(report) {
@@ -170,14 +172,34 @@ async function runBrowserProof(report) {
       const outcome = await Promise.race([
         frame.locator('#code-profiler-error').waitFor({ state: 'visible', timeout: 90_000 }).then(async () => ({ error: await frame.locator('#code-profiler-error').innerText() })),
         frame.locator('#myChart').waitFor({ state: 'visible', timeout: 90_000 }).then(() => ({ completed: true })),
-      ]).catch(() => { throw new Error('Code Profiler showed neither a result nor an error within 90 seconds.') })
-      if (outcome.error) {
-        Object.assign(report.codeProfiler, { status: 'blocked', error: outcome.error })
-        throw new Error(`Free Code Profiler failed: ${outcome.error}`)
+      ]).catch((error) => {
+        if (error.name === 'TimeoutError') throw new Error('Code Profiler showed neither a result nor an error within 90 seconds.')
+        throw error
+      })
+      if ('error' in outcome) {
+        const message = outcome.error || 'The profiler displayed an empty error message.'
+        Object.assign(report.codeProfiler, { status: 'blocked', error: message })
+        throw new Error(`Free Code Profiler failed: ${message}`)
       }
       const nativeProfileId = await page.evaluate(async () => new URL(await window.proofClient.getCurrentURL(), location.origin).searchParams.get('id'))
-      const profile = JSON.parse(await php(`<?php require '/wordpress/wp-load.php'; $files=code_profiler_glob(CODE_PROFILER_UPLOAD_DIR,'[.]slugs[.]profile$',true); $f=end($files); if (!$f || !is_file(str_replace('.slugs.profile','.summary.profile',$f))) { echo '{}'; return; } $rows=[]; foreach(file($f,FILE_IGNORE_NEW_LINES) as $line) { $v=explode("\t",$line); if(count($v)!==4) { echo '{}'; return; } $rows[]=['slug'=>$v[0],'seconds'=>(float)$v[1],'name'=>$v[2],'type'=>$v[3]]; } echo json_encode(['artifact'=>basename($f,'.slugs.profile'),'attribution'=>$rows]);`))
-      if (!matchesProfilerArtifact(nativeProfileId, profile.artifact) || !profile.attribution?.length) throw new Error('Profiler returned no matching saved summary and plugin/theme attribution.')
+      report.codeProfiler.profileId = nativeProfileId
+      const profile = JSON.parse(await php(`<?php
+require '/wordpress/wp-load.php';
+$files = code_profiler_glob(CODE_PROFILER_UPLOAD_DIR, '[.]slugs[.]profile$', true);
+$f = end($files);
+if (!$f || !is_file(str_replace('.slugs.profile', '.summary.profile', $f))) {
+  echo json_encode(['error' => 'Code Profiler saved no profile and matching summary.']); return;
+}
+$rows = [];
+foreach (file($f, FILE_IGNORE_NEW_LINES) as $line) {
+  $v = explode("\t", $line);
+  if (count($v) !== 4) { echo json_encode(['error' => 'Code Profiler saved a malformed attribution row.']); return; }
+  $rows[] = ['slug' => $v[0], 'seconds' => (float)$v[1], 'name' => $v[2], 'type' => $v[3]];
+}
+echo json_encode(['artifact' => basename($f, '.slugs.profile'), 'attribution' => $rows]);`))
+      if (profile.error) throw new Error(profile.error)
+      if (!matchesProfilerArtifact(nativeProfileId, profile.artifact)) throw new Error('Native profile ID does not match the saved Code Profiler artifact.')
+      if (!profile.attribution?.length) throw new Error('Code Profiler saved no plugin/theme attribution.')
       Object.assign(report.codeProfiler, { profileId: nativeProfileId, attribution: profile.attribution, status: 'completed', export: 'Parsed native .slugs.profile; matching .summary.profile verified. No Pro export requested.' })
     })()
     await Promise.race([work, new Promise((_, reject) => {

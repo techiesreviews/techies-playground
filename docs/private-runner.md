@@ -56,7 +56,8 @@ Function-level detail and Pro CSV exports are outside the free edition and this 
 
 `go` requires all three stages. `no-go` is a valid experimental result, returns exit 1,
 and preserves partial evidence in both private reports. A browser attempt has a
-180-second deadline. Failed attempts are not silently converted to zeros or retried.
+180-second deadline after browser startup and context setup. Failed attempts are not
+silently converted to zeros or retried.
 The report HTML escapes all captured data and loads no scripts or external resources.
 
 Upstream references: [Playground JavaScript API](https://developer.wordpress.org/playground/developers/apis/javascript-api/),
