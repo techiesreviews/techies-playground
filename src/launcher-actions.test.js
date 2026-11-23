@@ -1082,3 +1082,75 @@ test('TOOLS-438: launcher gates only uploaded-plugin launches on license readine
   assert.match(source, /aria-disabled=\{licenseStorage\.loading\}/)
   assert.match(source, /any-pointer-coarse:min-h-11[^<]*>\s*\{licenseStorage\.loading \? 'Retrying…' : 'Try again'\}/)
 })
+
+test('TOOLS-438: successful license retry restores focus to active setup tab only when Try again owns focus', async () => {
+  const retryButton = { id: 'retry' }
+  const otherElement = { id: 'other' }
+  let focusCalls = 0
+  let shouldFail = false
+  const licenseStorageRef = { current: { records: null, error: LICENSE_LIST_READ_ERROR, loading: false } }
+  const fakeDoc = { activeElement: retryButton }
+  const fakeWin = { requestAnimationFrame: (cb) => cb() }
+  const scope = {
+    LICENSE_LIST_READ_ERROR,
+    LICENSE_LIST_RETRY_ERROR,
+    LICENSE_READ_TIMEOUT_MS: 10000,
+    listLicenseMetadata: async () => {
+      if (shouldFail) throw new Error('still broken')
+      return []
+    },
+    licenseReadIdRef: { current: 0 },
+    licenseStorageRef,
+    retryLicenseButtonRef: { current: retryButton },
+    activeSetupTabRef: { current: { focus: () => { focusCalls += 1 } } },
+    setLicenseStorage() {},
+    document: fakeDoc,
+    window: fakeWin,
+  }
+  const runRefresh = handler('refreshLicenseRecords', scope)
+  await runRefresh({ retry: true })
+  assert.equal(focusCalls, 1, 'focus moves to active setup tab when retry button owned focus')
+
+  shouldFail = true
+  await runRefresh({ retry: true })
+  assert.equal(focusCalls, 1, 'failed retry does not move focus away from Try again')
+
+  shouldFail = false
+  fakeDoc.activeElement = otherElement
+  await runRefresh({ retry: true })
+  assert.equal(focusCalls, 1, 'successful retry does not steal focus when another control is focused')
+})
+
+test('TOOLS-438: launch after refreshing a newly saved key requests vault unlock when locked', async () => {
+  let unlockRequested = 0
+  const fresh = [{ id: 'meta-1', pluginId: 'plugin:sample-plugin', name: 'Sample Plugin', createdAt: '2026-11-23T00:00:00.000Z' }]
+  const session = licenseTab(async () => fresh, [])
+  const launchAbortRef = { current: null }
+  const keysBlockLaunch = extractLicenseLaunchCheck()
+  const runtime = {
+    ...recipes,
+    packagesWithSavedKeys: (records) => new Set((records || []).map((record) => record.pluginId)),
+    licenseStorageRef: session.licenseStorageRef,
+    keysBlockLaunch: (target, current = session.licenseStorageRef.current) => keysBlockLaunch(current)(target),
+    plugins: [{ id: 'sample-plugin', label: 'Sample Plugin' }],
+    themes: [],
+    resolveCheckPlugins: (recipe) => recipe,
+    launchIdRef: { current: 0 },
+    launchAbortRef,
+    launchedRecipeRef: { current: null },
+    checksInSetup: () => [],
+    isVaultSessionUnlocked: () => false,
+    unlockResolveRef: { current: null },
+    waitForVaultUnlock: async () => {
+      unlockRequested += 1
+      return 'closed'
+    },
+  }
+  const launchSource = source.slice(source.indexOf('  async function launch('))
+  for (const setter of launchSource.match(/\bset[A-Z]\w+/g)) runtime[setter] = () => {}
+  const launchFn = handler('launch', runtime)
+
+  await session.refresh()
+  await launchFn(recipes.validateRecipe({ name: 'With new key', wordpress: '6.8', storage: 'temporary', plugins: ['sample-plugin'] }))
+  assert.equal(unlockRequested, 1, 'launch uses refreshed live license metadata and requests vault unlock')
+})

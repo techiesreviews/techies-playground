@@ -48,7 +48,10 @@ for (const failure of ['checks', 'navigation']) {
       setLiveUpload() {}, setPluginInstallResults: (update) => results.push(update({})),
       installUploadedPlugin: async () => ({ status: 'active', folder: 'example', message: 'Active in WordPress' }),
       launchedRecipeRef: { current: { plugins: [] } }, selectUploadedPlugin: () => ({ plugins: ['example'] }),
-      checksInSetup: () => failure === 'checks' ? [{}] : [], setLaunchedChecks() {}, savedKeyPackages: new Set(),
+      checksInSetup: () => failure === 'checks' ? [{}] : [], setLaunchedChecks() {},
+      licenseStorageRef: { current: { records: [], error: '', loading: false } },
+      licenseListUnavailable: (current) => current.records === null || Boolean(current.error) || current.loading,
+      packagesWithSavedKeys: (records) => new Set((records || []).map((record) => record.pluginId)),
       CHECKS_PLUGIN_PATH: '/checks.php', CHECKS_PLUGIN: '<?php',
     })
     const { failures, problems } = await install([{ id: 'example', label: 'Example' }], client, 1)
@@ -72,7 +75,10 @@ test('a post-install navigation problem keeps the upload headline accurate and p
     setPluginInstallResults: (update) => results.push(update({})),
     installUploadedPlugin: async () => ({ status: 'active', folder: 'example', message: 'Active in WordPress' }),
     launchedRecipeRef: { current: { plugins: [] } }, selectUploadedPlugin: () => ({ plugins: ['example'] }),
-    checksInSetup: () => [], setLaunchedChecks() {}, savedKeyPackages: new Set(),
+    checksInSetup: () => [], setLaunchedChecks() {},
+    licenseStorageRef: { current: { records: [], error: '', loading: false } },
+    licenseListUnavailable: (current) => current.records === null || Boolean(current.error) || current.loading,
+    packagesWithSavedKeys: (records) => new Set((records || []).map((record) => record.pluginId)),
     detectPackageType: async () => 'plugin', normalizePluginId: () => 'example',
     getPlugin: async () => null, savePlugin: async () => {}, pluginLabelFromFilename: () => 'Example', extractVersionHint: () => '',
     setActiveSavedId() {}, setActiveSpinupId() {}, setPluginRecency() {}, setRecipe() {},
@@ -104,4 +110,28 @@ test('a tester deactivation error becomes a failed install without opening the p
   assert.equal(navigations, 0)
   assert.equal(outcome.failures.length, 1)
   assert.equal(outcome.problems.length, 0)
+})
+
+test('TOOLS-438: open-site plugin install reports unreadable license keys instead of silently skipping fill', async () => {
+  const results = []
+  let fillCalls = 0
+  const client = { goTo: async () => {} }
+  const install = appFunction('installLiveUploads', {
+    clientRef: { current: client }, launchIdRef: { current: 1 },
+    setLiveUpload() {}, setPluginInstallResults: (update) => results.push(update({})),
+    installUploadedPlugin: async () => ({ status: 'active', folder: 'example', message: 'Active in WordPress' }),
+    launchedRecipeRef: { current: { plugins: [] } }, selectUploadedPlugin: () => ({ plugins: ['example'] }),
+    checksInSetup: () => [], setLaunchedChecks() {},
+    licenseStorageRef: { current: { records: null, error: 'Saved license keys could not be read.', loading: false } },
+    licenseListUnavailable: (current) => current.records === null || Boolean(current.error) || current.loading,
+    packagesWithSavedKeys: () => new Set(),
+    isVaultSessionUnlocked: () => true,
+    fillSavedLicenseKeys: async () => { fillCalls += 1; return [] },
+  })
+  const outcome = await install([{ id: 'example', label: 'Example' }], client, 1)
+  assert.equal(results[0].example.status, 'active')
+  assert.equal(fillCalls, 0)
+  assert.equal(outcome.failures.length, 0)
+  assert.equal(outcome.problems.length, 1)
+  assert.match(outcome.problems[0], /Saved license keys could not be read/)
 })

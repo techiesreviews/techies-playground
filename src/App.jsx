@@ -2406,7 +2406,12 @@ export default function App() {
           if (!isCurrent()) return outcome
         }
         const folders = new Map(result.folder ? [[plugin.id, result.folder]] : [])
-        if (savedKeyPackages.has(`plugin:${plugin.id}`) && isVaultSessionUnlocked()) {
+        const currentLicenses = licenseStorageRef.current
+        const liveLicenseUnavailable = licenseListUnavailable(currentLicenses)
+        const liveSavedKeyPackages = liveLicenseUnavailable ? new Set() : packagesWithSavedKeys(currentLicenses.records || [])
+        if (liveLicenseUnavailable) {
+          problems.push(`${plugin.label}: Saved license keys could not be read, so no saved key was filled in. Use Try again, then add it from Licenses.`)
+        } else if (liveSavedKeyPackages.has(`plugin:${plugin.id}`) && isVaultSessionUnlocked()) {
           const filled = await fillSavedLicenseKeys({
             client, getVaultKey: getVaultSessionKey, readKeys: readLicenseKeysForPackages,
             packages: [{ id: plugin.id, vaultId: `plugin:${plugin.id}`, label: plugin.label }],
@@ -2422,13 +2427,15 @@ export default function App() {
           if (!isCurrent()) return outcome
           let needed = [plugin.id]
           let active = []
-          try {
-            const licenses = await readFreemiusLicenses({ client, signal: launchAbortRef.current?.signal })
-            const state = uploadedPluginLicenses(plugin.id, savedKeyPackages, licenses, folders)
-            needed = state.needed
-            active = state.active
-          } catch {
-            // Unknown licence state keeps checks waiting for activation.
+          if (!liveLicenseUnavailable) {
+            try {
+              const licenses = await readFreemiusLicenses({ client, signal: launchAbortRef.current?.signal })
+              const state = uploadedPluginLicenses(plugin.id, liveSavedKeyPackages, licenses, folders)
+              needed = state.needed
+              active = state.active
+            } catch {
+              // Unknown licence state keeps checks waiting for activation.
+            }
           }
           if (!isCurrent()) return outcome
           setLicensedPackageIds((current) => [...current.filter((id) => id !== plugin.id && launchedRecipeRef.current.plugins.includes(id)), ...needed])
