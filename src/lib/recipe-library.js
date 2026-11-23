@@ -1,5 +1,5 @@
 import { normalizePluginId, validateRecipe } from './recipe.js'
-import { parseSavedRecipes, replaceSavedRecipe, SAVED_RECIPES_KEY, updateSavedRecipes, upsertSavedRecipe } from './saved-recipes.js'
+import { parseSavedRecipes, replaceSavedRecipe, SAVED_RECIPES_KEY, SAVED_RECIPES_READ_ERROR, updateSavedRecipes, upsertSavedRecipe } from './saved-recipes.js'
 
 export function createRecipeLibrary(storage, locks = globalThis.navigator?.locks) {
   const inFlight = new Set()
@@ -28,6 +28,14 @@ export function createRecipeLibrary(storage, locks = globalThis.navigator?.locks
     const records = parseSavedRecipes(storage.getItem(SAVED_RECIPES_KEY))
     records.forEach(identity)
     return records
+  }
+
+  function read() {
+    try {
+      return { records: snapshot(), error: '' }
+    } catch {
+      return { records: [], error: SAVED_RECIPES_READ_ERROR }
+    }
   }
 
   function enqueue(entry, operation) {
@@ -108,5 +116,5 @@ export function createRecipeLibrary(storage, locks = globalThis.navigator?.locks
     })
   }
 
-  return { identity, isRemoved, snapshot, save, remove, resolve, refresh }
+  return { identity, isRemoved, snapshot, read, save, remove, resolve, refresh }
 }

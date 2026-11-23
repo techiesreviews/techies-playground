@@ -3,6 +3,7 @@ import { persistedSiteId } from './playground-persistence.js'
 
 export const SPINUP_HISTORY_KEY = 'private-playground-launcher:spinup-history'
 export const MAX_SPINUP_HISTORY = 30
+export const SPINUP_HISTORY_READ_ERROR = 'Past spin-ups could not be read. Stored data was kept.'
 
 function normalizePackageSummary(item) {
   if (!item || typeof item.id !== 'string' || !item.id.trim()) return null
@@ -43,10 +44,10 @@ function keepLatestBrowserEnvironment(records) {
 }
 
 export function parseSpinupHistory(serialized) {
-  if (!serialized) return []
+  if (serialized == null) return []
   try {
     const parsed = JSON.parse(serialized)
-    if (!Array.isArray(parsed)) return []
+    if (!Array.isArray(parsed)) throw new Error(SPINUP_HISTORY_READ_ERROR)
     return keepLatestBrowserEnvironment(parsed.flatMap((candidate) => {
       try {
         return [normalizeSpinup(candidate)]
@@ -55,8 +56,22 @@ export function parseSpinupHistory(serialized) {
       }
     })).slice(0, MAX_SPINUP_HISTORY)
   } catch {
-    return []
+    throw new Error(SPINUP_HISTORY_READ_ERROR)
   }
+}
+
+export function readSpinupHistory(storage) {
+  try {
+    return { records: parseSpinupHistory(storage.getItem(SPINUP_HISTORY_KEY)), error: '' }
+  } catch {
+    return { records: [], error: SPINUP_HISTORY_READ_ERROR }
+  }
+}
+
+export function updateSpinupHistory(storage, update) {
+  const records = update(parseSpinupHistory(storage.getItem(SPINUP_HISTORY_KEY)))
+  storage.setItem(SPINUP_HISTORY_KEY, serializeSpinupHistory(records))
+  return records
 }
 
 export function appendSpinup(records, { recipe, plugins, theme }, launchedAt = new Date().toISOString(), id = crypto.randomUUID()) {
