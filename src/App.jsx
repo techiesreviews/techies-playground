@@ -150,7 +150,7 @@ const DRAFT_KEY = 'private-playground-launcher:draft'
 const PERSISTED_SITES_KEY = persistedSitesKey(PLAYGROUND_ORIGIN)
 const STORAGE_DEFAULT_MIGRATION_KEY = 'private-playground-launcher:browser-storage-default-v1'
 const CHANGELOG_SEEN_VERSION_KEY = 'private-playground-launcher:changelog-seen-version'
-const LICENSE_LIST_READ_ERROR = 'Saved license keys could not be read. Your saved keys were kept, and launch is paused so they are not skipped.'
+const LICENSE_LIST_READ_ERROR = 'Saved license keys could not be read. Launch is paused for setups with uploaded plugins so saved keys are not skipped.'
 const CHANGELOG_ENTRIES = [
   {
     version: '0.13.6',
@@ -159,7 +159,7 @@ const CHANGELOG_ENTRIES = [
     summary: 'If Playground cannot read saved license keys, it keeps the list and warns instead of launching without them.',
     changes: [
       'A read error keeps the previously loaded license list instead of hiding saved keys.',
-      'A clear error notice appears and launch pauses while saved license keys cannot be read, so launches do not silently skip saved keys.',
+      'A clear error notice with a Try again action appears, and launch pauses for setups with uploaded plugins while saved license keys cannot be read, so launches do not silently skip saved keys.',
     ],
   },
   {
@@ -1817,10 +1817,12 @@ function LaunchSummary({ recipe, selectedPackageLabel, selectedPluginLabels, key
         </ol>
       )}
 
-      <div role="alert" className="mx-6 mb-5 grid gap-2 rounded-lg bg-red-50 p-3 text-base/7 text-red-800 ring-1 ring-red-700/15 empty:hidden sm:text-sm/6">
-        {error && <p>{error}</p>}
-        {licenseError && licenseError !== error && <p>{licenseError}</p>}
-      </div>
+      {(error || licenseError) && (
+        <div role="alert" className="mx-6 mb-5 grid gap-2 rounded-lg bg-red-50 p-3 text-base/7 text-red-800 ring-1 ring-red-700/15 sm:text-sm/6">
+          {error && <p>{error}</p>}
+          {licenseError && licenseError !== error && <p>{licenseError}</p>}
+        </div>
+      )}
 
       <div className="grid gap-3 px-6 pb-6 text-base/7 sm:text-sm/6">
         <div className="flex items-start gap-2">
@@ -1998,10 +2000,11 @@ export default function App() {
   const [error, setError] = useState('')
   const [wordpressVersionOptions, setWordPressVersionOptions] = useState(WORDPRESS_VERSION_FALLBACK_OPTIONS)
   // null until the vault's key list has been read, so a launch never misses saved keys.
-  const [licenseStorage, setLicenseStorage] = useState({ records: null, error: '' })
+  const [licenseStorage, setLicenseStorage] = useState({ records: null, error: '', loading: true })
   const licenseRecords = licenseStorage.records
   const licenseRecordsError = licenseStorage.error
-  const launchReady = licenseRecords !== null && !licenseRecordsError
+  const licenseListUnavailable = licenseRecords === null || Boolean(licenseRecordsError) || licenseStorage.loading
+  const keysBlockLaunch = (candidate) => Boolean(candidate?.plugins?.length) && licenseListUnavailable
   const licenseReadIdRef = useRef(0)
   const [addingKeyFor, setAddingKeyFor] = useState('')
   const [unlockPending, setUnlockPending] = useState(false)
@@ -2095,15 +2098,16 @@ export default function App() {
   function refreshLicenseRecords() {
     const readId = licenseReadIdRef.current + 1
     licenseReadIdRef.current = readId
+    setLicenseStorage((current) => ({ ...current, loading: true }))
     return listLicenseMetadata()
       .then((records) => {
         if (readId !== licenseReadIdRef.current) return null
-        setLicenseStorage({ records, error: '' })
+        setLicenseStorage({ records, error: '', loading: false })
         return records
       })
       .catch(() => {
         if (readId !== licenseReadIdRef.current) return null
-        setLicenseStorage((current) => ({ ...current, error: LICENSE_LIST_READ_ERROR }))
+        setLicenseStorage((current) => ({ ...current, error: LICENSE_LIST_READ_ERROR, loading: false }))
         return null
       })
   }
@@ -2800,7 +2804,7 @@ export default function App() {
   }
 
   async function launch(candidate = recipe) {
-    if (licenseRecords === null || licenseRecordsError) return
+    if (keysBlockLaunch(candidate)) return
     const missingPlugins = candidate.plugins.filter((id) => !plugins.some((plugin) => plugin.id === id))
     if (missingPlugins.length) {
       setError(`Import the missing ZIP${missingPlugins.length === 1 ? '' : 's'} first: ${missingPlugins.join(', ')}`)
@@ -3272,12 +3276,21 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                 <div role="status" className="grid gap-1 [padding-block-start:--spacing(3)] text-pretty text-base/7 text-amber-700 empty:hidden sm:text-sm/6">
                   {savedRecipeStorage.error && <p>{savedRecipeStorage.error}</p>}
                   {historyStorage.error && <p>{historyStorage.error}</p>}
+                  {licenseRecordsError && (
+                    <p className="flex flex-wrap items-center gap-x-3 gap-y-2 text-red-700">
+                      <span>{licenseRecordsError}</span>
+                      <button
+                        type="button"
+                        disabled={licenseStorage.loading}
+                        onClick={refreshLicenseRecords}
+                        className="relative inline-flex shrink-0 items-center rounded-lg bg-white px-2.5 py-1 text-sm/5 font-medium text-neutral-800 ring-1 ring-neutral-950/10 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />
+                        {licenseStorage.loading ? 'Retrying…' : 'Try again'}
+                      </button>
+                    </p>
+                  )}
                 </div>
-                {licenseRecordsError && (
-                  <p className={`${savedRecipeStorage.error || historyStorage.error ? 'pt-1' : '[padding-block-start:--spacing(3)]'} text-pretty text-base/7 text-red-700 sm:text-sm/6`}>
-                    {licenseRecordsError}
-                  </p>
-                )}
 
                 {selectionMode === 'recipes' ? (
                   <div className="pt-5">
@@ -3291,7 +3304,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                             editing={editingSavedId === record.id}
                             missingCount={record.recipe.plugins.filter((id) => !plugins.some((plugin) => plugin.id === id)).length + (record.recipe.theme && !themes.some((theme) => theme.id === record.recipe.theme) ? 1 : 0)}
                             keyCounts={keyCountsFor(record.recipe)}
-                            starting={status.running || !launchReady}
+                            starting={status.running || keysBlockLaunch(record.recipe)}
                             onChoose={chooseSavedRecipe}
                             onStart={startSavedRecipe}
                             onEdit={editSavedRecipe}
@@ -3653,7 +3666,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                   <button
                     ref={launchButtonRef}
                     type="submit"
-                    disabled={status.running || !launchReady}
+                    disabled={status.running || keysBlockLaunch(recipe)}
                     className="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 py-2.5 pr-4 pl-2.5 text-sm/5 font-medium text-white ring-1 ring-teal-700 hover:bg-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <PlayIcon className="size-4 shrink-0 fill-white" />
@@ -3689,9 +3702,9 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
             keyCounts={keyCountsFor(recipe)}
             checks={activeChecks}
             status={status}
-            launchReady={launchReady}
+            launchReady={!keysBlockLaunch(recipe)}
             error={error}
-            licenseError={licenseRecordsError}
+            licenseError={licenseRecordsError && recipe.plugins.length > 0 ? 'Launch paused: saved license keys could not be read.' : ''}
             onLaunch={() => launch()}
           />
         </div>
