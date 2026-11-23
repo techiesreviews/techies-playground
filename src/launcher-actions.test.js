@@ -63,7 +63,7 @@ function tab(localStorage, locks, actualLaunch = false) {
   scope.refreshSavedRecipes = (...args) => handler('refreshSavedRecipes', scope)(...args)
   if (actualLaunch) {
     const runtime = {
-      ...recipes, licenseRecords: [], licenseRecordsError: '', plugins: [], themes: [], resolveCheckPlugins: (recipe) => recipe,
+      ...recipes, keysBlockLaunch: () => false, plugins: [], themes: [], resolveCheckPlugins: (recipe) => recipe,
       launchIdRef: scope.launchIdRef, launchAbortRef: scope.launchAbortRef, launchedRecipeRef: { current: null },
       savedKeyPackages: new Set(), checksInSetup: () => [], persistedSiteId: () => 'test-site',
       createLauncherScope: () => 'test-scope', readPersistedSites: () => new Set(),
@@ -733,24 +733,27 @@ for (const type of ['plugin', 'theme']) {
   })
 }
 
+const LICENSE_LIST_READ_ERROR = source.match(/^const LICENSE_LIST_READ_ERROR = '([^']+)'/m)?.[1] || ''
+
 function licenseTab(listLicenseMetadata, initialRecords = null) {
   const state = {
     records: initialRecords,
     error: '',
+    loading: false,
     runtimeStarts: [],
   }
   const licenseReadIdRef = { current: 0 }
   const scope = {
-    LICENSE_LIST_READ_ERROR: 'Saved license keys could not be read. Your saved keys were kept, and launch is paused so they are not skipped.',
+    LICENSE_LIST_READ_ERROR,
     listLicenseMetadata,
     licenseReadIdRef,
-    setLicenseRecords: (next) => {
-      state.records = typeof next === 'function' ? next(state.records) : next
-    },
     setLicenseStorage: (next) => {
-      const updated = typeof next === 'function' ? next({ records: state.records, error: state.error }) : next
+      const updated = typeof next === 'function'
+        ? next({ records: state.records, error: state.error, loading: state.loading })
+        : next
       state.records = updated.records
       state.error = updated.error
+      state.loading = Boolean(updated.loading)
     },
   }
   const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
@@ -760,10 +763,12 @@ function licenseTab(listLicenseMetadata, initialRecords = null) {
   }
   function launchWith(candidate) {
     const launchAbortRef = { current: null }
+    const licenseListUnavailable = state.records === null || Boolean(state.error) || state.loading
     const runtime = {
       ...recipes,
       licenseRecords: state.records,
       licenseRecordsError: state.error,
+      keysBlockLaunch: (target) => Boolean(target?.plugins?.length) && licenseListUnavailable,
       plugins: [{ id: 'sample-plugin', label: 'Sample Plugin' }],
       themes: [],
       resolveCheckPlugins: (recipe) => recipe,
@@ -789,14 +794,25 @@ function licenseTab(listLicenseMetadata, initialRecords = null) {
   return { state, refresh, launchWith }
 }
 
-test('TOOLS-438: initial license list read failure keeps null state, sets a clear error and blocks launch', async () => {
+test('TOOLS-438: initial license list read failure keeps null state, sets a clear error and blocks uploaded-plugin launch', async () => {
+  assert.ok(LICENSE_LIST_READ_ERROR, 'App.jsx defines LICENSE_LIST_READ_ERROR')
   const session = licenseTab(async () => { throw new Error('IndexedDB unavailable') }, null)
   await session.refresh()
   assert.equal(session.state.records, null, 'initial read failure must keep licenseRecords as null, not []')
-  assert.match(session.state.error, /Saved license keys could not be read/)
+  assert.equal(session.state.error, LICENSE_LIST_READ_ERROR)
   assert.doesNotMatch(session.state.error, /IndexedDB unavailable/)
+  assert.equal(session.state.loading, false)
   await session.launchWith(recipes.validateRecipe({ name: 'With plugin', wordpress: '6.8', storage: 'temporary', plugins: ['sample-plugin'] }))
-  assert.equal(session.state.runtimeStarts.length, 0, 'launch must not proceed when initial license list read failed')
+  assert.equal(session.state.runtimeStarts.length, 0, 'launch must not proceed for uploaded plugins when initial license list read failed')
+})
+
+test('TOOLS-438: setups without uploaded plugins still launch when the license list cannot be read', async () => {
+  const session = licenseTab(async () => { throw new Error('IndexedDB blocked') }, null)
+  await session.refresh()
+  assert.equal(session.state.records, null)
+  assert.equal(session.state.error, LICENSE_LIST_READ_ERROR)
+  session.launchWith(recipes.validateRecipe({ name: 'Plain', wordpress: '6.8', storage: 'temporary', plugins: [] }))
+  assert.equal(session.state.runtimeStarts.length, 1, 'plain WordPress setup must still launch without a readable license list')
 })
 
 test('TOOLS-438: subsequent license list refresh failure keeps previous records, blocks stale launch and clears on recovery', async () => {
@@ -813,7 +829,7 @@ test('TOOLS-438: subsequent license list refresh failure keeps previous records,
 
   await session.refresh()
   assert.deepEqual(session.state.records, existing, 'refresh failure must keep previous license records intact')
-  assert.match(session.state.error, /Saved license keys could not be read/)
+  assert.equal(session.state.error, LICENSE_LIST_READ_ERROR)
 
   await session.launchWith(recipes.validateRecipe({ name: 'With plugin', wordpress: '6.8', storage: 'temporary', plugins: ['sample-plugin'] }))
   assert.equal(session.state.runtimeStarts.length, 0, 'launch must not silently proceed after a failed license list refresh')
@@ -822,35 +838,55 @@ test('TOOLS-438: subsequent license list refresh failure keeps previous records,
   await session.refresh()
   assert.deepEqual(session.state.records, updated, 'a subsequent successful read updates records')
   assert.equal(session.state.error, '', 'a subsequent successful read clears the read error')
+  assert.equal(session.state.loading, false)
 })
 
-test('TOOLS-438: out-of-order license list reads never let an older call overwrite newer state', async () => {
+test('TOOLS-438: out-of-order license list reads never let an older call overwrite newer state and track in-flight loading', async () => {
   const pending = []
   const session = licenseTab(() => new Promise((resolve, reject) => pending.push({ resolve, reject })), null)
   const first = session.refresh()
+  assert.equal(session.state.loading, true, 'in-flight refresh marks loading so stale launches pause')
   const second = session.refresh()
   const fresh = [{ id: 'meta-1', pluginId: 'plugin:sample-plugin', name: 'Sample Plugin', createdAt: '2026-11-23T00:00:00.000Z' }]
   pending[1].resolve(fresh)
   await second
+  assert.equal(session.state.loading, false)
   pending[0].reject(new Error('Late failure'))
   await first
   assert.deepEqual(session.state.records, fresh)
   assert.equal(session.state.error, '')
+  assert.equal(session.state.loading, false)
 
   const third = session.refresh()
+  assert.equal(session.state.loading, true)
   const fourth = session.refresh()
   pending[3].reject(new Error('Newer failure'))
   await fourth
+  assert.equal(session.state.loading, false)
   pending[2].resolve([])
   await third
   assert.deepEqual(session.state.records, fresh)
-  assert.match(session.state.error, /Saved license keys could not be read/)
+  assert.equal(session.state.error, LICENSE_LIST_READ_ERROR)
+  assert.equal(session.state.loading, false)
 })
 
-test('TOOLS-438: launcher never coerces failed license reads to empty and keeps launch gated on readiness', () => {
+test('TOOLS-438: keyCountsFor reports null saved count while unloaded and exact counts once loaded', () => {
+  const match = source.match(/^  const keyCountsFor = (\([\s\S]*?\n  \}\))/m)
+  assert.ok(match, 'keyCountsFor exists')
+  const runKeyCounts = (licenseRecords, savedIds = []) => Function(
+    'licenseRecords', 'savedKeyPackages', `return (${match[1]})`,
+  )(licenseRecords, new Set(savedIds))
+  const candidate = { plugins: ['sample-plugin', 'second-plugin'] }
+  assert.deepEqual(runKeyCounts(null)(candidate), { total: 2, saved: null })
+  assert.deepEqual(runKeyCounts([])(candidate), { total: 2, saved: 0 })
+  assert.deepEqual(runKeyCounts([{ pluginId: 'plugin:sample-plugin' }], ['plugin:sample-plugin'])(candidate), { total: 2, saved: 1 })
+})
+
+test('TOOLS-438: launcher gates only uploaded-plugin launches on license readiness and exposes retry', () => {
   assert.doesNotMatch(source, /catch\(\(\)\s*=>\s*setLicenseRecords\(\[\]\)\)/)
-  assert.match(source, /const launchReady = licenseRecords !== null && !licenseRecordsError/)
-  assert.match(source, /starting=\{status\.running \|\| !launchReady\}/)
-  assert.match(source, /disabled=\{status\.running \|\| !launchReady\}/)
-  assert.match(source, /launchReady=\{launchReady\}/)
+  assert.match(source, /const keysBlockLaunch = \(candidate\) => Boolean\(candidate\?\.plugins\?\.length\) && licenseListUnavailable/)
+  assert.match(source, /starting=\{status\.running \|\| keysBlockLaunch\(record\.recipe\)\}/)
+  assert.match(source, /disabled=\{status\.running \|\| keysBlockLaunch\(recipe\)\}/)
+  assert.match(source, /launchReady=\{!keysBlockLaunch\(recipe\)\}/)
+  assert.match(source, /onClick=\{refreshLicenseRecords\}/)
 })
