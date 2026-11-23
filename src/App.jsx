@@ -163,6 +163,7 @@ const CHANGELOG_ENTRIES = [
     summary: 'Saving or removing a recipe uses the latest library, so another open tab cannot erase newer recipes.',
     changes: [
       'Recipe saves, renames and removals read the current browser library before writing. Other open tabs refresh their lists automatically.',
+      'A save that finishes late keeps the recipe you are now editing, including its rename.',
     ],
   },
   {
@@ -1955,6 +1956,7 @@ export default function App() {
     savedRecipes.find((record) => JSON.stringify(record.recipe) === JSON.stringify(recipe))?.id || ''
   ))
   const [editingSavedId, setEditingSavedId] = useState('')
+  const recipeEditRef = useRef(0)
   const [activeSpinupId, setActiveSpinupId] = useState('')
   const [replacementPluginId, setReplacementPluginId] = useState('')
   const [replacementThemeId, setReplacementThemeId] = useState('')
@@ -2177,18 +2179,22 @@ export default function App() {
   }, [recipe.storage, showPlayground, status.running])
 
   function updateRecipe(patch) {
+    recipeEditRef.current += 1
     setActiveSavedId('')
     setActiveSpinupId('')
     setRecipe((current) => ({ ...current, ...patch }))
   }
 
   async function saveRecipeToLibrary(candidate, replaceId = '') {
+    const edit = recipeEditRef.current
     const safeRecipe = validateRecipe(candidate)
     const id = normalizePluginId(safeRecipe.name) || 'recipe'
     const records = await updateSavedRecipes(localStorage, (current) => replaceId
       ? replaceSavedRecipe(current, replaceId, safeRecipe)
       : upsertSavedRecipe(current, safeRecipe))
     setSavedRecipes(records)
+    if (recipeEditRef.current !== edit) return
+    recipeEditRef.current += 1
     setActiveSavedId(id)
     setEditingSavedId('')
     setSelectionMode('recipes')
@@ -2242,11 +2248,13 @@ export default function App() {
         if (type === 'theme') {
           themeCount += 1
           setThemeRecency((current) => markPluginSelected(current, id))
+          recipeEditRef.current += 1
           setRecipe((current) => validateRecipe({ ...current, theme: id, repositoryTheme: '' }))
         } else {
           pluginCount += 1
           uploadedPlugins.push(record)
           setPluginRecency((current) => markPluginSelected(current, id))
+          recipeEditRef.current += 1
           setRecipe((current) => validateRecipe(selectUploadedPlugin(current, id)))
         }
       } catch (caught) {
@@ -2419,6 +2427,7 @@ export default function App() {
       const imported = validateRecipe(JSON.parse(await event.target.files[0].text()))
       const warning = externalSetupMessage(imported)
       if (warning && !window.confirm(`${warning}\n\nImport this recipe?`)) return
+      recipeEditRef.current += 1
       setRecipe(imported)
       await saveRecipeToLibrary(imported)
     } catch (caught) {
@@ -2429,6 +2438,7 @@ export default function App() {
   }
 
   function chooseSavedRecipe(record) {
+    recipeEditRef.current += 1
     setRecipe(validateRecipe(record.recipe))
     setActiveSavedId(record.id)
     setEditingSavedId('')
@@ -2436,10 +2446,16 @@ export default function App() {
   }
 
   function editSavedRecipe(record) {
+    recipeEditRef.current += 1
     setRecipe(validateRecipe(record.recipe))
     setActiveSavedId(record.id)
     setEditingSavedId(record.id)
     setActiveSpinupId('')
+  }
+
+  function stopEditingRecipe() {
+    recipeEditRef.current += 1
+    setEditingSavedId('')
   }
 
   function startSavedRecipe(record) {
@@ -2578,6 +2594,7 @@ export default function App() {
   }
 
   function chooseSpinup(record) {
+    recipeEditRef.current += 1
     setRecipe(validateRecipe(record.recipe))
     setActiveSavedId('')
     setEditingSavedId('')
@@ -2586,10 +2603,12 @@ export default function App() {
 
   async function removeSavedRecipe(id) {
     try {
+      const edit = recipeEditRef.current
       const records = await updateSavedRecipes(localStorage, (current) => current.filter((record) => record.id !== id))
       setSavedRecipes(records)
+      if (recipeEditRef.current !== edit) return
       if (activeSavedId === id) setActiveSavedId('')
-      if (editingSavedId === id) setEditingSavedId('')
+      if (editingSavedId === id) stopEditingRecipe()
     } catch (caught) {
       setError(caught.message)
     }
@@ -3509,7 +3528,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                       <span>Editing saved recipe. Updating also applies a renamed recipe without leaving the old copy behind.</span>
                       <button
                         type="button"
-                        onClick={() => setEditingSavedId('')}
+                        onClick={stopEditingRecipe}
                         className="relative shrink-0 rounded-md px-2 py-1 font-medium hover:bg-teal-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
                       >
                         <span className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2" aria-hidden="true" />

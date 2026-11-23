@@ -66,6 +66,7 @@ test('a post-install navigation problem keeps the upload headline accurate and p
   const client = { goTo: async () => { throw new Error('navigation failed') } }
   const context = {
     status: { step: 4 }, showPlayground: true,
+    recipeEditRef: { current: 0 },
     clientRef: { current: client }, launchIdRef: { current: 1 },
     setLiveUpload: (value) => uploads.push(value),
     setPluginInstallResults: (update) => results.push(update({})),

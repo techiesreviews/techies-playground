@@ -21,20 +21,36 @@ function storage() {
   const values = new Map()
   return { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) }
 }
-function tab(localStorage) {
-  const state = { records: savedRecipes.parseSavedRecipes(localStorage.getItem(savedRecipes.SAVED_RECIPES_KEY)) }
+function tab(localStorage, locks) {
+  const state = {
+    records: savedRecipes.parseSavedRecipes(localStorage.getItem(savedRecipes.SAVED_RECIPES_KEY)),
+    recipe: recipes.validateRecipe({ name: 'Draft' }),
+    activeSavedId: '', editingSavedId: '', selectionMode: 'plugins',
+  }
   const scope = {
     ...savedRecipes, ...recipes, localStorage,
+    recipe: state.recipe, recipeEditRef: { current: 0 },
+    updateSavedRecipes: (store, update) => savedRecipes.updateSavedRecipes(store, update, locks),
+    setRecipe: (next) => { scope.recipe = state.recipe = typeof next === 'function' ? next(state.recipe) : next },
     setSavedRecipes: (next) => { state.records = typeof next === 'function' ? next(state.records) : next },
-    setActiveSavedId() {}, setEditingSavedId() {}, setSelectionMode() {},
+    setActiveSavedId: (id) => { scope.activeSavedId = state.activeSavedId = id },
+    setEditingSavedId: (id) => { scope.editingSavedId = state.editingSavedId = id },
+    setSelectionMode: (mode) => { state.selectionMode = mode },
+    setActiveSpinupId() {},
     activeSavedId: '', editingSavedId: '', setError: (error) => { state.error = error },
   }
+  scope.saveRecipeToLibrary = (...args) => handler('saveRecipeToLibrary', scope)(...args)
+  scope.stopEditingRecipe = () => handler('stopEditingRecipe', scope)()
   const persistEffect = source.match(/useEffect\(\(\) => \{\n(    localStorage.setItem\(SAVED_RECIPES_KEY,[\s\S]*?)\n  }, \[savedRecipes\]\)/)?.[1]
   async function run(name, ...args) {
     await handler(name, scope)(...args)
     if (persistEffect) Function('localStorage', 'savedRecipes', ...Object.keys(savedRecipes), persistEffect)(localStorage, state.records, ...Object.values(savedRecipes))
   }
-  return { state, save: (...args) => run('saveRecipeToLibrary', ...args), remove: (id) => run('removeSavedRecipe', id) }
+  return {
+    state, save: (...args) => run('saveRecipeToLibrary', ...args), remove: (id) => run('removeSavedRecipe', id),
+    edit: (record) => run('editSavedRecipe', record), update: (patch) => run('updateRecipe', patch),
+    saveCurrent: () => run('handleSaveRecipe'),
+  }
 }
 
 test('PG-01: two stale tabs saving distinct recipes keep both after reload', async () => {
@@ -68,6 +84,54 @@ test('PG-01: stale-tab delete preserves new records and a later save does not re
   assert.deepEqual(tab(localStorage).state.records.map((record) => record.id), ['another-recipe', 'keep-me'])
 })
 
+test('PG-01: a delayed save keeps a newer edit and its rename replaces the old record', async () => {
+  const localStorage = storage()
+  const seed = tab(localStorage)
+  await seed.save({ name: 'Recipe A' })
+  await seed.save({ name: 'Recipe B' })
+  const pending = []
+  const locks = { request: (_name, write) => new Promise((resolve) => pending.push(() => resolve(write()))) }
+  const a = tab(localStorage, locks)
+  await a.edit(a.state.records.find((record) => record.id === 'recipe-a'))
+  const savingA = a.saveCurrent()
+  assert.equal(pending.length, 1, 'save A waits for its storage lock')
+
+  await a.edit(a.state.records.find((record) => record.id === 'recipe-b'))
+  await a.update({ name: 'Recipe B renamed' })
+  pending.shift()()
+  await savingA
+  assert.equal(a.state.editingSavedId, 'recipe-b', 'save A must keep B in editing mode')
+  assert.equal(a.state.recipe.name, 'Recipe B renamed')
+  assert.equal(a.state.activeSavedId, '', 'save A must not select A over the edited draft')
+  assert.equal(a.state.selectionMode, 'plugins', 'save A must not switch the current tab')
+
+  const savingB = a.saveCurrent()
+  pending.shift()()
+  await savingB
+  assert.deepEqual(tab(localStorage).state.records.map((record) => record.id), ['recipe-b-renamed', 'recipe-a'])
+  assert.equal(a.state.editingSavedId, '', 'the current save still completes normally')
+  assert.equal(a.state.activeSavedId, 'recipe-b-renamed')
+  assert.equal(a.state.selectionMode, 'recipes')
+})
+
+test('PG-01: a delayed removal keeps the recipe now being edited', async () => {
+  const localStorage = storage()
+  const seed = tab(localStorage)
+  await seed.save({ name: 'Recipe A' })
+  await seed.save({ name: 'Recipe B' })
+  let finishRemoval
+  const locks = { request: (_name, write) => new Promise((resolve) => { finishRemoval = () => resolve(write()) }) }
+  const a = tab(localStorage, locks)
+  await a.edit(a.state.records.find((record) => record.id === 'recipe-a'))
+  const removingA = a.remove('recipe-a')
+  await a.edit(a.state.records.find((record) => record.id === 'recipe-b'))
+  finishRemoval()
+  await removingA
+  assert.equal(a.state.editingSavedId, 'recipe-b')
+  assert.equal(a.state.activeSavedId, 'recipe-b')
+  assert.deepEqual(tab(localStorage).state.records.map((record) => record.id), ['recipe-b'])
+})
+
 for (const type of ['plugin', 'theme']) {
   test(`PG-02: ${type} picker imports valid ZIPs after invalid files and resets for retry`, async () => {
     const packages = new Map()
@@ -75,6 +139,7 @@ for (const type of ['plugin', 'theme']) {
     const setRecipe = (next) => { state.recipe = next(state.recipe) }
     const scope = {
       ...recipes, detectPackageType, selectUploadedPlugin, markPluginSelected,
+      recipeEditRef: { current: 0 },
       status: { step: 0 }, showPlayground: false, launchIdRef: { current: 1 },
       setActiveSpinupId() {}, setUploadMessage() {},
       installLiveUploads: async () => ({ failures: [], problems: [] }),
