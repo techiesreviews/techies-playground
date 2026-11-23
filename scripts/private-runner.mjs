@@ -53,6 +53,7 @@ export async function claim(root = DATA_DIRECTORY) {
 
 export function verdict(report) {
   return !report.blocker && report.boot?.status === 'completed'
+    && (report.kind !== 'design-test' || (report.ai?.status === 'completed' && report.design?.status === 'completed'))
     && report.queryMonitor?.status === 'completed'
     && report.queryMonitor.source === 'query-monitor'
     && report.queryMonitor.observations?.length === 6
@@ -74,7 +75,7 @@ export function reportHTML(report) {
   return `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Private runner proof</title><h1>Private runner: ${report.verdict === 'go' ? 'go' : 'no-go'}</h1><p>Playground / WebAssembly / SQLite sandbox diagnostics. No production hosting comparison.</p><pre>${escaped}</pre>\n`
 }
 
-export async function runOnce(root = DATA_DIRECTORY, execute = runBrowserProof) {
+export async function runOnce(root = DATA_DIRECTORY, execute = runBrowserProof, render = reportHTML) {
   const job = await claim(root)
   if (!job) return null
   const directory = path.join(root, 'runs', job.id)
@@ -85,22 +86,22 @@ export async function runOnce(root = DATA_DIRECTORY, execute = runBrowserProof) 
     boot: { status: 'not-run' }, queryMonitor: { status: 'not-run' }, codeProfiler: { status: 'not-run' },
   }
   try {
-    await execute(report)
+    await execute(report, directory)
   } catch (error) {
     report.blocker = error.message
-    for (const stage of ['boot', 'queryMonitor', 'codeProfiler']) {
-      if (report[stage].status === 'running') report[stage].status = 'blocked'
+    for (const stage of ['boot', 'queryMonitor', 'codeProfiler', 'design', 'ai']) {
+      if (report[stage]?.status === 'running') report[stage].status = 'blocked'
     }
   }
   report.finishedAt = new Date().toISOString()
   report.verdict = verdict(report)
   await json(path.join(directory, 'report.json'), report)
-  await writeFile(path.join(directory, 'report.html'), reportHTML(report), { mode: 0o600, flag: 'wx' })
+  await writeFile(path.join(directory, 'report.html'), render(report), { mode: 0o600, flag: 'wx' })
   await rename(path.join(root, 'running', `${job.id}.json`), path.join(root, 'finished', `${job.id}.json`))
   return report
 }
 
-async function runBrowserProof(report) {
+export async function runBrowserProof(report, { beforeChecks } = {}) {
   const { chromium } = await import('playwright')
   const browser = await chromium.launch({ headless: true, chromiumSandbox: true })
   let timeout
@@ -144,13 +145,16 @@ async function runBrowserProof(report) {
       const php = async (code) => page.evaluate(async (code) => (await window.proofClient.run({ code })).text, code)
       report.boot = { status: 'completed', ...JSON.parse(await php(`<?php require '/wordpress/wp-load.php'; require_once ABSPATH.'wp-admin/includes/plugin.php'; echo json_encode(['wordpress'=>get_bloginfo('version'),'php'=>PHP_VERSION,'plugins'=>array_map(fn($p)=>$p['Version'],get_plugins()),'active'=>get_option('active_plugins')]);`)) }
       console.log(`Booted WordPress ${report.boot.wordpress}, PHP ${report.boot.php}.`)
+      if (beforeChecks) await beforeChecks({ page, context, php })
       report.queryMonitor = { status: 'running', source: 'query-monitor', observations: [] }
+      const homepage = await php(`<?php require '/wordpress/wp-load.php'; echo home_url('/');`)
       for (let index = 0; index < 6; index++) {
-        const response = await page.evaluate(async () => {
-          const response = await window.proofClient.request({ url: '/?techies-measure=1', method: 'GET' })
-          return { status: response.httpStatusCode, text: response.text }
-        })
-        if (response.status !== 200) throw new Error(`Query Monitor target returned HTTP ${response.status}.`)
+        const response = await page.evaluate(async (homepage) => {
+          const target = new URL(homepage); target.searchParams.set('techies-measure', '1')
+          const response = await window.proofClient.request({ url: target.href, method: 'GET' })
+          return { status: response.httpStatusCode, text: response.text, redirect: response.headers?.location?.[0] }
+        }, homepage)
+        if (response.status !== 200) throw new Error(`Query Monitor target returned HTTP ${response.status}${response.redirect ? ` (redirect to ${new URL(response.redirect, PLAYGROUND).pathname})` : ''}.`)
         const observation = parseMeasurement(response.text)
         report.queryMonitor.observations.push({ phase: index === 0 ? 'cold' : 'warm', ...observation })
         if (observation.source !== 'query-monitor') throw new Error('Query Monitor collectors missing; launcher fallback is not proof.')
