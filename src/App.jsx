@@ -1959,6 +1959,7 @@ export default function App() {
   const savedRecipes = savedRecipeStorage.records
   const [historyStorage, setHistoryStorage] = useState(() => readSpinupHistory(localStorage))
   const spinupHistory = historyStorage.records
+  const historyUnreadable = historyStorage.error === SPINUP_HISTORY_READ_ERROR
   const [selectionMode, setSelectionMode] = useState(() => savedRecipes.length ? 'recipes' : 'plugins')
   const [activeSavedId, setActiveSavedId] = useState(() => (
     savedRecipes.find((record) => JSON.stringify(record.recipe) === JSON.stringify(recipe))?.id || ''
@@ -2656,7 +2657,7 @@ export default function App() {
       applySavedRecipes(await recipeLibraryRef.current.remove(record))
     } catch (caught) {
       reloadSavedRecipes()
-      setError(caught.message)
+      setError(caught.message === SAVED_RECIPES_READ_ERROR ? 'Recipe not removed. Saved recipes could not be read.' : caught.message)
     }
   }
 
@@ -3229,7 +3230,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                     onClick={() => setSelectionMode('history')}
                     className={`shrink-0 rounded-t-lg px-3 py-2 text-sm/5 font-medium focus-visible:outline-2 -outline-offset-1 focus-visible:outline-teal-600 ${selectionMode === 'history' ? 'bg-neutral-200/70 text-neutral-950' : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950'}`}
                   >
-                    Past spin-ups{historyStorage.error ? '' : ` (${spinupHistory.length})`}
+                    Past spin-ups{historyUnreadable ? '' : ` (${spinupHistory.length})`}
                   </button>
                 </div>
 
@@ -3276,7 +3277,7 @@ echo 'PLAYGROUND_ACTIVE_THEME:' . get_option('stylesheet');
                   </div>
                 ) : selectionMode === 'history' ? (
                   <div className="pt-5">
-                    {historyStorage.error && !spinupHistory.length ? null : spinupHistory.length ? (
+                    {historyUnreadable && !spinupHistory.length ? null : spinupHistory.length ? (
                       <div className="grid gap-1 rounded-[min(1vw,var(--radius-xl))] bg-white p-2 ring-1 ring-neutral-950/8">
                         {spinupHistory.map((record) => (
                           <SpinupHistoryRow
