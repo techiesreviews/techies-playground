@@ -46,7 +46,9 @@ keyboard/pointer comparisons, disclosures, offline assets, JavaScript-disabled i
 Home/End checks at both widths and themes verify a 44 px hit-testable handle and an
 unclipped focus ring, with endpoint screenshots and `slider-ends.json`.
 `scripts/design-runner.test.mjs` also covers visible layout notes (including mixed
-semantic/layout notes) and 98.96/98.99/99/100% display boundaries in all score locations.
+semantic/layout notes), neutral notes when captures meet the 99% threshold, and
+98.96/98.99/99/100% display boundaries in all score locations. The browser check
+also verifies that switching to the phone keeps the footer below its measured score.
 It uses injected tester observations and no private run data, AI or WordPress. The
 before/prototype/after comparison evidence is in
 `changes/2026-11-24-design-report-look.md`.

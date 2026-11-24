@@ -25,7 +25,8 @@ objects containing `raw`, `title`, `why`, boolean `visible`, and optional `kind`
 (`block-limit`, `semantic`, `unclassified`). `visible: true` means a known visible
 miss; false also includes unclassified AI notes, which the page labels neutrally
 rather than claiming they cannot be seen. Body-margin, box-sizing and viewport-metadata
-notes are visible layout misses; only an exact article-semantics note gets the
+notes are visible layout misses only when a capture is below 99% or reports overflow;
+otherwise they remain unclassified AI notes. Only an exact article-semantics note gets the
 invisible block-limit wording. Raw `design.misses`
 remain unchanged for existing consumers. Display state does not replace pipeline
 `verdict` or `design.outcome`; semantic notes alone can coexist with a passed picture

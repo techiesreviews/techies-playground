@@ -195,13 +195,29 @@ test('visible margin and viewport defects never become invisible block limits', 
     'Horizontal overflow at 390px because viewport metadata is missing.',
     'Missing article element semantics and a body margin that shifts every card.',
   ]) {
-    const report = { ai: { status: 'completed' }, design: { status: 'completed', misses: [miss], captures: [1440, 390].map((width) => ({ width, height: 1000, match: 100, pixels: width * 1000, changedPixels: 0, reference: 'reference.png', rebuilt: 'rebuilt.png' })) }, queryMonitor: { status: 'completed' }, codeProfiler: { status: 'completed' } }
+    const report = { ai: { status: 'completed' }, design: { status: 'completed', misses: [miss], captures: [1440, 390].map((width) => ({ width, height: 1000, match: 97, pixels: width * 1000, changedPixels: width * 30, reference: 'reference.png', rebuilt: 'rebuilt.png' })) }, queryMonitor: { status: 'completed' }, codeProfiler: { status: 'completed' } }
     finalizeDesignReport(report)
     assert.equal(report.design.missDetails[0].visible, true, miss)
     assert.equal(report.state, 'partial', miss)
     const html = designReportHTML(report)
     assert.match(html, />You can see it</)
     assert.doesNotMatch(html, />Not visible</)
+  }
+})
+
+test('unconfirmed layout notes stay neutral when the pictures match', () => {
+  for (const [match, changedPerRow, state, visible] of [[100, 0, 'passed', false], [99.5, 5, 'passed', false], [97, 30, 'partial', true]]) {
+    const report = { ai: { status: 'completed' }, design: { status: 'completed', misses: ['The body margin cannot be set with blocks.'], captures: [1440, 390].map((width) => ({ width, height: 1000, match, pixels: width * 1000, changedPixels: width * changedPerRow, reference: 'reference.png', rebuilt: 'rebuilt.png' })) }, queryMonitor: { status: 'completed' }, codeProfiler: { status: 'completed' } }
+    finalizeDesignReport(report)
+    assert.equal(report.state, state)
+    assert.equal(report.design.missDetails[0].visible, visible)
+    const html = designReportHTML(report)
+    assert.doesNotMatch(html, />Not visible</)
+    if (visible) assert.equal(report.design.missDetails[0].title, 'The page spacing or phone layout needs checking')
+    else {
+      assert.match(html, />Noted by the AI</)
+      assert.doesNotMatch(html, />You can see it</)
+    }
   }
 })
 

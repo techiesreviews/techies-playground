@@ -152,6 +152,9 @@ try {
       assert.ok(Math.abs(Number(await slider.getAttribute('aria-valuenow')) - 75) <= 1)
       await page.getByRole('radio', { name: 'Phone 390' }).check()
       assert.ok((await page.locator('#viewer .orig').getAttribute('src')).includes('390'))
+      const phoneMatch = captures.find((c) => c.width === 390).match
+      const shownMatch = parseFloat(await page.locator('#foot strong').textContent())
+      assert.ok(shownMatch <= phoneMatch && phoneMatch - shownMatch < .1, 'The switched footer must never round the measured match up')
       await page.getByRole('radio', { name: 'Side by side' }).check()
       assert.equal(await page.locator('.side figure').count(), 2)
       await page.getByText('Show the original technical wording', { exact: true }).click()
