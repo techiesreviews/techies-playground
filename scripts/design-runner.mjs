@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-import { designReportHTML, finalizeDesignReport } from './design-report.mjs'
-export { designReportHTML, finalizeDesignReport } from './design-report.mjs'
 import { spawn } from 'node:child_process'
 import { mkdir, readFile, writeFile, chmod } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { designReportHTML, finalizeDesignReport } from './design-report.mjs'
+export { designReportHTML, finalizeDesignReport } from './design-report.mjs'
 import { DATA_DIRECTORY, enqueue, runOnce, runBrowserProof } from './private-runner.mjs'
 
 export const DESIGN_DIRECTORY = path.join(DATA_DIRECTORY, 'design-tests')
@@ -17,7 +17,6 @@ const SAMPLE = {
     ['Built to endure', 'Good design for the long term.', '#c4d0c6'],
   ], footer: 'The Long View Studio',
 }
-const escape = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 
 export function sampleHTML() {
   return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Sample page</title><style>

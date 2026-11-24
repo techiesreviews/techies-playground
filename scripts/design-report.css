@@ -310,7 +310,6 @@ details > summary::-webkit-details-marker { display: none; }
 
 /* Run in numbers: each tile has its own colour, a counting number and a small picture of the figure */
 @property --n { syntax: "<integer>"; inherits: false; initial-value: 0; }
-.sr-only { position: absolute; inline-size: 1px; block-size: 1px; overflow: clip; clip-path: inset(50%); white-space: nowrap; }
 .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 @media (min-width: 48rem) { .stats { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; } }
 .stat {
@@ -397,6 +396,10 @@ details > summary::-webkit-details-marker { display: none; }
 .verdict-text, .lead, .run-meta { overflow-wrap: anywhere; }
 .raw { white-space: pre-wrap; overflow-wrap: anywhere; font: .8125rem/1.5 var(--font-code); }
 @media (prefers-reduced-motion: no-preference) {
-  .seg label, .knob { transition: transform 120ms var(--ease-out); }
+  .seg label { transition: background-color 150ms var(--ease-out), color 150ms var(--ease-out), box-shadow 150ms var(--ease-out), transform 120ms var(--ease-out); }
+  .knob { transition: transform 120ms var(--ease-out); }
   .disclose summary::before, .run-details > summary::after { transition: transform 150ms var(--ease-out); }
 }
+
+.miss-title, .miss-why, .plugin-name { overflow-wrap: anywhere; }
+.stat-art { order: 4; }

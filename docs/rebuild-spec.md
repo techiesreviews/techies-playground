@@ -7,11 +7,12 @@ Its results page follows the approved TOOLS-450 layout: serif verdict and score,
 count-up tiles, accessible picture comparison, plain-word misses, two tester cards,
 block mix and raw evidence. Saved reports work offline and follow system light/dark
 and reduced-motion preferences. See the run guide for its display-state rules.
-Its standalone layout-A report has an Automated tests navigation entry, one fixed
-Gutenberg run, sample/rebuild comparisons and measured scores at 1440 and 390 CSS px,
-listed misses, both tester results and native-block inventory. It uses real results
-only; a paused or blocked attempt shows its reason and no invented score. Report
-section links and expandable raw evidence work without JavaScript or a live runner.
+The standalone report has a Design runs navigation entry, one fixed Gutenberg run,
+1440/390 comparisons, measured scores, tester results and native-block inventory.
+Paused/blocked attempts show their actual reasons and no invented scores. All result
+sections, original comparison images and expandable raw evidence work without
+JavaScript or a live runner. Slider dragging and the device/comparison switches need
+the embedded JavaScript.
 It has no Figma input, other builders, scheduling, public endpoint or hosted pairing.
 
 ## 1. Application shell

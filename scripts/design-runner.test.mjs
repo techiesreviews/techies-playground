@@ -175,3 +175,32 @@ test('standalone report uses local fonts, safe inline data and no preview contro
   assert.match(html, /&lt;script&gt;alert/)
   assert.doesNotMatch(html, /<script>alert|fetch\(|name="mode"|name="theme"|data-shift/)
 })
+
+test('unknown AI notes and heading mistakes never claim to be invisible block limits', () => {
+  const report = { ai: { status: 'completed' }, design: { status: 'completed', misses: ['Card hover shadow not supported', 'The sample title was not rebuilt as an H1 heading.'], captures: [1440, 390].map((width) => ({ width, height: 1000, match: 100, pixels: width * 1000, changedPixels: 0, reference: 'reference.png', rebuilt: 'rebuilt.png' })) }, queryMonitor: { status: 'completed' }, codeProfiler: { status: 'completed' } }
+  finalizeDesignReport(report)
+  assert.equal(report.state, 'passed')
+  assert.doesNotMatch(report.summary.lead, /None of them change how it looks|can’t be set with blocks|looks identical/)
+  const html = designReportHTML(report)
+  assert.match(html, /Noted by the AI/)
+  assert.match(html, /Heading structure/)
+  assert.doesNotMatch(html, />Not visible</)
+})
+
+test('saved blocks with failed captures keep notes and do not invent zero changed pixels', () => {
+  const report = { ai: { status: 'completed' }, design: { status: 'blocked', native: { status: 'completed', invalidBlocks: 0, inventory: { 'core/group': 1 } }, captures: [], misses: ['AI note'] }, blocker: 'Capture calibration failed.' }
+  finalizeDesignReport(report)
+  const html = designReportHTML(report)
+  assert.equal(report.state, 'failed')
+  assert.match(html, /page was rebuilt, but picture capture did not finish/)
+  assert.doesNotMatch(html, /0 different|before the page was rebuilt|Nothing to report yet/)
+  assert.match(html, /AI note/)
+})
+
+test('a failed speed tester on a rebuilt page shows its actual reason', () => {
+  const report = { ai: { status: 'completed' }, design: { status: 'completed', captures: [], misses: [] }, queryMonitor: { status: 'blocked', reason: 'Collector response was incomplete.' } }
+  finalizeDesignReport(report)
+  const html = designReportHTML(report)
+  assert.match(html, /Collector response was incomplete/)
+  assert.doesNotMatch(html, /This test needs the rebuilt page/)
+})
