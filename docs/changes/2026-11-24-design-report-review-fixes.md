@@ -36,7 +36,7 @@ light/dark. Preserve the approved TOOLS-450 look elsewhere.
 
 `scripts/design-report.mjs` classifies margin, box-sizing and viewport-metadata notes
 as visible only when a capture is below 99% or reports overflow. Other layout notes
-stay neutral and cannot downgrade a passing run. Confirmed layout notes get a plain
+stay neutral and cannot downgrade a passing run. Confirmed layout notes get distinct plain
 title, with original technical wording retained in the disclosure.
 Scores use one shared floored formatter, including
 the embedded script. `scripts/design-report.css` rounds the images instead of
@@ -58,7 +58,14 @@ entire hit area, focus state, clipping ancestors and viewport bounds.
 | Node | New matching-capture test before review correction | Unconfirmed layout note must not downgrade a pass | Failed 19/20: `partial` instead of `passed`; after correction, affected tests 20/20 | [Review correction](2026-11-24-design-report-review-fixes/review-validation.txt) |
 | Chromium | `kit go tools-457-ends-before -- node scripts/design-report-check.mjs .scratch/tools-457/ends-before` | Catch clipped endpoints | Failed: `clippedBy: ["viewer"]`, `grabbable: false`; all eight before screenshots saved | [Before geometry](2026-11-24-design-report-review-fixes/before-slider-ends.json) |
 | Chromium | Same browser command with `tools-457-ends-after` and `.scratch/tools-457/ends-after` | Complete handle/ring at both ends | Passed all eight focused endpoints and 12 layouts; 44×44 hit areas, no clipping/overflow/page errors/HTTP requests; existing keyboard, mouse, touch, offline and enlarged-text checks passed | [After evidence](2026-11-24-design-report-review-fixes/after-browser-evidence.json) |
-| Node | `kit unit` | Whole suite passes | 425/425, 43 files | [Validation](2026-11-24-design-report-review-fixes/validation.txt) |
+| Node | Initial `kit unit`, before review corrections | Whole suite passes | 425/425, 43 files | [Validation](2026-11-24-design-report-review-fixes/validation.txt) |
+| Node | `kit unit`, after the matching-capture correction | Whole suite passes | 426/426, 43 files | [Review correction](2026-11-24-design-report-review-fixes/review-validation.txt) |
+| Chromium | `kit go tools-457-browser-final -- node scripts/design-report-check.mjs .scratch/tools-457/browser-final` | Endpoint and switched-footer checks pass | Passed 12 layouts and all eight endpoints | [Review correction](2026-11-24-design-report-review-fixes/review-validation.txt) |
+| Kit UX | `kit go tools-457-ux-final -- scripts/agents/kit ux` | Report missing feature list after the visible edit | Failed ENOENT for `docs/agents/features.md`; no UX verdict | [Review correction](2026-11-24-design-report-review-fixes/review-validation.txt) |
+| Node | Distinct-title regression, before and after the copy correction | Separate spacing/sizing/phone notes have distinct plain titles | Failed 20/21 on identical titles; affected tests now 21/21 | [Final validation](2026-11-24-design-report-review-fixes/final-validation.txt) |
+| Node | Final `kit unit` | Whole suite passes | 427/427, 43 files | [Final validation](2026-11-24-design-report-review-fixes/final-validation.txt) |
+| Chromium | `kit go tools-457-browser-land -- node scripts/design-report-check.mjs .scratch/tools-457/browser-land` | Final endpoint and switched-footer checks pass | Passed 12 layouts and all eight endpoints | [Final validation](2026-11-24-design-report-review-fixes/final-validation.txt) |
+| Kit UX | `kit go tools-457-ux-land -- scripts/agents/kit ux` | Report missing feature list after the final visible edit | Failed ENOENT for `docs/agents/features.md`; no UX verdict | [Final validation](2026-11-24-design-report-review-fixes/final-validation.txt) |
 | Vite | `kit go tools-457-build -- scripts/agents/kit build` | Build passes | Passed; existing browser-externalization and large-chunk warnings | [Validation](2026-11-24-design-report-review-fixes/validation.txt) |
 | Kit UX | `kit go tools-457-ux -- scripts/agents/kit ux` | Report missing integration | Failed ENOENT: no `docs/agents/features.md`; no feature list invented. `kit shots` is also unavailable. No kit UX verdict claimed. | [Validation](2026-11-24-design-report-review-fixes/validation.txt) |
 
@@ -91,7 +98,10 @@ WordPress, or tester pipeline execution. No private Melapress result was read.
 The initial implementation treated every layout keyword as visible. Independent
 review correctly found that this could downgrade a report whose pictures meet the
 pass threshold. A new test failed on that case before the correction; capture
-evidence now controls classification. Confirmed layout notes also use a plain title.
+evidence now controls classification. Confirmed layout notes also use plain titles.
+The next review found that one generic title could produce duplicate-looking rows.
+A three-note regression failed first; spacing, box sizing and phone layout now have
+distinct titles, and the summary still counts the three recorded notes correctly.
 The browser diagnostic now verifies that the footer never exceeds the raw measured
 score after switching sizes. This uses a numeric bound rather than a fixed pixel
 score that can vary with the local browser/font environment.
