@@ -155,6 +155,17 @@ const LICENSE_LIST_RETRY_ERROR = 'Saved license keys still could not be read. La
 const LICENSE_READ_TIMEOUT_MS = 10000
 const CHANGELOG_ENTRIES = [
   {
+    version: '0.13.8',
+    date: 'November 24, 2026',
+    title: 'More accurate design comparisons',
+    summary: 'Local design reports keep visible layout problems visible and comparison handles easy to grab.',
+    changes: [
+      'Margin, sizing and phone-layout problems no longer appear as invisible notes.',
+      'Picture scores below the 99% pass mark no longer round up to 99%.',
+      'The comparison handle and its keyboard focus ring stay fully visible at both ends of the slider.',
+    ],
+  },
+  {
     version: '0.13.7',
     date: 'November 24, 2026',
     title: 'Clearer design test results',

@@ -1,0 +1,230 @@
+{
+  "matrix": [
+    {
+      "state": "partial",
+      "width": 1440,
+      "colorScheme": "light",
+      "overflow": false
+    },
+    {
+      "state": "passed",
+      "width": 1440,
+      "colorScheme": "light",
+      "overflow": false
+    },
+    {
+      "state": "failed",
+      "width": 1440,
+      "colorScheme": "light",
+      "overflow": false
+    },
+    {
+      "state": "partial",
+      "width": 1440,
+      "colorScheme": "dark",
+      "overflow": false
+    },
+    {
+      "state": "passed",
+      "width": 1440,
+      "colorScheme": "dark",
+      "overflow": false
+    },
+    {
+      "state": "failed",
+      "width": 1440,
+      "colorScheme": "dark",
+      "overflow": false
+    },
+    {
+      "state": "partial",
+      "width": 390,
+      "colorScheme": "light",
+      "overflow": false
+    },
+    {
+      "state": "passed",
+      "width": 390,
+      "colorScheme": "light",
+      "overflow": false
+    },
+    {
+      "state": "failed",
+      "width": 390,
+      "colorScheme": "light",
+      "overflow": false
+    },
+    {
+      "state": "partial",
+      "width": 390,
+      "colorScheme": "dark",
+      "overflow": false
+    },
+    {
+      "state": "passed",
+      "width": 390,
+      "colorScheme": "dark",
+      "overflow": false
+    },
+    {
+      "state": "failed",
+      "width": 390,
+      "colorScheme": "dark",
+      "overflow": false
+    }
+  ],
+  "errors": [],
+  "network": [],
+  "captures": [
+    {
+      "width": 1440,
+      "height": 1000,
+      "reference": "reference-1440.png",
+      "rebuilt": "rebuilt-1440.png",
+      "match": 95.10666666666665,
+      "changedPixels": 70464,
+      "pixels": 1440000,
+      "overflow": false
+    },
+    {
+      "width": 390,
+      "height": 1000,
+      "reference": "reference-390.png",
+      "rebuilt": "rebuilt-390.png",
+      "match": 66.1925641025641,
+      "changedPixels": 131849,
+      "pixels": 390000,
+      "overflow": false
+    }
+  ],
+  "sliderEnds": [
+    {
+      "width": 1440,
+      "colorScheme": "light",
+      "ends": [
+        {
+          "key": "Home",
+          "screenshot": "slider-1440-light-home.png",
+          "value": "0",
+          "width": 44,
+          "height": 44,
+          "focused": true,
+          "clippedBy": [],
+          "ringInViewport": true,
+          "grabbable": true
+        },
+        {
+          "key": "End",
+          "screenshot": "slider-1440-light-end.png",
+          "value": "100",
+          "width": 44,
+          "height": 44,
+          "focused": true,
+          "clippedBy": [],
+          "ringInViewport": true,
+          "grabbable": true
+        }
+      ]
+    },
+    {
+      "width": 1440,
+      "colorScheme": "dark",
+      "ends": [
+        {
+          "key": "Home",
+          "screenshot": "slider-1440-dark-home.png",
+          "value": "0",
+          "width": 44,
+          "height": 44,
+          "focused": true,
+          "clippedBy": [],
+          "ringInViewport": true,
+          "grabbable": true
+        },
+        {
+          "key": "End",
+          "screenshot": "slider-1440-dark-end.png",
+          "value": "100",
+          "width": 44,
+          "height": 44,
+          "focused": true,
+          "clippedBy": [],
+          "ringInViewport": true,
+          "grabbable": true
+        }
+      ]
+    },
+    {
+      "width": 390,
+      "colorScheme": "light",
+      "ends": [
+        {
+          "key": "Home",
+          "screenshot": "slider-390-light-home.png",
+          "value": "0",
+          "width": 44,
+          "height": 44,
+          "focused": true,
+          "clippedBy": [],
+          "ringInViewport": true,
+          "grabbable": true
+        },
+        {
+          "key": "End",
+          "screenshot": "slider-390-light-end.png",
+          "value": "100",
+          "width": 44,
+          "height": 44,
+          "focused": true,
+          "clippedBy": [],
+          "ringInViewport": true,
+          "grabbable": true
+        }
+      ]
+    },
+    {
+      "width": 390,
+      "colorScheme": "dark",
+      "ends": [
+        {
+          "key": "Home",
+          "screenshot": "slider-390-dark-home.png",
+          "value": "0",
+          "width": 44,
+          "height": 44,
+          "focused": true,
+          "clippedBy": [],
+          "ringInViewport": true,
+          "grabbable": true
+        },
+        {
+          "key": "End",
+          "screenshot": "slider-390-dark-end.png",
+          "value": "100",
+          "width": 44,
+          "height": 44,
+          "focused": true,
+          "clippedBy": [],
+          "ringInViewport": true,
+          "grabbable": true
+        }
+      ]
+    }
+  ],
+  "noJavaScript": {
+    "fallbackImages": 4,
+    "fallbackLinks": 4,
+    "fallbackLoaded": true
+  },
+  "enlargedText": {
+    "width": 390,
+    "percent": 200,
+    "scrollWidth": 390
+  },
+  "normalPhone": {
+    "width": 360,
+    "statColumns": 2
+  },
+  "controls": "keyboard, pointer drag, touch knob drag, touch scroll cancellation, device and comparison radios, disclosures",
+  "report": "runs/888369f5-c6fd-48cb-9d38-3d492907f79a/report.html"
+}

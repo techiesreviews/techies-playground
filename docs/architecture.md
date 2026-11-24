@@ -63,7 +63,7 @@ The resulting layout-A page is a private local file, not a hosted launcher route
 | `scripts/private-runner.mjs` | On-demand TOOLS-411 proof: fixed local queue, headless browser Playground, private reports. | Run by hand only; not imported by the launcher. |
 | `scripts/design-runner.mjs` | TOOLS-417 fixed Gutenberg sample, signed-in Codex generation, saved native readback, visual captures and standalone report. | Separate CLI; reuses private-runner, never imported by the launcher. |
 | `scripts/design-report.mjs`, `scripts/design-report.css`, `scripts/design-report-assets/` | TOOLS-450 report finalization, server-rendered page, comparison controls, styles and embedded local fonts. | Used by the design CLI only; no launcher bundle dependency. |
-| `scripts/design-report-check.mjs` | Offline report browser check with public pixel-difference fixtures and injected tester data. | Explicit diagnostic CLI; no AI, WordPress or hosted service. |
+| `scripts/design-report-check.mjs` | Offline report browser check with public pixel-difference fixtures, injected tester data, and focused slider-end screenshots and hit tests. | Explicit diagnostic CLI; no AI, WordPress or hosted service. |
 | `scripts/design-runner-heading-check.mjs` | Real browser regression replay with a saved AI response and an H2 title; requires captures and both real testers. | Explicit diagnostic CLI; never calls AI or the launcher. |
 | `scripts/configure-cloudflare-deploy.ps1` | Securely configure GitHub deployment secret/variables and trigger workflow. | One-time maintainer action. |
 

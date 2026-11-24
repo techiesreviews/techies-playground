@@ -24,13 +24,16 @@ Reports also persist `state` (`passed`, `partial`, `failed`), generator-written
 objects containing `raw`, `title`, `why`, boolean `visible`, and optional `kind`
 (`block-limit`, `semantic`, `unclassified`). `visible: true` means a known visible
 miss; false also includes unclassified AI notes, which the page labels neutrally
-rather than claiming they cannot be seen. Raw `design.misses`
+rather than claiming they cannot be seen. Body-margin, box-sizing and viewport-metadata
+notes are visible layout misses; only an exact article-semantics note gets the
+invisible block-limit wording. Raw `design.misses`
 remain unchanged for existing consumers. Display state does not replace pipeline
 `verdict` or `design.outcome`; semantic notes alone can coexist with a passed picture
 comparison. `runOnce` accepts an optional finalizer that runs after stage failures
 and timestamps/verdict are settled, before both report files are written.
 Each capture records dimensions, reference/rebuild filenames, changed pixels, match,
-overflow and repeated/broken-capture calibration. `go` means the pipeline completed;
+overflow and repeated/broken-capture calibration. Match precision is retained in JSON;
+display scores are floored to one decimal. `go` means the pipeline completed;
 it does not mean the design has no misses. A completed design can have
 `outcome: "needs-work"`. Missing stages never produce passing numbers.
 The cold observation is the first frontend request to the saved rebuilt page; five

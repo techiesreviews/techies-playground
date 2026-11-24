@@ -90,7 +90,7 @@ Release `dev` to `main` (`kit pr --release --base main`)
 - `src/App.jsx` is deliberately the orchestration and presentation center. Pure data rules live in `src/lib` and are tested with Node's built-in test runner.
 - `worker.js` only serves built assets through a Cloudflare Worker and adds security headers.
 - There is no router, global state library, server database, analytics client, or authentication layer.
-- The source-controlled app version is `0.13.7` in the current working tree.
+- The source-controlled app version is `0.13.8` in the current working tree.
 - An independent local design-test CLI uses signed-in Codex to rebuild a fixed sample with Gutenberg, then saves private comparison and tester reports. It has no hosted integration; see `docs/design-runner.md`.
 
 ## Where to look next
