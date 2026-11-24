@@ -213,12 +213,19 @@ test('unconfirmed layout notes stay neutral when the pictures match', () => {
     assert.equal(report.design.missDetails[0].visible, visible)
     const html = designReportHTML(report)
     assert.doesNotMatch(html, />Not visible</)
-    if (visible) assert.equal(report.design.missDetails[0].title, 'The page spacing or phone layout needs checking')
+    if (visible) assert.equal(report.design.missDetails[0].title, 'The space around the page may differ')
     else {
       assert.match(html, />Noted by the AI</)
       assert.doesNotMatch(html, />You can see it</)
     }
   }
+})
+
+test('different layout notes keep distinct plain titles', () => {
+  const report = { ai: { status: 'completed' }, design: { status: 'completed', misses: ['The body margin cannot be set with blocks.', 'box-sizing differs from the theme.', 'Viewport metadata is missing.'], captures: [1440, 390].map((width) => ({ width, height: 1000, match: 97, pixels: width * 1000, changedPixels: width * 30, reference: 'reference.png', rebuilt: 'rebuilt.png' })) }, queryMonitor: { status: 'completed' }, codeProfiler: { status: 'completed' } }
+  finalizeDesignReport(report)
+  assert.deepEqual(report.design.missDetails.map((miss) => miss.title), ['The space around the page may differ', 'Boxes may be sized differently', 'The phone may show the page at the wrong size'])
+  assert.equal(report.summary.lead, '3 differences show on screen. They are listed first below.')
 })
 
 test('picture scores below the cutoff never display as 99 percent', () => {

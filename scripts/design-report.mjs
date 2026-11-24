@@ -27,13 +27,18 @@ const took = (a, b) => { if (!Number.isFinite(Date.parse(a)) || !Number.isFinite
 const stage = (s) => ({ completed: 'Done', running: 'Running', blocked: 'Stopped', paused: 'Paused', 'not-run': 'Not run' })[s] || 'Not run'
 const stageTone = (s) => (s === 'completed' ? 'ok' : s === 'blocked' ? 'bad' : s === 'paused' ? 'warn' : 'idle')
 
-function plainMiss(text, layoutDiffers) {
+function plainMiss(text, picturesDiffer) {
   let m
   if (/^article element semantics[.!]?$/i.test(text)) return { title: 'The cards are plain boxes, not “article” sections', why: 'Screen readers and search engines get a smaller hint about what each card is. It looks the same.', visible: false, kind: 'block-limit' }
   if ((m = text.match(/^(\d+)px: ([\d.]+)% of pixels differ/))) return { title: `On the ${device(+m[1])}, ${+m[2]}% of the picture is different`, why: 'Compare the two pictures above to see where.', visible: true }
   if ((m = text.match(/Horizontal overflow at (\d+)px/))) return { title: `On the ${device(+m[1])}, the page scrolls sideways`, why: 'Something is wider than the screen.', visible: true }
   if ((m = text.match(/Missing required text: (.+)/))) return { title: `Text is missing: “${m[1]}”`, why: 'The copy dropped words that are in the original.', visible: true }
-  if (layoutDiffers && /box-sizing|body margin|viewport metadata/i.test(text)) return { title: 'The page spacing or phone layout needs checking', why: 'The pictures differ. Compare them above to check the spacing, sizing and phone layout.', visible: true }
+  if (picturesDiffer && /box-sizing|body margin|viewport metadata/i.test(text)) {
+    const title = /body margin/i.test(text) ? 'The space around the page may differ'
+      : /box-sizing/i.test(text) ? 'Boxes may be sized differently'
+        : 'The phone may show the page at the wrong size'
+    return { title, why: 'The pictures differ. Compare them above to check the spacing, sizing and phone layout.', visible: true }
+  }
   if (/not rebuilt as an H1/i.test(text)) return { title: 'The main title is not a proper heading', why: 'Blocks can set the page title. This rebuild used the wrong heading level, which changes its meaning for screen readers and search engines.', visible: false, kind: 'semantic' }
   return { title: text, why: 'The AI reported this detail. Check the pictures and original wording to assess its effect.', visible: false, kind: 'unclassified' }
 }
@@ -267,14 +272,14 @@ function detailsSection(vm) {
 export function finalizeDesignReport(report) {
   const d = report.design ||= { status: 'not-run' }
   const captures = d.captures || []
-  const layoutDiffers = captures.some((c) => c.match < 99 || c.overflow)
-  d.missDetails = (d.misses || []).map((raw) => ({ raw, ...plainMiss(raw, layoutDiffers) }))
+  const picturesDiffer = captures.some((c) => c.match < 99 || c.overflow)
+  d.missDetails = (d.misses || []).map((raw) => ({ raw, ...plainMiss(raw, picturesDiffer) }))
     .sort((a, b) => Number(b.visible) - Number(a.visible))
   const visible = d.missDetails.filter((miss) => miss.visible).length
   const completed = report.ai?.status === 'completed' && d.status === 'completed'
   const bothSizes = [1440, 390].every((width) => captures.some((c) => c.width === width && Number.isFinite(c.match)))
   report.state = !completed ? 'failed'
-    : !bothSizes || captures.some((c) => c.match < 99 || c.overflow) || visible || d.native?.invalidBlocks > 0
+    : !bothSizes || picturesDiffer || visible || d.native?.invalidBlocks > 0
       || report.queryMonitor?.status !== 'completed' || report.codeProfiler?.status !== 'completed' ? 'partial' : 'passed'
   const notes = d.missDetails.length
   report.summary = report.state === 'passed' ? {
