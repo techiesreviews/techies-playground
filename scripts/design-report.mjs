@@ -75,8 +75,8 @@ function compareSection(vm, state) {
       <div><h2 id="h-compare">Side by side</h2><p class="muted small" id="hint">${hint}</p></div>
       <div class="controls">
         <fieldset class="seg" id="view"><legend class="sr">Screen size</legend>
-          <label><input type="radio" name="view" value="desktop" ${state.view === 'desktop' ? 'checked' : ''} ${vm.captures.some((c) => device(c.width) === 'desktop') ? '' : 'disabled'}>Desktop <span class="sub">1440</span></label>
-          <label><input type="radio" name="view" value="phone" ${state.view === 'phone' ? 'checked' : ''} ${vm.captures.some((c) => device(c.width) === 'phone') ? '' : 'disabled'}>Phone <span class="sub">390</span></label>
+          <label><input type="radio" name="view" value="desktop" ${state.view === 'desktop' ? 'checked' : ''} ${vm.captures.some((c) => device(c.width) === 'desktop') ? '' : 'disabled'}>Desktop <span class="sub">${vm.captures.some((c) => device(c.width) === 'desktop') ? '1440' : 'not captured'}</span></label>
+          <label><input type="radio" name="view" value="phone" ${state.view === 'phone' ? 'checked' : ''} ${vm.captures.some((c) => device(c.width) === 'phone') ? '' : 'disabled'}>Phone <span class="sub">${vm.captures.some((c) => device(c.width) === 'phone') ? '390' : 'not captured'}</span></label>
         </fieldset>
         <fieldset class="seg" id="compare"><legend class="sr">How to compare</legend>
           <label><input type="radio" name="compare" value="slide" ${state.compare === 'slide' ? 'checked' : ''}>Slide</label>
@@ -88,7 +88,7 @@ function compareSection(vm, state) {
       <div class="stage" id="stage">${stageHTML(vm, state)}</div>
       <div class="compare-foot" id="foot">${footHTML(vm, state)}</div>
     </div>
-    <noscript><style>.controls, .compare-card, #hint { display: none; }</style>
+    <noscript>
       <div class="card static-comparison">${vm.captures.map((c) => `<section><h3>${c.width} px</h3><div class="static-pair">
         ${[['Original', c.reference], ['Gutenberg copy', c.rebuilt]].map(([label, file]) => `<figure><figcaption><a href="${esc(file)}">Open ${label.toLowerCase()} at ${c.width} px</a></figcaption><img src="${esc(file)}" width="${c.width}" height="${c.height}" alt="${label} at ${c.width} pixels wide"></figure>`).join('')}
       </div></section>`).join('')}</div>
@@ -374,7 +374,7 @@ export function designReportHTML(report) {
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark"><title>Design test results · The Long View</title>
-<style>${fonts}${styles}</style></head><body>
+<style>${fonts}${styles}</style><noscript><style>.controls, .compare-card, #hint { display: none; }</style></noscript></head><body>
 <a class="skip" href="#app">Skip to results</a>
 <header class="site"><div class="wrap"><span class="brand">Techies Playground</span>
 <nav aria-label="Main"><a href="https://play.techies.tools">Playground</a><a href="#app" aria-current="page">Design runs</a></nav></div></header>

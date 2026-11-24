@@ -226,4 +226,17 @@ test('a later tester explains that it did not run after the real global blocker'
   finalizeDesignReport(report)
   const html = designReportHTML(report)
   assert.match(html, /note-box">Did not run because the test stopped: Query Monitor target returned HTTP 500\./)
+  const speed = html.slice(html.indexOf('<h3>Page speed</h3>'), html.indexOf('<h3>Which plugins take the time</h3>'))
+  assert.match(speed, /note-box">Query Monitor target returned HTTP 500\.<\/p>/)
+  assert.doesNotMatch(speed, /note-box">Did not run/)
+})
+
+
+test('phone-only captures select the real phone image and disable desktop', () => {
+  const report = { ai: { status: 'completed' }, design: { status: 'blocked', captures: [{ width: 390, height: 1000, match: 100, pixels: 390000, changedPixels: 0, reference: 'reference-390.png', rebuilt: 'rebuilt-390.png' }], misses: [] } }
+  finalizeDesignReport(report)
+  const html = designReportHTML(report)
+  assert.match(html, /value="desktop"[^>]*disabled/)
+  assert.match(html, /value="phone"[^>]*checked/)
+  assert.match(html, /class="viewer" data-view="phone"[\s\S]*?class="orig" src="reference-390\.png"/)
 })
