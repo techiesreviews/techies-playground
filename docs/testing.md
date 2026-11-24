@@ -27,7 +27,7 @@ For a deployment preparation, also run `npm run deploy:check`. Per the Release s
 ## Current automated suite
 
 The [Gutenberg design proof](design-runner.md) adds native-tree rejection, score,
-escaping, design-completion gates and quota handling in `scripts/design-runner.test.mjs`.
+escaping, persisted display states, plain-word misses, design-completion gates and quota handling in `scripts/design-runner.test.mjs`.
 The quota test injects a CLI usage-limit response into the real generation flow, checks
 the saved paused HTML/JSON, and forbids browser execution. It does not exhaust a live
 subscription. `node scripts/design-runner.mjs enqueue`, then `once`, runs the real
@@ -40,6 +40,13 @@ render last. A failed measurement must never start capture. The committed
 `scripts/design-runner-heading-check.mjs` exercises the real H2 browser regression
 with a saved AI response; see the run guide for its two private path arguments.
 
+`node scripts/design-report-check.mjs .scratch/design-report-check` runs a separate
+Chromium report check: 12 theme/width/state combinations, real fixture PNG differences,
+keyboard/pointer comparisons, disclosures, offline assets and motion preferences.
+It uses injected tester observations and no private run data, AI or WordPress. The
+before/prototype/after comparison evidence is in
+`changes/2026-11-24-design-report-look/README.md`.
+
 The independent [private runner proof](private-runner.md) has queue-concurrency,
 partial-failure, permission, HTML-escaping and real-collector/artifact gate coverage in
 `scripts/private-runner.test.mjs`. These unit checks do not prove hosted Playground or
@@ -47,7 +54,7 @@ Code Profiler compatibility. Run `node scripts/private-runner.mjs enqueue`, then
 `node scripts/private-runner.mjs once` for the separate, real headless attempt; retain
 its private reports and distinguish a completed profile from a no-go.
 
-The suite uses Node's built-in test runner and contains 414 tests in 43 files in the current working tree. `npm test` names its files (`src/**/*.test.js`, `scripts/*.test.mjs`), so a locally prepared `playground-host/dist` adds none.
+The suite uses Node's built-in test runner and contains 417 tests in 43 files in the current working tree. `npm test` names its files (`src/**/*.test.js`, `scripts/*.test.mjs`), so a locally prepared `playground-host/dist` adds none.
 
 Use the shared [Agent Kit](agents/agent-scripts.md): `scripts/agents/kit doctor`, `scripts/agents/kit unit` (the same files as `npm test`), and `scripts/agents/kit build`. The unit tests are Node tests only; browser specs and `kit shots` are not integrated. Real browser checks below use T3 separately and must not be inferred from the Node results.
 

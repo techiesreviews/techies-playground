@@ -1,7 +1,7 @@
 {
   "name": "techies-playground",
   "private": true,
-  "version": "0.13.6",
+  "version": "0.13.7",
   "license": "MIT",
   "type": "module",
   "scripts": {

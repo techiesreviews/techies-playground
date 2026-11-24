@@ -155,6 +155,17 @@ const LICENSE_LIST_RETRY_ERROR = 'Saved license keys still could not be read. La
 const LICENSE_READ_TIMEOUT_MS = 10000
 const CHANGELOG_ENTRIES = [
   {
+    version: '0.13.7',
+    date: 'November 24, 2026',
+    title: 'Clearer design test results',
+    summary: 'Local design reports now lead with the result, picture comparison, and the run in numbers.',
+    changes: [
+      'Compare the original and Gutenberg copy with a slider or side by side, on desktop and phone.',
+      'See plain-word differences, page speed, plugin timings, and block totals in a report that follows your light or dark setting.',
+      'Saved reports include their fonts and work offline, with reduced motion respected.',
+    ],
+  },
+  {
     version: '0.13.6',
     date: 'November 23, 2026',
     title: 'License read errors keep your list and pause launch',

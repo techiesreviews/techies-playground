@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { enqueue, runOnce, verdict } from './private-runner.mjs'
-import { validateDesign, classifyCodexFailure, codexArguments, designReportHTML, pixelScore, generateDesign, runDesignProof } from './design-runner.mjs'
+import { validateDesign, classifyCodexFailure, codexArguments, designReportHTML, finalizeDesignReport, pixelScore, generateDesign, runDesignProof } from './design-runner.mjs'
 
 const tree = [{ name: 'core/group', attributes: {}, innerBlocks: [{ name: 'core/heading', attributes: { content: 'Build something that lasts.', level: 1 }, innerBlocks: [] }] }]
 
@@ -66,7 +66,7 @@ test('a CLI usage-limit fixture saves a paused report and never starts the brows
   const report = await runOnce(root, (report, directory) => runDesignProof(report, directory, {
     generate: (report, directory) => generateDesign(report, directory, run),
     browser: () => assert.fail('a paused run must not start WordPress'),
-  }), designReportHTML)
+  }), designReportHTML, finalizeDesignReport)
   assert.equal(invocations, 2)
   assert.equal(report.ai.status, 'paused')
   assert.equal(report.verdict, 'no-go')
@@ -109,14 +109,69 @@ test('API-key login blocks before generation and completed reports retain escape
       invocations++
       return { code: 0, output: 'Logged in using an API key' }
     }), browser: () => assert.fail('no browser after rejected login'),
-  }), designReportHTML)
+  }), designReportHTML, finalizeDesignReport)
   assert.equal(invocations, 1)
   assert.equal(report.verdict, 'no-go')
   assert.equal(report.ai.status, 'blocked')
-  const html = designReportHTML({ verdict: 'go', design: { misses: ['Semantic mismatch'], captures: [1440, 390].map((width) => ({ width, height: 1000, match: 99.5, changedPixels: 5, reference: 'sample".png', rebuilt: 'saved".png' })) } })
-  assert.match(html, /Completed · misses listed/)
-  assert.equal((html.match(/99\.50% match/g) || []).length, 2)
+  const html = designReportHTML({ verdict: 'go', ai: { status: 'completed' }, queryMonitor: { status: 'completed' }, codeProfiler: { status: 'completed' }, design: { status: 'completed', misses: ['Semantic mismatch'], captures: [1440, 390].map((width) => ({ width, height: 1000, match: 99.5, pixels: width * 1000, changedPixels: 5, reference: 'sample".png', rebuilt: 'saved".png' })) } })
+  assert.match(html, /Passed · 1 note/)
+  assert.match(html, /99\.5%/)
   assert.match(html, /src="sample&quot;\.png"/)
   assert.match(html, /src="saved&quot;\.png"/)
-  assert.match(html, /summary\{display:list-item/)
+  assert.match(html, /Show the original technical wording/)
+  assert.match(html, /Semantic mismatch/)
+})
+
+test('report finalization records real states and visible-first plain misses', () => {
+  const report = {
+    ai: { status: 'completed' }, design: { status: 'completed', misses: ['The sample title was not rebuilt as an H1 heading.', '390px: 5.40% of pixels differ from the sample; inspect the side-by-side captures.'], captures: [{ width: 1440, match: 100 }, { width: 390, match: 94.6 }] },
+    queryMonitor: { status: 'completed' }, codeProfiler: { status: 'completed' },
+  }
+  finalizeDesignReport(report)
+  assert.equal(report.state, 'partial')
+  assert.equal(report.design.missDetails[0].visible, true)
+  assert.match(report.design.missDetails[0].title, /phone/)
+  assert.match(report.design.missDetails[1].raw, /H1/)
+  report.design.captures[1].match = 100
+  report.design.misses.pop()
+  finalizeDesignReport(report)
+  assert.equal(report.state, 'passed', 'nonvisual notes remain a pass')
+  report.codeProfiler.status = 'blocked'
+  finalizeDesignReport(report)
+  assert.equal(report.state, 'partial')
+  assert.doesNotMatch(report.summary.lead, /0 differences|mostly on the phone/)
+  report.ai = { status: 'blocked', reason: 'Login rejected.' }
+  finalizeDesignReport(report)
+  assert.equal(report.state, 'failed')
+  assert.match(report.summary.lead, /Login rejected/)
+  assert.doesNotMatch(report.summary.lead, /180|Nothing was charged/)
+})
+
+test('the saved JSON gets the same final state and wording as the page, even after failure', async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), 'design-report-state-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const job = await enqueue(root)
+  await runOnce(root, async (report) => {
+    report.kind = 'design-test'
+    report.ai = { status: 'running' }
+    report.design = { status: 'not-run' }
+    throw new Error('Login unavailable.')
+  }, designReportHTML, finalizeDesignReport)
+  const saved = JSON.parse(await readFile(path.join(root, 'runs', job.id, 'report.json'), 'utf8'))
+  assert.equal(saved.state, 'failed')
+  assert.match(saved.summary.lead, /Login unavailable/)
+  const html = await readFile(path.join(root, 'runs', job.id, 'report.html'), 'utf8')
+  assert.match(html, /Login unavailable/)
+  assert.doesNotMatch(html, /NaN|Invalid Date|Nothing charged|fonts.googleapis/)
+})
+
+test('standalone report uses local fonts, safe inline data and no preview controls', () => {
+  const report = { ai: { status: 'blocked', reason: '</script><script>alert(1)</script>' }, design: { status: 'not-run' } }
+  finalizeDesignReport(report)
+  const html = designReportHTML(report)
+  assert.match(html, /data:font\/woff2;base64,/)
+  assert.match(html, /@property --n/)
+  assert.match(html, /prefers-reduced-motion/)
+  assert.match(html, /&lt;script&gt;alert/)
+  assert.doesNotMatch(html, /<script>alert|fetch\(|name="mode"|name="theme"|data-shift/)
 })
