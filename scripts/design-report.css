@@ -310,7 +310,7 @@ details > summary::-webkit-details-marker { display: none; }
 
 /* Run in numbers: each tile has its own colour, a counting number and a small picture of the figure */
 @property --n { syntax: "<integer>"; inherits: false; initial-value: 0; }
-.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); gap: 12px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); gap: 12px; }
 @media (min-width: 48rem) { .stats { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; } }
 .stat {
   --hue: 190; position: relative; isolation: isolate; overflow: clip;

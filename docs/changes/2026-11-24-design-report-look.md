@@ -62,10 +62,10 @@ was copied into the repository.
 | Node 24 | `kit doctor`, after installing locked dependencies | All required checks pass | 17/17; first attempt correctly failed because dependencies were absent | [Recorded evidence](2026-11-24-design-report-look/validation.txt) |
 | Node 24 | New report tests before implementation | Fail first | 3 failed: finalization module absent; saved state/wording and offline assets not implemented | [Recorded evidence](2026-11-24-design-report-look/validation.txt) |
 | Chromium | `node scripts/design-report-check.mjs .scratch/tools-450/check-red` | Detect hidden speed bars | Failed with `Speed bars must be visible` before the flex fix | [Recorded evidence](2026-11-24-design-report-look/validation.txt) |
-| Node 24 | `kit unit --affected` | Relevant tests pass | 23/23 in 2 files after review fixes | [Recorded evidence](2026-11-24-design-report-look/validation.txt) |
-| Node 24 | `kit unit` | Whole suite passes | 422/422 in 43 files after review fixes (417/417 before review) | [Recorded evidence](2026-11-24-design-report-look/validation.txt) |
+| Node 24 | `kit unit --affected` | Relevant tests pass | 24/24 in 2 files after review fixes | [Recorded evidence](2026-11-24-design-report-look/validation.txt) |
+| Node 24 | `kit unit` | Whole suite passes | 423/423 in 43 files after review fixes (417/417 before review) | [Recorded evidence](2026-11-24-design-report-look/validation.txt) |
 | Vite | `kit build` | Production build completes | Passed; existing dependency-externalization and large-chunk warnings remain | [Recorded evidence](2026-11-24-design-report-look/validation.txt) |
-| Chromium | `node scripts/design-report-check.mjs .scratch/tools-450/check-final-2` through `kit go` | Saved local report works without HTTP; all states, controls and motion variants work | Passed 12 layouts; zero page errors/HTTP requests/overflow; keyboard/drag/switches/disclosures/counters passed | [Recorded evidence](2026-11-24-design-report-look/browser-evidence.json) |
+| Chromium | `node scripts/design-report-check.mjs .scratch/tools-450/check-land` through `kit go` | Saved local report works without HTTP; all states, controls and motion variants work | Passed 12 layouts; zero page errors/HTTP requests/overflow; keyboard/drag/switches/disclosures/counters passed | [Recorded evidence](2026-11-24-design-report-look/browser-evidence.json) |
 | Kit UX | `kit ux` through `kit go` | Report the project's missing integration | Failed `ENOENT ... docs/agents/features.md`; this repository has no feature list or project `shots` command. It supplied no UX verdict. Browser evidence above is independently executed, not a claimed kit UX pass. | [Recorded evidence](2026-11-24-design-report-look/validation.txt) |
 
 The screenshot fixture uses the existing public `sampleHTML()` and a deliberately
@@ -116,6 +116,12 @@ regression failed, the no-JavaScript check found 0/4 images, and enlarged text m
 the document 438 px wide. Afterward these checks pass (4 images, 4 links, 390 px).
 The later not-run tester also frames the real global blocker rather than presenting
 another stage's error as its own; its new regression failed before the wording fix.
+
+Final layout regression: 360 px normal text initially produced one stat column;
+the lower tile minimum restores two columns while the 390 px/200% text case still
+uses one readable column. The committed checker now exercises touch-knob dragging
+as well as scroll cancellation. The current unmodified browser output records
+no-JavaScript images/links, enlarged-text width and the 360 px column count.
 
 ## Result
 

@@ -97,6 +97,20 @@
       "overflow": false
     }
   ],
-  "controls": "keyboard, pointer drag, touch scroll cancellation, device and comparison radios, disclosures",
-  "report": "runs/28e47887-ee67-4468-be6d-485ccd329dd8/report.html"
+  "noJavaScript": {
+    "fallbackImages": 4,
+    "fallbackLinks": 4,
+    "fallbackLoaded": true
+  },
+  "enlargedText": {
+    "width": 390,
+    "percent": 200,
+    "scrollWidth": 390
+  },
+  "normalPhone": {
+    "width": 360,
+    "statColumns": 2
+  },
+  "controls": "keyboard, pointer drag, touch knob drag, touch scroll cancellation, device and comparison radios, disclosures",
+  "report": "runs/48778c64-7e53-465d-af58-ca099569c110/report.html"
 }

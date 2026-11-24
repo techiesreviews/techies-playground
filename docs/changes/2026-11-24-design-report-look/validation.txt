@@ -18,18 +18,18 @@ AssertionError: Speed bars must be visible
 
 Final focused check:
 kit unit --affected
-RESULT: ok unit 23/23 (2 files)
+RESULT: ok unit 24/24 (2 files)
 
 Final whole suite:
-kit go tools-450-unit-last -- scripts/agents/kit unit
-RESULT: ok unit 422/422 (43 files)
+kit go tools-450-unit-land -- scripts/agents/kit unit
+RESULT: ok unit 423/423 (43 files)
 
 Production build:
 kit go tools-450-build -- scripts/agents/kit build
 RESULT: ok build finished
 
 Browser check, after review fixes:
-kit go tools-450-browser-final-2 -- node scripts/design-report-check.mjs .scratch/tools-450/check-final-2
+kit go tools-450-browser-land -- node scripts/design-report-check.mjs .scratch/tools-450/check-land
 RESULT: ok design-report-browser 12 layouts; offline fonts/images; controls; counters
 
 Doctor (after resolving missing locked dependencies):
@@ -51,4 +51,9 @@ A not-run tester did not frame the earlier step's error.
 
 After fixes:
 Browser check: fallbackImages=4, fallbackLinks=4, enlargedWidth=390.
-A standalone real touch-knob check at 390 px moved the divider from 50% to 69%.
+Real touch knob dragging is now part of node scripts/design-report-check.mjs .scratch/tools-450/check-land; it checks a move to 75% at both widths and in both themes.
+
+360 px regression before the tile-minimum fix:
+node scripts/design-report-check.mjs .scratch/tools-450/columns-red
+AssertionError: Normal text keeps two stat columns at 360 px (1 !== 2).
+After the fix, browser-evidence.json records normalPhone.statColumns=2.
