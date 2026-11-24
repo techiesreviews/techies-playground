@@ -204,3 +204,26 @@ test('a failed speed tester on a rebuilt page shows its actual reason', () => {
   assert.match(html, /Collector response was incomplete/)
   assert.doesNotMatch(html, /This test needs the rebuilt page/)
 })
+
+test('partial captures never substitute desktop images for the phone', async () => {
+  const { runInNewContext } = await import('node:vm')
+  const report = { ai: { status: 'completed' }, design: { status: 'blocked', captures: [{ width: 1440, height: 1000, match: 100, pixels: 1440000, changedPixels: 0, reference: 'reference-1440.png', rebuilt: 'rebuilt-1440.png' }], misses: [] } }
+  finalizeDesignReport(report)
+  const html = designReportHTML(report)
+  assert.match(html, /value="phone"[^>]*disabled/)
+  const elements = new Map(['#stage', '#foot', '#hint'].map((id) => [id, { innerHTML: '', textContent: '' }]))
+  let change
+  runInNewContext(html.match(/<script type="module">([\s\S]*?)<\/script>/)[1], {
+    document: { querySelector: (id) => elements.get(id), addEventListener: (event, fn) => { if (event === 'change') change = fn } },
+  })
+  change({ target: { type: 'radio', name: 'view', value: 'phone' } })
+  assert.match(elements.get('#stage').innerHTML, /Phone capture did not finish/)
+  assert.doesNotMatch(elements.get('#stage').innerHTML, /reference-1440/)
+})
+
+test('a later tester explains that it did not run after the real global blocker', () => {
+  const report = { ai: { status: 'completed' }, design: { status: 'completed', captures: [], misses: [] }, queryMonitor: { status: 'blocked' }, codeProfiler: { status: 'not-run' }, blocker: 'Query Monitor target returned HTTP 500.' }
+  finalizeDesignReport(report)
+  const html = designReportHTML(report)
+  assert.match(html, /note-box">Did not run because the test stopped: Query Monitor target returned HTTP 500\./)
+})

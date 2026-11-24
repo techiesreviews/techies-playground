@@ -85,6 +85,10 @@ are embedded from local WOFF2 files, along with the stylesheet and comparison sc
 The four PNGs stay beside the HTML. It opens via `file://` without fetching JSON or
 external fonts and follows the viewer's light/dark preference. Decorative animations
 are disabled with reduced motion; screen readers receive each final stat as text.
+Without JavaScript, a static fallback exposes the complete original/copy pictures
+at both captured widths, with direct PNG links. Missing capture sizes are disabled
+in the device switch; they never silently display another size. Controls and stat
+tiles reflow when text is enlarged to 200% on a 390 px screen.
 
 Before JSON/HTML persistence, the generator writes `state: passed|partial|failed`,
 `summary` (tone, pill, title, lead), and `design.missDetails` (`raw`, `title`, `why`,

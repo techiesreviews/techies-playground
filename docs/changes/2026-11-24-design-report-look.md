@@ -59,14 +59,14 @@ was copied into the repository.
 
 | Environment | Procedure | Expected | Observed | Evidence |
 | --- | --- | --- | --- | --- |
-| Node 24 | `kit doctor`, after installing locked dependencies | All required checks pass | 17/17; first attempt correctly failed because dependencies were absent | local `.scratch/tools-450/` logs; browser output below |
-| Node 24 | New report tests before implementation | Fail first | 3 failed: finalization module absent; saved state/wording and offline assets not implemented | local `.scratch/tools-450/` logs; browser output below |
-| Chromium | `node scripts/design-report-check.mjs .scratch/tools-450/check-red` | Detect hidden speed bars | Failed with `Speed bars must be visible` before the flex fix | local `.scratch/tools-450/` logs; browser output below |
-| Node 24 | `kit unit --affected` | Relevant tests pass | 21/21 in 2 files after review fixes | local `.scratch/tools-450/` logs; browser output below |
-| Node 24 | `kit unit` | Whole suite passes | 420/420 in 43 files after the review fixes (417/417 before them) | local `.scratch/tools-450/` logs; browser output below |
-| Vite | `kit build` | Production build completes | Passed; existing dependency-externalization and large-chunk warnings remain | local `.scratch/tools-450/` logs; browser output below |
-| Chromium | `node scripts/design-report-check.mjs .scratch/tools-450/check-reviewed` through `kit go` | Saved local report works without HTTP; all states, controls and motion variants work | Passed 12 layouts; zero page errors/HTTP requests/overflow; keyboard/drag/switches/disclosures/counters passed | local `.scratch/tools-450/` logs; browser output below |
-| Kit UX | `kit ux` through `kit go` | Report the project's missing integration | Failed `ENOENT ... docs/agents/features.md`; this repository has no feature list or project `shots` command. It supplied no UX verdict. Browser evidence above is independently executed, not a claimed kit UX pass. | local `.scratch/tools-450/` logs; browser output below |
+| Node 24 | `kit doctor`, after installing locked dependencies | All required checks pass | 17/17; first attempt correctly failed because dependencies were absent | [Recorded evidence](2026-11-24-design-report-look/validation.txt) |
+| Node 24 | New report tests before implementation | Fail first | 3 failed: finalization module absent; saved state/wording and offline assets not implemented | [Recorded evidence](2026-11-24-design-report-look/validation.txt) |
+| Chromium | `node scripts/design-report-check.mjs .scratch/tools-450/check-red` | Detect hidden speed bars | Failed with `Speed bars must be visible` before the flex fix | [Recorded evidence](2026-11-24-design-report-look/validation.txt) |
+| Node 24 | `kit unit --affected` | Relevant tests pass | 23/23 in 2 files after review fixes | [Recorded evidence](2026-11-24-design-report-look/validation.txt) |
+| Node 24 | `kit unit` | Whole suite passes | 422/422 in 43 files after review fixes (417/417 before review) | [Recorded evidence](2026-11-24-design-report-look/validation.txt) |
+| Vite | `kit build` | Production build completes | Passed; existing dependency-externalization and large-chunk warnings remain | [Recorded evidence](2026-11-24-design-report-look/validation.txt) |
+| Chromium | `node scripts/design-report-check.mjs .scratch/tools-450/check-final-2` through `kit go` | Saved local report works without HTTP; all states, controls and motion variants work | Passed 12 layouts; zero page errors/HTTP requests/overflow; keyboard/drag/switches/disclosures/counters passed | [Recorded evidence](2026-11-24-design-report-look/browser-evidence.json) |
+| Kit UX | `kit ux` through `kit go` | Report the project's missing integration | Failed `ENOENT ... docs/agents/features.md`; this repository has no feature list or project `shots` command. It supplied no UX verdict. Browser evidence above is independently executed, not a claimed kit UX pass. | [Recorded evidence](2026-11-24-design-report-look/validation.txt) |
 
 The screenshot fixture uses the existing public `sampleHTML()` and a deliberately
 smaller heading. Actual pixel scores are 95.1067% at 1440 and 66.1926% at 390. It
@@ -92,7 +92,7 @@ The committed `browser-evidence.json` is the unmodified output of the reproducib
 checker (its report path is relative to the chosen evidence directory).
 `comparison-captures.json` is a manually assembled manifest: `before_prototype_matrix`
 and `after_matrix` were copied from the separate local capture helper's executed
-outputs; `scope` was added by hand to distinguish that evidence. The helper loaded the
+outputs; `scope` and `assembly` were added by hand to distinguish that evidence. The helper loaded the
 old renderer saved before editing, the approved prototype with its toolbar hidden,
 and the current generated renderer against the same public report. The manifest
 contains no claim that these extra fields were produced by `design-report-check.mjs`.
@@ -109,9 +109,17 @@ failure), R1-3 (tester reason), R1-4 (touch scrolling), R1-5 (long-word overflow
 R1-6 (rebuild spec), R1-7 (record format/index), and R1-8 (evidence provenance)
 were addressed. Approved prototype colours and section names remain as requested.
 
+Codex second-look fixes: a missing phone capture can no longer show a desktop
+picture; no-JavaScript viewers get all four complete PNGs and direct links; 200%
+text at 390 px reflows instead of overflowing. Before the fixes, the new capture
+regression failed, the no-JavaScript check found 0/4 images, and enlarged text made
+the document 438 px wide. Afterward these checks pass (4 images, 4 links, 390 px).
+The later not-run tester also frames the real global blocker rather than presenting
+another stage's error as its own; its new regression failed before the wording fix.
+
 ## Result
 
- The generated page follows the approved visual design, handles actual fixture
+The generated page follows the approved visual design, handles actual fixture
 differences and partial/failed runs, and opens offline. Stop reasons use the saved
 failure rather than prototype mock wording. The comparative images are visual
 evidence, not a pixel-identical report-layout assertion: wording, honest picture
