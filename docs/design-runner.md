@@ -102,8 +102,11 @@ completed testers. Behind-the-scenes notes can remain on a passed run. Missing
 testers/captures or visible differences make a completed rebuild partial; an incomplete
 AI/design stage is failed. Stop reasons use actual saved evidence, without inventing
 a timeout or cash-cost claim. These display states are separate from pipeline `go`.
-Body-margin, box-sizing and viewport-metadata notes count as visible layout misses,
-including mixed notes. Only an exact article-semantics note gets the invisible
+Body-margin, box-sizing and viewport-metadata notes count as visible layout misses
+when a capture is below 99% or reports overflow, including mixed notes. Otherwise
+they retain neutral AI-note wording and do not change a passing state.
+Confirmed layout notes use a plain title; technical wording stays in the disclosure.
+Only an exact article-semantics note gets the invisible
 block-limit wording; unknown metadata notes retain neutral AI-note wording.
 
 The report counts four saved pictures for two width comparisons, including originals

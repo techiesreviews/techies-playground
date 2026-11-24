@@ -1,0 +1,76 @@
+Command evidence: review-red.log
+scripts/design-runner.test.mjs — explicit
+pass 19, fail 1
+✖ unconfirmed layout notes stay neutral when the pictures match
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  + 'partial'
+  - 'passed'
+log: .scratch/unit/20261124T140936-2789460.log
+RESULT: fail unit 19/20 (1 files) log .scratch/unit/20261124T140936-2789460.log
+
+
+Command evidence: review-green.log
+scripts/design-runner.test.mjs — changed
+pass 20, fail 0
+log: .scratch/unit/20261124T140937-2789708.log
+RESULT: ok unit 20/20 (1 files) log .scratch/unit/20261124T140937-2789708.log
+
+
+Command evidence: unit-final.log
+scripts/check-playground-advisories.test.mjs — all
+scripts/deploy-workflow.test.mjs — all
+scripts/design-runner.test.mjs — all
+scripts/launcher-worker.test.mjs — all
+scripts/playground-boot-check.test.mjs — all
+scripts/playground-host-cors-proxy.test.mjs — all
+scripts/playground-host-worker.test.mjs — all
+scripts/playground-release-workflows.test.mjs — all
+scripts/prepare-playground-host.test.mjs — all
+scripts/private-runner.test.mjs — all
+scripts/sync-playground-release.test.mjs — all
+scripts/sync-wordpress-release.test.mjs — all
+src/app-upload.test.js — all
+src/bar-compact-labels.test.js — all
+src/checks-panel.test.js — all
+src/launcher-actions.test.js — all
+src/lib/checks-php.test.js — all
+src/lib/checks.test.js — all
+src/lib/freemius-plugin.test.js — all
+src/lib/github-repository.test.js — all
+src/lib/license-fill-php.test.js — all
+src/lib/license-fill.test.js — all
+src/lib/license-vault.test.js — all
+src/lib/package-upload.test.js — all
+src/lib/playground-host.test.js — all
+src/lib/playground-persistence.test.js — all
+src/lib/playground-preview.test.js — all
+src/lib/plugin-preferences.test.js — all
+src/lib/plugin-updates-php.test.js — all
+src/lib/plugin-updates.test.js — all
+src/lib/recipe.test.js — all
+src/lib/saved-recipes.test.js — all
+src/lib/spinup-history.test.js — all
+src/lib/uploaded-plugins-php.test.js — all
+src/lib/uploaded-plugins.test.js — all
+src/lib/vault-session.test.js — all
+src/lib/vault.test.js — all
+src/lib/wordpress-org-plugins.test.js — all
+src/lib/wordpress-org-themes.test.js — all
+src/lib/wordpress-versions.test.js — all
+src/plugin-row-tap-targets.test.js — all
+src/theme-row-tap-targets.test.js — all
+src/updates-control.test.js — all
+pass 426, fail 0
+log: .scratch/unit/20261124T141055-2796735.log
+RESULT: ok unit 426/426 (43 files) log .scratch/unit/20261124T141055-2796735.log
+
+
+kit go tools-457-browser-final
+{"fallbackImages":4,"fallbackLinks":4,"enlargedWidth":390}
+RESULT: ok design-report-browser 12 layouts; offline fonts/images; controls; counters; evidence /home/ubulex/.t3/worktrees/techies-playground/build-tools-457-design--c7327b7dfcc7b37f/.scratch/tools-457/browser-final
+
+
+kit go tools-457-ux-final
+problem: ENOENT: no such file or directory, open '/home/ubulex/.t3/worktrees/techies-playground/build-tools-457-design--c7327b7dfcc7b37f/docs/agents/features.md'
+RESULT: fail ux ENOENT: no such file or directory, open '/home/ubulex/.t3/worktrees/techies-playground/build-tools-457-design--c7327b7dfcc7b37f/docs/agents/features.md'

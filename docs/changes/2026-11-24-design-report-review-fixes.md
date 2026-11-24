@@ -35,8 +35,10 @@ light/dark. Preserve the approved TOOLS-450 look elsewhere.
 ## Implementation or prototype
 
 `scripts/design-report.mjs` classifies margin, box-sizing and viewport-metadata notes
-as visible; mixed notes retain their wording. Metadata notes with uncertain effects
-retain neutral AI-note wording. Scores use one shared floored formatter, including
+as visible only when a capture is below 99% or reports overflow. Other layout notes
+stay neutral and cannot downgrade a passing run. Confirmed layout notes get a plain
+title, with original technical wording retained in the disclosure.
+Scores use one shared floored formatter, including
 the embedded script. `scripts/design-report.css` rounds the images instead of
 clipping the viewer and its interactive descendants. No new controls or motion.
 
@@ -53,6 +55,7 @@ entire hit area, focus state, clipping ancestors and viewport bounds.
 | Node | Same, after SL-1 fix | All five visible-note cases pass | 18/18 | [Validation](2026-11-24-design-report-review-fixes/validation.txt) |
 | Node | Same, before SL-2 fix | 98.96% fails honest display | 18/19; `'99' !== '98.9'` | [Validation](2026-11-24-design-report-review-fixes/validation.txt) |
 | Node | `kit unit --affected`, after SL-2 fix | 98.96/98.99/99/100 display boundaries pass in hero, rows, footer | 19/19 | [Validation](2026-11-24-design-report-review-fixes/validation.txt) |
+| Node | New matching-capture test before review correction | Unconfirmed layout note must not downgrade a pass | Failed 19/20: `partial` instead of `passed`; after correction, affected tests 20/20 | [Review correction](2026-11-24-design-report-review-fixes/review-validation.txt) |
 | Chromium | `kit go tools-457-ends-before -- node scripts/design-report-check.mjs .scratch/tools-457/ends-before` | Catch clipped endpoints | Failed: `clippedBy: ["viewer"]`, `grabbable: false`; all eight before screenshots saved | [Before geometry](2026-11-24-design-report-review-fixes/before-slider-ends.json) |
 | Chromium | Same browser command with `tools-457-ends-after` and `.scratch/tools-457/ends-after` | Complete handle/ring at both ends | Passed all eight focused endpoints and 12 layouts; 44×44 hit areas, no clipping/overflow/page errors/HTTP requests; existing keyboard, mouse, touch, offline and enlarged-text checks passed | [After evidence](2026-11-24-design-report-review-fixes/after-browser-evidence.json) |
 | Node | `kit unit` | Whole suite passes | 425/425, 43 files | [Validation](2026-11-24-design-report-review-fixes/validation.txt) |
@@ -67,7 +70,7 @@ before the recorded slider regression run. No browser profile or configuration w
 
 ## Result
 
-Done when 1: met — the visible-layout regression failed first on body margin and on a mixed article/body-margin note; all five cases now stay visible, produce partial state and never render "Not visible".
+Done when 1: met — the visible-layout regression failed first on body margin and on a mixed article/body-margin note; all five cases with 97% captures now stay visible and never render "Not visible". A second failing test protects matching captures: unconfirmed layout notes stay neutral at 100% and 99.5%.
 
 Done when 2: met — the cutoff regression failed first with `'99' !== '98.9'`; 98.96% and 98.99% now display 98.9% in the hero, both size rows and comparison footer; 99% and 100% remain exact.
 
@@ -82,6 +85,29 @@ The generated sample, HTML/JSON plus four PNGs, is saved at
 `/home/ubulex/Projects/fleet/inbox/playground-TOOLS-457-sample-report/`.
 Tester measurements and block inventory are injected public fixtures, not a new AI,
 WordPress, or tester pipeline execution. No private Melapress result was read.
+
+## Review correction
+
+The initial implementation treated every layout keyword as visible. Independent
+review correctly found that this could downgrade a report whose pictures meet the
+pass threshold. A new test failed on that case before the correction; capture
+evidence now controls classification. Confirmed layout notes also use a plain title.
+The browser diagnostic now verifies that the footer never exceeds the raw measured
+score after switching sizes. This uses a numeric bound rather than a fixed pixel
+score that can vary with the local browser/font environment.
+
+Declined: R1-3 (P3), R1-6 (validation gap): the handle intentionally extends into
+the existing gutter and remains fully visible and hit-testable inside the viewport.
+Keeping it inside the card is not an acceptance criterion. Extra padding would
+shrink the approved comparison pictures at every position; this task asks to keep
+the approved look otherwise unchanged. The before/after screenshots expose the
+tradeoff rather than hiding it.
+
+Declined: optional floating-point epsilon suggestion: adding an epsilon can display
+a raw value just below 99% as 99%, violating the explicit threshold requirement.
+Keeping a conservative floor is intentional. The optional divider-corner and local
+path suggestions do not affect the three acceptance criteria; the sample path is
+included for the requested local handoff.
 
 ## Documentation impact
 
