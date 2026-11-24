@@ -29,14 +29,14 @@ const stageTone = (s) => (s === 'completed' ? 'ok' : s === 'blocked' ? 'bad' : s
 
 function plainMiss(text) {
   let m
-  if (/article element semantics/i.test(text)) return { title: 'The cards are plain boxes, not “article” sections', why: 'Screen readers and search engines get a smaller hint about what each card is. It looks the same.', visible: false }
-  if (/doctype|viewport metadata|lang="en"/i.test(text)) return { title: 'Page-level settings can’t be set with blocks', why: 'Language, the browser tab title and the phone setup normally come from the theme. Blocks can’t reach them.', visible: false }
-  if (/box-sizing|body margin/i.test(text)) return { title: 'Two site-wide layout rules can’t be set with blocks', why: 'These come from the theme, so the copy needs a theme to behave the same on every site.', visible: false }
+  if (/article element semantics/i.test(text)) return { title: 'The cards are plain boxes, not “article” sections', why: 'Screen readers and search engines get a smaller hint about what each card is. It looks the same.', visible: false, kind: 'block-limit' }
+  if (/doctype|viewport metadata|lang="en"/i.test(text)) return { title: 'Page-level settings can’t be set with blocks', why: 'Language, the browser tab title and the phone setup normally come from the theme. Blocks can’t reach them.', visible: false, kind: 'block-limit' }
+  if (/box-sizing|body margin/i.test(text)) return { title: 'Two site-wide layout rules can’t be set with blocks', why: 'These come from the theme, so the copy needs a theme to behave the same on every site.', visible: false, kind: 'block-limit' }
   if ((m = text.match(/^(\d+)px: ([\d.]+)% of pixels differ/))) return { title: `On the ${device(+m[1])}, ${+m[2]}% of the picture is different`, why: 'Compare the two pictures above to see where.', visible: true }
   if ((m = text.match(/Horizontal overflow at (\d+)px/))) return { title: `On the ${device(+m[1])}, the page scrolls sideways`, why: 'Something is wider than the screen.', visible: true }
   if ((m = text.match(/Missing required text: (.+)/))) return { title: `Text is missing: “${m[1]}”`, why: 'The copy dropped words that are in the original.', visible: true }
-  if (/not rebuilt as an H1/i.test(text)) return { title: 'The main title is not a proper heading', why: 'It may look right, but search engines and screen readers won’t treat it as the page title.', visible: false }
-  return { title: text, why: '', visible: false }
+  if (/not rebuilt as an H1/i.test(text)) return { title: 'The main title is not a proper heading', why: 'Blocks can set the page title. This rebuild used the wrong heading level, which changes its meaning for screen readers and search engines.', visible: false, kind: 'semantic' }
+  return { title: text, why: 'The AI reported this detail. Check the pictures and original wording to assess its effect.', visible: false, kind: 'unclassified' }
 }
 
 function scoreCard(vm) {
@@ -46,13 +46,13 @@ function scoreCard(vm) {
     : vm.captures.map((c) => {
         const tone = c.match >= 99 ? 'ok' : 'warn'
         return `<div class="size-row"><dt>${device(c.width) === 'phone' ? 'Phone' : 'Desktop'}</dt>
-          <div class="meter" data-tone="${tone}" style="--w:${c.match}%" role="img" aria-label="${pct(c.match)} match"><i></i></div>
+          <dd class="meter" data-tone="${tone}" style="--w:${c.match}%" aria-hidden="true"><i></i></dd>
           <dd>${pct(c.match)}</dd></div>`
       })
-  return `<div class="card score" aria-label="Picture match">
+  return `<div class="card score" role="group" aria-label="Picture match">
     <p class="eyebrow">Picture match</p>
-    <p class="score-num num" aria-label="${failed ? 'No score' : pct(vm.lowest)}">${failed ? '—' : `${Math.round(vm.lowest * 10) / 10}<small>%</small>`}</p>
-    <p class="score-note">${failed ? 'No score. The test stopped before the page was rebuilt.' : 'of the original’s pixels also look the same in the copy. 99% or more counts as the same.'}</p>
+    <p class="score-num num">${failed ? '—' : `${Math.round(vm.lowest * 10) / 10}<small>%</small>`}</p>
+    <p class="score-note">${failed ? vm.rebuilt ? 'No score. The page was rebuilt, but picture capture did not finish.' : 'No score. The page has not been rebuilt.' : 'of the original’s pixels also look the same in the copy. 99% or more counts as the same.'}</p>
     <dl class="sizes">${rows.join('')}</dl>
   </div>`
 }
@@ -63,7 +63,7 @@ function compareSection(vm, state) {
       <div class="section-head"><div><h2 id="h-compare">Side by side</h2></div></div>
       <div class="card compare-card"><div class="stage"><div class="empty">
         <h3>No pictures were taken</h3>
-        <p>The pictures appear here once the AI has rebuilt the page and both versions have been captured.</p>
+        <p>${vm.rebuilt ? 'The page was rebuilt, but picture capture did not finish.' : 'The pictures appear here once the page has been rebuilt and both versions captured.'}</p>
       </div></div></div></section>`
   }
   const identical = vm.captures.every((c) => c.match === 100)
@@ -117,23 +117,23 @@ function footHTML(vm, state) {
 
 function missesSection(vm) {
   const n = vm.items.length
-  const intro = vm.status === 'fail' ? 'Nothing to report yet.'
+  const intro = !n ? 'No missing details were recorded.'
     : vm.visibleCount ? 'Where the copy differs from the original. Things you can see come first.'
-    : 'Details that WordPress blocks can’t set. A theme normally takes care of them.'
+      : 'Recorded notes from the rebuild. Their original wording is available below.'
   let body
   if (!n) {
-    body = `<div class="card"><div class="empty"><h3>${vm.status === 'fail' ? 'Nothing to report' : 'Nothing was missed'}</h3><p>${vm.status === 'fail' ? 'The page was never rebuilt, so there is nothing to compare.' : 'Every detail of the original was copied.'}</p></div></div>`
+    body = `<div class="card"><div class="empty"><h3>${vm.status === 'fail' ? 'Nothing to report' : 'Nothing was missed'}</h3><p>${vm.rebuilt ? 'No missing details were recorded. Inspect the pictures when available.' : 'The page has not been rebuilt, so there is nothing to compare.'}</p></div></div>`
   } else {
     body = `<div class="card misses" style="padding-inline:0">
       <ol>${vm.items.map((i) => `<li class="miss"><div class="miss-top"><p class="miss-title">${esc(i.title)}</p>
-        <span class="pill" data-tone="${i.visible ? 'warn' : 'idle'}">${i.visible ? 'You can see it' : 'Not visible'}</span></div>
+        <span class="pill" data-tone="${i.visible ? 'warn' : 'idle'}">${i.visible ? 'You can see it' : i.kind === 'block-limit' ? 'Not visible' : i.kind === 'semantic' ? 'Heading structure' : 'Noted by the AI'}</span></div>
         ${i.why ? `<p class="miss-why">${esc(i.why)}</p>` : ''}</li>`).join('')}</ol>
       <details class="disclose"><summary>Show the original technical wording</summary>
         <div class="tech">${vm.misses.map((m) => `<code>${esc(m)}</code>`).join('')}</div></details>
     </div>`
   }
   return `<section aria-labelledby="h-misses">
-    <div class="section-head"><div><h2 id="h-misses">What it couldn’t copy ${n ? `<span class="count num" aria-label="${n} items">${n}</span>` : ''}</h2><p class="muted small">${intro}</p></div></div>
+    <div class="section-head"><div><h2 id="h-misses">What it couldn’t copy ${n ? `<span class="count num">${n}</span>` : ''}</h2><p class="muted small">${intro}</p></div></div>
     ${body}</section>`
 }
 
@@ -141,7 +141,8 @@ function speedCard(vm) {
   const head = `<div class="tester-head"><div><h3>Page speed</h3><p class="caption">Tested with Query Monitor</p></div>
     <span class="pill" data-tone="${stageTone(vm.qm.status)}">${ICON[stageTone(vm.qm.status)]}${stage(vm.qm.status)}</span></div>`
   if (vm.qm.status !== 'completed') {
-    return `<div class="card tester">${head}<p class="note note-box">This test needs the rebuilt page, so it did not run.</p></div>`
+    const why = vm.qm.data.reason || vm.report.blocker || (vm.rebuilt ? 'The page was rebuilt, but the speed check did not finish.' : 'This test needs the rebuilt page, so it did not run.')
+    return `<div class="card tester">${head}<p class="note note-box">${esc(why)}</p></div>`
   }
   const q = vm.qm.data, o = q.observations, warm = o.filter((x) => x.phase === 'warm'), last = warm[warm.length - 1]
   const max = Math.max(.001, ...o.map((x) => x.time))
@@ -167,8 +168,8 @@ function pluginCard(vm) {
   const head = `<div class="tester-head"><div><h3>Which plugins take the time</h3><p class="caption">Tested with Code Profiler</p></div>
     <span class="pill" data-tone="${stageTone(vm.cp.status)}">${ICON[stageTone(vm.cp.status)]}${stage(vm.cp.status)}</span></div>`
   if (vm.cp.status !== 'completed') {
-    const why = vm.status === 'fail' ? 'This test needs the rebuilt page, so it did not run.' : 'The profiler didn’t finish this time. The page speed result above is still valid.'
-    return `<div class="card tester">${head}<p class="note note-box">${why}</p></div>`
+    const why = vm.cp.data.reason || vm.report.blocker || (!vm.rebuilt ? 'This test needs the rebuilt page, so it did not run.' : 'The page was rebuilt, but the profiler did not finish this time.')
+    return `<div class="card tester">${head}<p class="note note-box">${esc(why)}</p></div>`
   }
   const p = vm.cp.data, rows = [...p.attribution].sort((a, b) => b.seconds - a.seconds), top = Math.max(.0001, rows[0]?.seconds || 0)
   const type = { plugin: 'Plugin', 'mu-plugin': 'Always-on plugin' }
@@ -200,17 +201,17 @@ function statsSection(vm) {
   const matchPct = px ? (1 - diff / px) : 1
   const elapsed = Math.max(0, Math.round((new Date(r.finishedAt) - new Date(r.startedAt)) / 1000))
   const runMin = Math.floor(elapsed / 60), runSec = elapsed % 60
-  const t = (hue, vis, sr, label, sub, tone, extra) => `<div class="card stat" data-tone="${tone || ''}" style="--hue:${hue}"><dt>${label}</dt><dd class="stat-num num"><span class="sr-only">${sr === 'none' ? 'No result' : sr}</span><span aria-hidden="true">${vis}</span></dd>${sub ? `<dd class="stat-sub">${sub}</dd>` : ''}${extra || ''}</div>`
+  const t = (hue, vis, sr, label, sub, tone, extra) => `<div class="card stat" data-tone="${tone || ''}" style="--hue:${hue}"><dt>${label}</dt><dd class="stat-num num"><span class="sr">${sr === 'none' ? 'No result' : sr}</span><span aria-hidden="true">${vis}</span></dd>${sub ? `<dd class="stat-sub">${sub}</dd>` : ''}${extra ? `<dd class="stat-art">${extra}</dd>` : ''}</div>`
   const OKTICK = `<svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>`
   const tiles = [
     failed ? t(190, dash, 'none', 'Blocks built', 'Not rebuilt') : t(190, cnt(total), `${total}`, 'Blocks built', 'in the Gutenberg copy', '', dotsOf(total)),
     failed ? t(150, dash, 'none', 'Broken blocks', '') : t(bad === 0 ? 150 : 60, cnt(bad), `${bad}`, 'Broken blocks', bad === 0 ? 'All valid' : 'Need fixing', bad === 0 ? 'ok' : 'warn', bad === 0 ? OKTICK : ''),
-    failed ? t(250, dash, 'none', 'Pixels compared', '') : t(250, cnt(Math.round(px / 1e5), true) + u('million'), `${(px / 1e6).toFixed(1)} million`, 'Pixels compared', `${diff.toLocaleString('en')} different`, diff ? 'warn' : '', `<div class="meter" aria-hidden="true"><i style="--p:${matchPct}"></i></div>`),
+    !vm.captures.length ? t(250, dash, 'none', 'Pixels compared', 'Not captured') : t(250, cnt(Math.round(px / 1e5), true) + u('million'), `${(px / 1e6).toFixed(1)} million`, 'Pixels compared', `${diff.toLocaleString('en')} different`, diff ? 'warn' : '', `<div class="meter" aria-hidden="true"><i style="--p:${matchPct}"></i></div>`),
     last ? t(35, cnt(Math.round(vm.qm.data.warmSeconds.median * 1000)) + u('ms'), `${Math.round(vm.qm.data.warmSeconds.median * 1000)} milliseconds`, 'Page build time', `middle of ${warm.length} tries`) : t(35, dash, 'none', 'Page build time', 'Not tested'),
     last ? t(310, cnt(last.queries), `${last.queries}`, 'Database questions', `${last.slowQueries} slow`, last.slowQueries ? '' : 'ok') : t(310, dash, 'none', 'Database questions', 'Not tested'),
     last ? t(85, cnt(Math.round(last.memory / 1048576)) + u('MB'), `${Math.round(last.memory / 1048576)} megabytes`, 'Memory used', `of ${Math.round(last.memoryLimit / 1048576)} MB allowed`, '', `<div class="meter" aria-hidden="true"><i style="--p:${Math.min(1, last.memory / last.memoryLimit)}"></i></div>`) : t(85, dash, 'none', 'Memory used', 'Not tested'),
     !Number.isFinite(runMin) ? t(20, dash, 'none', 'Total run time', 'Not recorded')
-           : t(20, (runMin ? cnt(runMin) + u('min') + ' ' : '') + cnt(runSec) + u('s'), `${runMin ? runMin + ' min ' : ''}${runSec} seconds`, 'Total run time', Number.isFinite(queued) ? `after ${queued} s in the queue` : 'Queue time not recorded'),
+           : t(20, (runMin ? cnt(runMin) + u('min') + ' ' : '') + cnt(runSec) + u('s'), `${runMin ? runMin + ' min ' : ''}${runSec} seconds`, 'Total run time', Number.isFinite(queued) ? `after ${took(r.job.queuedAt, r.startedAt)} in the queue` : 'Queue time not recorded'),
     vm.captures.length ? t(215, cnt(vm.captures.length * 2), `${vm.captures.length * 2}`, 'Pictures taken', vm.captures.map((c) => c.width).join(' and ') + ' px wide', '', dotsOf(vm.captures.length * 2)) : t(215, dash, 'none', 'Pictures taken', 'None'),
   ].map((h, k) => h.replace('style="--hue:', `style="--i:${k};--hue:`))
   return `<section aria-labelledby="h-stats">
@@ -266,7 +267,7 @@ export function finalizeDesignReport(report) {
   report.summary = report.state === 'passed' ? {
     tone: 'ok', pill: notes ? `Passed · ${notes} ${notes === 1 ? 'note' : 'notes'}` : 'Passed',
     title: 'The Gutenberg copy matches the original.',
-    lead: `WordPress blocks rebuilt your sample page, and it looks identical on desktop and on a phone.${notes ? ` ${notes} ${notes === 1 ? 'detail' : 'details'} can’t be set with blocks. None of them change how it looks.` : ''}`,
+    lead: `WordPress blocks rebuilt your sample page. Its picture match is at least 99% on desktop and on a phone.${notes ? ` ${notes} ${notes === 1 ? 'note is' : 'notes are'} listed below.` : ''}`,
   } : report.state === 'partial' ? {
     tone: 'warn', pill: 'Needs work', title: 'The copy is close, but not the same.',
     lead: visible ? `${visible} ${visible === 1 ? 'difference shows' : 'differences show'} on screen. They are listed first below.`
@@ -288,6 +289,7 @@ function viewModel(input) {
   const captures = (d.captures || []).filter((c) => Number.isFinite(c.match) && c.width > 0 && c.height > 0)
   return {
     report: { ...report, design: d, ai: report.ai || {}, job: report.job || {} },
+    rebuilt: d.status === 'completed' || d.native?.status === 'completed',
     ai: report.ai || {}, status: { passed: 'pass', partial: 'partial', failed: 'fail' }[report.state],
     captures, items: d.missDetails || [], misses: d.misses || [],
     visibleCount: (d.missDetails || []).filter((m) => m.visible).length,
@@ -314,7 +316,7 @@ function comparisonControls(vm, state, stageHTML, footHTML) {
     }
     let dragging = false
     viewer.addEventListener('pointerdown', (e) => {
-      if (e.button > 0) return
+      if (e.button > 0 || (e.pointerType === 'touch' && !knob.contains(e.target))) return
       dragging = true
       viewer.setPointerCapture(e.pointerId)
       knob.focus({ preventScroll: true })

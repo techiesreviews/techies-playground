@@ -1,0 +1,41 @@
+TOOLS-450 validation excerpts (curated, not an unmodified command log)
+
+Initial unit regression run, before implementation:
+kit unit scripts/design-runner.test.mjs
+RESULT: fail unit 8/11 (1 files)
+Three new tests failed because the report finalization module did not exist.
+
+Review regressions, before fixes:
+kit unit scripts/design-runner.test.mjs
+RESULT: fail unit 11/14 (1 files)
+- Unknown notes wrongly claimed "None of them change how it looks".
+- Saved-page/capture failure lacked the correct stopped message.
+- A blocked speed tester claimed the page was not rebuilt.
+
+Browser regression before the speed-bar fix:
+node scripts/design-report-check.mjs .scratch/tools-450/check-red
+AssertionError: Speed bars must be visible
+
+Final focused check:
+kit unit --affected
+RESULT: ok unit 21/21 (2 files)
+
+Final whole suite:
+kit go tools-450-unit-reviewed -- scripts/agents/kit unit
+RESULT: ok unit 420/420 (43 files)
+
+Production build:
+kit go tools-450-build -- scripts/agents/kit build
+RESULT: ok build finished
+
+Browser check, after review fixes:
+kit go tools-450-browser-reviewed -- node scripts/design-report-check.mjs .scratch/tools-450/check-reviewed
+RESULT: ok design-report-browser 12 layouts; offline fonts/images; controls; counters
+
+Doctor (after resolving missing locked dependencies):
+RESULT: ok doctor 17/17 checks passed
+
+Kit UX integration, attempted after final visible edits:
+kit go tools-450-ux-reviewed -- scripts/agents/kit ux
+RESULT: fail ux ENOENT: no such file or directory, open 'docs/agents/features.md'
+The full command names the absolute worktree prefix. No UX verdict was obtained.

@@ -21,7 +21,10 @@ paused result, not an automatic retry. `design` records misses, the saved page I
 native block inventory, zero-invalid-block readback, and 1440/390 pixel captures.
 Reports also persist `state` (`passed`, `partial`, `failed`), generator-written
 `summary` (`tone`, `pill`, `title`, `lead`), and `design.missDetails`: visible-first
-objects containing `raw`, `title`, `why`, and boolean `visible`. Raw `design.misses`
+objects containing `raw`, `title`, `why`, boolean `visible`, and optional `kind`
+(`block-limit`, `semantic`, `unclassified`). `visible: true` means a known visible
+miss; false also includes unclassified AI notes, which the page labels neutrally
+rather than claiming they cannot be seen. Raw `design.misses`
 remain unchanged for existing consumers. Display state does not replace pipeline
 `verdict` or `design.outcome`; semantic notes alone can coexist with a passed picture
 comparison. `runOnce` accepts an optional finalizer that runs after stage failures

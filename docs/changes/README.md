@@ -33,6 +33,8 @@ Prefer, in order:
 
 ## Index
 
+- [2026-11-24-design-report-look.md](2026-11-24-design-report-look.md) — approved offline results-page layout, saved display states, plain-word notes and public-fixture comparison evidence (TOOLS-450).
+
 - [2026-11-23-preserve-licence-list-on-read-error.md](2026-11-23-preserve-licence-list-on-read-error.md) — license metadata read failures keep previous state, warn clearly and pause launch instead of skipping saved keys (TOOLS-438).
 
 - [2026-11-23-preserve-unreadable-saved-lists.md](2026-11-23-preserve-unreadable-saved-lists.md) — unreadable recipe/history lists stay intact with notices; history writes only on explicit mutations (TOOLS-437).

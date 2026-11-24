@@ -5,7 +5,7 @@
 - Status: complete
 - Disposition: kept
 - Related version: 0.13.7
-- Related commit/issue: TOOLS-450; extends [the Gutenberg design proof](../2026-11-23-gutenberg-design-test.md)
+- Related commit/issue: TOOLS-450; extends [the Gutenberg design proof](2026-11-23-gutenberg-design-test.md)
 
 ## Context
 
@@ -33,7 +33,7 @@ also exercised 12 state/width/theme combinations and the real controls offline.
 - Render report sections in Node and embed fonts/CSS plus comparison-only JavaScript:
   chosen to preserve portable HTML and keep report-state rules in the generator.
 
-## Implementation
+## Implementation or prototype
 
 `scripts/design-report.mjs` finalizes saved display state and plain-word misses, then
 renders the approved page. `runOnce` runs its optional finalizer after failures and
@@ -57,16 +57,16 @@ was copied into the repository.
 
 ## Tests and evidence
 
-| Environment | Procedure | Expected | Observed |
-| --- | --- | --- | --- |
-| Node 24 | `kit doctor`, after installing locked dependencies | All required checks pass | 17/17; first attempt correctly failed because dependencies were absent |
-| Node 24 | New report tests before implementation | Fail first | 3 failed: finalization module absent; saved state/wording and offline assets not implemented |
-| Chromium | `node scripts/design-report-check.mjs .scratch/tools-450/check-red` | Detect hidden speed bars | Failed with `Speed bars must be visible` before the flex fix |
-| Node 24 | `kit unit --affected` | Relevant tests pass | 18/18 in 2 files |
-| Node 24 | `kit unit` | Whole suite passes | 417/417 in 43 files |
-| Vite | `kit build` | Production build completes | Passed; existing dependency-externalization and large-chunk warnings remain |
-| Chromium | `node scripts/design-report-check.mjs .scratch/tools-450/check-final` through `kit go` | Saved local report works without HTTP; all states, controls and motion variants work | Passed 12 layouts; zero page errors/HTTP requests/overflow; keyboard/drag/switches/disclosures/counters passed |
-| Kit UX | `kit ux` through `kit go` | Report the project's missing integration | Failed `ENOENT ... docs/agents/features.md`; this repository has no feature list or project `shots` command. It supplied no UX verdict. Browser evidence above is independently executed, not a claimed kit UX pass. |
+| Environment | Procedure | Expected | Observed | Evidence |
+| --- | --- | --- | --- | --- |
+| Node 24 | `kit doctor`, after installing locked dependencies | All required checks pass | 17/17; first attempt correctly failed because dependencies were absent | local `.scratch/tools-450/` logs; browser output below |
+| Node 24 | New report tests before implementation | Fail first | 3 failed: finalization module absent; saved state/wording and offline assets not implemented | local `.scratch/tools-450/` logs; browser output below |
+| Chromium | `node scripts/design-report-check.mjs .scratch/tools-450/check-red` | Detect hidden speed bars | Failed with `Speed bars must be visible` before the flex fix | local `.scratch/tools-450/` logs; browser output below |
+| Node 24 | `kit unit --affected` | Relevant tests pass | 21/21 in 2 files after review fixes | local `.scratch/tools-450/` logs; browser output below |
+| Node 24 | `kit unit` | Whole suite passes | 420/420 in 43 files after the review fixes (417/417 before them) | local `.scratch/tools-450/` logs; browser output below |
+| Vite | `kit build` | Production build completes | Passed; existing dependency-externalization and large-chunk warnings remain | local `.scratch/tools-450/` logs; browser output below |
+| Chromium | `node scripts/design-report-check.mjs .scratch/tools-450/check-reviewed` through `kit go` | Saved local report works without HTTP; all states, controls and motion variants work | Passed 12 layouts; zero page errors/HTTP requests/overflow; keyboard/drag/switches/disclosures/counters passed | local `.scratch/tools-450/` logs; browser output below |
+| Kit UX | `kit ux` through `kit go` | Report the project's missing integration | Failed `ENOENT ... docs/agents/features.md`; this repository has no feature list or project `shots` command. It supplied no UX verdict. Browser evidence above is independently executed, not a claimed kit UX pass. | local `.scratch/tools-450/` logs; browser output below |
 
 The screenshot fixture uses the existing public `sampleHTML()` and a deliberately
 smaller heading. Actual pixel scores are 95.1067% at 1440 and 66.1926% at 390. It
@@ -81,19 +81,45 @@ viewport. Local sandboxed Chromium supplied the verified-width screenshot matrix
 The approved prototype's toolbar was hidden only for these comparison screenshots;
 its data came from the public fixture. The report itself has no such toolbar.
 
-- [1440, light](comparison-1440-light.png)
-- [1440, dark](comparison-1440-dark.png)
-- [390, light](comparison-390-light.png)
-- [390, dark](comparison-390-dark.png)
-- [Executed browser evidence](browser-evidence.json)
+- [1440, light](2026-11-24-design-report-look/comparison-1440-light.png)
+- [1440, dark](2026-11-24-design-report-look/comparison-1440-dark.png)
+- [390, light](2026-11-24-design-report-look/comparison-390-light.png)
+- [390, dark](2026-11-24-design-report-look/comparison-390-dark.png)
+- [Curated validation excerpts](2026-11-24-design-report-look/validation.txt)
+- [Unmodified browser-check output](2026-11-24-design-report-look/browser-evidence.json)
 
-## Result and disposition
+The committed `browser-evidence.json` is the unmodified output of the reproducible
+checker (its report path is relative to the chosen evidence directory).
+`comparison-captures.json` is a manually assembled manifest: `before_prototype_matrix`
+and `after_matrix` were copied from the separate local capture helper's executed
+outputs; `scope` was added by hand to distinguish that evidence. The helper loaded the
+old renderer saved before editing, the approved prototype with its toolbar hidden,
+and the current generated renderer against the same public report. The manifest
+contains no claim that these extra fields were produced by `design-report-check.mjs`.
+The four PNG contact sheets were assembled from those full-page captures.
 
-Kept. The generated page follows the approved visual design, handles actual fixture
+Review fixes: uncertain AI notes now have a neutral label; heading mistakes are not
+called block limits; saved pages with failed captures show no pixel result; blocked
+testers show actual reasons. Touch scrolling outside the knob leaves the slider
+unchanged. Three new unit regressions failed before the corresponding fixes, and
+the browser check now sends real Chromium touch start/move/cancel events.
+
+Review ledger after the fixes: R1-1 (uncertain notes), R1-2 (saved-page/capture
+failure), R1-3 (tester reason), R1-4 (touch scrolling), R1-5 (long-word overflow),
+R1-6 (rebuild spec), R1-7 (record format/index), and R1-8 (evidence provenance)
+were addressed. Approved prototype colours and section names remain as requested.
+
+## Result
+
+ The generated page follows the approved visual design, handles actual fixture
 differences and partial/failed runs, and opens offline. Stop reasons use the saved
 failure rather than prototype mock wording. The comparative images are visual
 evidence, not a pixel-identical report-layout assertion: wording, honest picture
 counts, UTC labels, tap targets and the two chart fixes intentionally differ.
+
+## Disposition and rationale
+
+Kept: the approved layout is implemented with honest report states and working offline controls.
 
 ## Documentation impact
 
@@ -101,7 +127,7 @@ Updated the design-runner guide, rebuild spec, architecture, data contracts, tes
 inventory, context version and user-facing changelog/version. Existing records remain
 unchanged.
 
-## Follow-ups
+## Follow-ups and open questions
 
 - Lead: close TOOLS-450 (Done, with a dated note naming the PR and its merge SHA).
 - The lead checks the preview deployment after landing; this local report change does

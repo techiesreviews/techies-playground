@@ -13,7 +13,7 @@ const root = path.resolve(process.argv[2])
 await mkdir(root, { recursive: true })
 const browser = await chromium.launch({ headless: true, chromiumSandbox: true })
 try {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 })
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1, hasTouch: true })
   const page = await context.newPage()
   const captures = []
   for (const width of [1440, 390]) {
@@ -88,6 +88,15 @@ try {
         await page.keyboard.press(key)
         assert.equal(await slider.getAttribute('aria-valuenow'), value)
       }
+      const beforeScroll = await slider.getAttribute('aria-valuenow')
+      const scrollBox = await page.locator('#viewer').boundingBox()
+      const session = await context.newCDPSession(page)
+      const point = { x: scrollBox.x + scrollBox.width * .25, y: scrollBox.y + Math.min(80, scrollBox.height * .2) }
+      await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] })
+      await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: point.x, y: point.y + 60 }] })
+      await session.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] })
+      await session.detach()
+      assert.equal(await slider.getAttribute('aria-valuenow'), beforeScroll, 'Touch scroll must not move the divider')
       const box = await page.locator('#viewer').boundingBox()
       await page.mouse.move(box.x + box.width * .25, box.y + box.height * .4)
       await page.mouse.down()
@@ -113,7 +122,7 @@ try {
   await page.waitForFunction(() => getComputedStyle(document.querySelector('.tally')).getPropertyValue('--n').trim() === '18')
   assert.equal(errors.length, 0, errors.join('\n'))
   assert.equal(network.length, 0, 'Saved reports must work offline without HTTP requests')
-  await writeFile(path.join(root, 'browser-evidence.json'), JSON.stringify({ matrix, errors, network, captures, controls: 'keyboard, pointer drag, device and comparison radios, disclosures', report: path.join(directory, 'report.html') }, null, 2))
+  await writeFile(path.join(root, 'browser-evidence.json'), JSON.stringify({ matrix, errors, network, captures, controls: 'keyboard, pointer drag, touch scroll cancellation, device and comparison radios, disclosures', report: path.relative(root, path.join(directory, 'report.html')) }, null, 2))
   console.log(`RESULT: ok design-report-browser 12 layouts; offline fonts/images; controls; counters; evidence ${root}`)
 } finally {
   await browser.close()

@@ -88,7 +88,7 @@ are disabled with reduced motion; screen readers receive each final stat as text
 
 Before JSON/HTML persistence, the generator writes `state: passed|partial|failed`,
 `summary` (tone, pill, title, lead), and `design.missDetails` (`raw`, `title`, `why`,
-`visible`). A pass requires completed AI/design stages, both expected capture widths
+`visible`, optional `kind`). A pass requires completed AI/design stages, both expected capture widths
 at 99% or better without overflow or visible misses, no invalid native blocks, and
 completed testers. Behind-the-scenes notes can remain on a passed run. Missing
 testers/captures or visible differences make a completed rebuild partial; an incomplete
