@@ -19,6 +19,13 @@ Their reports add `kind: "design-test"`, `ai` and `design`. AI statuses include
 `running`, `completed`, `paused` and `blocked`; a limit is a finished attempt with a
 paused result, not an automatic retry. `design` records misses, the saved page ID,
 native block inventory, zero-invalid-block readback, and 1440/390 pixel captures.
+Reports also persist `state` (`passed`, `partial`, `failed`), generator-written
+`summary` (`tone`, `pill`, `title`, `lead`), and `design.missDetails`: visible-first
+objects containing `raw`, `title`, `why`, and boolean `visible`. Raw `design.misses`
+remain unchanged for existing consumers. Display state does not replace pipeline
+`verdict` or `design.outcome`; semantic notes alone can coexist with a passed picture
+comparison. `runOnce` accepts an optional finalizer that runs after stage failures
+and timestamps/verdict are settled, before both report files are written.
 Each capture records dimensions, reference/rebuild filenames, changed pixels, match,
 overflow and repeated/broken-capture calibration. `go` means the pipeline completed;
 it does not mean the design has no misses. A completed design can have

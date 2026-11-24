@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { designReportHTML, finalizeDesignReport } from './design-report.mjs'
+export { designReportHTML, finalizeDesignReport } from './design-report.mjs'
 import { spawn } from 'node:child_process'
 import { mkdir, readFile, writeFile, chmod } from 'node:fs/promises'
 import path from 'node:path'
@@ -218,44 +220,6 @@ async function captureDesign({ page, context }, report, directory) {
   console.log(`Gutenberg readback valid; ${report.design.captures.map((c) => `${c.width}px ${c.match.toFixed(2)}%`).join(', ')}.`)
 }
 
-export function designReportHTML(report) {
-  const design = report.design || {}, ai = report.ai || {}
-  const rows = (value) => `<pre>${escape(JSON.stringify(value, null, 2))}</pre>`
-  const qm = report.queryMonitor || {}, profiler = report.codeProfiler || {}
-  const stageLabel = (status) => ({ completed: 'Completed', running: 'Running', blocked: 'Stopped', paused: 'Paused', 'not-run': 'Not run' })[status] || 'Not run'
-  const status = ai.status === 'paused' ? 'Paused · AI limit' : report.verdict === 'go' ? design.misses?.length ? 'Completed · misses listed' : 'Completed' : 'Needs attention'
-  const captures = design.captures?.length ? design.captures.map((c) => `
-    <div><h3>${c.width} px</h3><p class="metric">${c.match.toFixed(2)}% match</p>
-    <p>${c.changedPixels.toLocaleString('en')} changed pixels · horizontal overflow ${c.overflow ? 'found' : 'not found'}</p>
-    <div class="compare">
-      <figure><figcaption>Sample</figcaption><img src="${escape(c.reference)}" width="${c.width}" height="${c.height}" alt="Original sample page at ${c.width} pixels"></figure>
-      <figure><figcaption>Gutenberg rebuild</figcaption><img src="${escape(c.rebuilt)}" width="${c.width}" height="${c.height}" alt="Saved native Gutenberg page at ${c.width} pixels"></figure>
-    </div></div>`).join('') : '<p>No score · design capture has not completed.</p>'
-  return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Design test · The Long View</title><style>
-:root{--ink:oklch(21% .01 180);--muted:oklch(45% .01 180);--line:oklch(91% 0 none);--teal:oklch(45% .08 190);--surface:oklch(98% 0 none)}*{box-sizing:border-box}body{margin:0;font:16px/1.5 Arial,sans-serif;color:var(--ink);background:var(--surface)}header{padding:20px 24px;border-block-end:1px solid var(--line);background:white;font-weight:700}main{max-inline-size:1200px;margin-inline:auto;padding:24px;display:grid;gap:24px}nav,.row{display:flex;flex-wrap:wrap;gap:16px;align-items:center}a{color:var(--teal);text-underline-offset:4px}a,summary{min-block-size:44px;display:inline-flex;align-items:center}a:active,summary:active{opacity:.7}:focus-visible{outline:2px solid var(--ink);outline-offset:4px}h1,h2,h3,p{margin:0}h1{font-size:clamp(28px,4vw,40px);line-height:1.2}h2{font-size:24px}p{max-inline-size:70ch}.muted{color:var(--muted)}section{padding:24px;background:white;border:1px solid var(--line);border-radius:12px;display:grid;gap:16px;min-inline-size:0}.compare{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:16px}figure{margin:0;min-inline-size:0}figcaption{padding-block:8px;font-weight:700}img{display:block;inline-size:100%;block-size:auto;border:1px solid var(--line)}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:14px/1.5 monospace;margin:0}.metric{font-size:32px;font-weight:700;font-variant-numeric:tabular-nums}li{overflow-wrap:anywhere}.badge{color:var(--teal);font-weight:700}details{min-inline-size:0}summary{cursor:pointer;font-weight:700}@media(max-width:500px){main{padding:16px}section{padding:16px}}
-summary{display:list-item;min-block-size:44px;padding-block:10px}
-</style><header>Techies Playground</header><main>
-<nav aria-label="Main"><a href="https://play.techies.tools">Playground</a><a href="#runs" aria-current="page">Automated tests</a></nav>
-<div id="runs"><p class="muted">PRIVATE RUN ON UBULEX</p><h1>Your design runs</h1><p>The Long View · Gutenberg</p></div>
-<section><div class="row"><h2>The Long View</h2><span class="badge">${escape(status)}</span></div>
-<p>${escape(report.blocker || ai.reason || 'Page rebuilt with native Gutenberg blocks. Tester results below.')}</p>
-<p class="muted">${escape(ai.route)} · ${escape(ai.model)} · ${escape(ai.cost)}</p>
-<nav aria-label="Report sections"><a href="#design">Design</a><a href="#query">Query Monitor</a><a href="#profiler">Code Profiler</a><a href="#native">Native elements</a></nav></section>
-<section id="design"><h2>Design</h2><p class="muted">Fixed sample v1 · same Chromium, Arial, viewport and device scale. Match = unchanged pixels / all pixels; channel tolerance 10%. This is not SSIM or a design-quality verdict.</p>
-${captures}<h3>Misses</h3>${design.misses?.length ? `<ul>${design.misses.map((m) => `<li>${escape(m)}</li>`).join('')}</ul>` : `<p>${design.status === 'completed' ? 'No missing text or unsupported details reported. Inspect the captures for visual differences.' : 'Not assessed.'}</p>`}</section>
-<section id="query"><div class="row"><h2>Query Monitor</h2><span class="badge">${stageLabel(qm.status)}</span></div>
-${qm.warmSeconds ? `<p class="metric">${qm.warmSeconds.median.toFixed(3)} s</p><p>Warm PHP time · median of five requests</p><p>Range ${qm.warmSeconds.min.toFixed(3)}–${qm.warmSeconds.max.toFixed(3)} s · ${qm.observations.length} collector observations</p>` : '<p>No completed measurements.</p>'}
-<p class="muted">One cold + five warm requests to the rebuilt homepage. Playground / WebAssembly / SQLite sandbox diagnostics.</p>
-<details><summary>All Query Monitor measurements</summary>${rows(qm)}</details></section>
-<section id="profiler"><div class="row"><h2>Code Profiler</h2><span class="badge">${stageLabel(profiler.status)}</span></div>
-<p>Profile ${escape(profiler.profileId || 'not available')}</p>
-${profiler.attribution?.map((entry) => `<div class="row"><strong>${escape(entry.name)}</strong><span>${Number(entry.seconds).toFixed(4)} s · ${escape(entry.type)}</span></div>`).join('') || '<p>No completed profile.</p>'}
-<p class="muted">Separate free-edition profile of the rebuilt homepage.</p>
-<details><summary>Code Profiler evidence</summary>${rows(profiler)}</details></section>
-<section id="native"><h2>Native elements</h2>${rows(design.native || { status: 'not-run' })}</section>
-<details><summary>Run details · ${escape(report.job?.id)}</summary>${rows(report)}</details></main></html>`
-}
-
 export async function runDesignProof(report, directory, { generate = generateDesign, browser = runBrowserProof } = {}) {
   report.kind = 'design-test'
   report.design = { status: 'not-run' }
@@ -266,7 +230,7 @@ export async function runDesignProof(report, directory, { generate = generateDes
 async function main() {
   if (process.argv.length !== 3 || !['enqueue', 'once'].includes(process.argv[2])) throw new Error('Usage: node scripts/design-runner.mjs enqueue|once')
   if (process.argv[2] === 'enqueue') { console.log(`Queued design test ${(await enqueue(DESIGN_DIRECTORY)).id}`); return }
-  const report = await runOnce(DESIGN_DIRECTORY, runDesignProof, designReportHTML)
+  const report = await runOnce(DESIGN_DIRECTORY, runDesignProof, designReportHTML, finalizeDesignReport)
   if (!report) { console.log('No queued design tests.'); return }
   console.log(`Report: ${path.join(DESIGN_DIRECTORY, 'runs', report.job.id, 'report.html')}`)
   console.log(`RESULT: ${report.verdict === 'go' ? 'ok' : 'fail'} design-runner ${report.verdict}${report.blocker ? `: ${report.blocker}` : ''}`)

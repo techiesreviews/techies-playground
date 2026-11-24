@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { enqueue, runOnce, runBrowserProof } from './private-runner.mjs'
-import { buildAndCapture, designReportHTML, validateDesign } from './design-runner.mjs'
+import { buildAndCapture, designReportHTML, finalizeDesignReport, validateDesign } from './design-runner.mjs'
 
 if (process.argv.length !== 4) throw new Error('Usage: node scripts/design-runner-heading-check.mjs <answer.json> <private-output-directory>')
 const answer = JSON.parse(await readFile(process.argv[2], 'utf8'))
@@ -25,7 +25,7 @@ const report = await runOnce(root, async (report, directory) => {
   report.kind = 'design-test'
   report.ai = { status: 'completed', route: 'Frozen AI response with an H2 title; browser regression only, no new AI generation.' }
   await runBrowserProof(report, { beforeChecks: (browser) => buildAndCapture(browser, report, directory, design) })
-}, designReportHTML)
+}, designReportHTML, finalizeDesignReport)
 console.log(`Report: ${path.join(root, 'runs', report.job.id, 'report.html')}`)
 assert.equal(report.verdict, 'go', report.blocker)
 assert.ok(report.design.misses.some((miss) => miss.includes('H1')))

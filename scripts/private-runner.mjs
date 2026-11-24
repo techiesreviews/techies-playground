@@ -75,7 +75,7 @@ export function reportHTML(report) {
   return `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Private runner proof</title><h1>Private runner: ${report.verdict === 'go' ? 'go' : 'no-go'}</h1><p>Playground / WebAssembly / SQLite sandbox diagnostics. No production hosting comparison.</p><pre>${escaped}</pre>\n`
 }
 
-export async function runOnce(root = DATA_DIRECTORY, execute = runBrowserProof, render = reportHTML) {
+export async function runOnce(root = DATA_DIRECTORY, execute = runBrowserProof, render = reportHTML, finalize = () => {}) {
   const job = await claim(root)
   if (!job) return null
   const directory = path.join(root, 'runs', job.id)
@@ -95,6 +95,7 @@ export async function runOnce(root = DATA_DIRECTORY, execute = runBrowserProof, 
   }
   report.finishedAt = new Date().toISOString()
   report.verdict = verdict(report)
+  finalize(report)
   await json(path.join(directory, 'report.json'), report)
   await writeFile(path.join(directory, 'report.html'), render(report), { mode: 0o600, flag: 'wx' })
   await rename(path.join(root, 'running', `${job.id}.json`), path.join(root, 'finished', `${job.id}.json`))

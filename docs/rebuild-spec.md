@@ -3,6 +3,10 @@
 This document describes the product independently of its current code layout. A conforming rebuild should satisfy these behaviors and the contracts in [data-contracts.md](data-contracts.md).
 
 The separate [local design-test proof](design-runner.md) is outside the hosted launcher.
+Its results page follows the approved TOOLS-450 layout: serif verdict and score, eight
+count-up tiles, accessible picture comparison, plain-word misses, two tester cards,
+block mix and raw evidence. Saved reports work offline and follow system light/dark
+and reduced-motion preferences. See the run guide for its display-state rules.
 Its standalone layout-A report has an Automated tests navigation entry, one fixed
 Gutenberg run, sample/rebuild comparisons and measured scores at 1440 and 390 CSS px,
 listed misses, both tester results and native-block inventory. It uses real results

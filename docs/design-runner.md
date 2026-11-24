@@ -77,8 +77,26 @@ waits for the result chart, and verifies the profile ID against native slugs and
 summary artifacts. The minimal block theme executes no PHP, so no theme attribution
 row is invented when the profiler reports only plugins.
 
-The layout-A report shows the sample beside the rebuild, each match score, misses,
-both tester summaries and expandable raw evidence. `go` means all stages completed;
+The standalone report follows the approved TOOLS-450 results-page layout: verdict
+first, picture-match score, eight CSS count-up stat tiles without blobs, original/copy
+comparison (slider or side by side, desktop or phone), visible-first plain-word misses,
+both tester cards, block mix, and expandable raw evidence. Inter and Instrument Serif
+are embedded from local WOFF2 files, along with the stylesheet and comparison script.
+The four PNGs stay beside the HTML. It opens via `file://` without fetching JSON or
+external fonts and follows the viewer's light/dark preference. Decorative animations
+are disabled with reduced motion; screen readers receive each final stat as text.
+
+Before JSON/HTML persistence, the generator writes `state: passed|partial|failed`,
+`summary` (tone, pill, title, lead), and `design.missDetails` (`raw`, `title`, `why`,
+`visible`). A pass requires completed AI/design stages, both expected capture widths
+at 99% or better without overflow or visible misses, no invalid native blocks, and
+completed testers. Behind-the-scenes notes can remain on a passed run. Missing
+testers/captures or visible differences make a completed rebuild partial; an incomplete
+AI/design stage is failed. Stop reasons use actual saved evidence, without inventing
+a timeout or cash-cost claim. These display states are separate from pipeline `go`.
+
+The report counts four saved pictures for two width comparisons, including originals
+and copies. Elapsed time comes from timestamps, including failed attempts. `go` means all stages completed;
 misses remain visible and can still mean the design needs work. Sandbox measurements
 are not production-hosting benchmarks. Hosted navigation, worker pairing, Figma,
 other builders, schedules and service installation belong to later cards.
@@ -93,3 +111,17 @@ one completed design run and a private output directory:
 ```sh
 node scripts/design-runner-heading-check.mjs /private/run/answer.json /private/h2-check
 ```
+
+## Check the report page without AI or private run data
+
+```sh
+node scripts/design-report-check.mjs .scratch/design-report-check
+```
+
+This explicit browser check generates a public `sampleHTML()` fixture and a smaller
+heading, scores the actual PNG differences, and saves a report through `runOnce`.
+Tester observations are injected fixtures; this does not claim a new WordPress or AI
+run. It checks all three report states at 1440/390 in light/dark, no sideways scroll,
+44 px radio targets, slider keys and drag, comparison controls, disclosures, final
+counters and reduced motion. It also asserts that opening the saved page requires no
+HTTP requests. Screenshots and `browser-evidence.json` go to the chosen directory.
