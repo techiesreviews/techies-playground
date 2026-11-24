@@ -187,6 +187,24 @@ test('unknown AI notes and heading mistakes never claim to be invisible block li
   assert.doesNotMatch(html, />Not visible</)
 })
 
+test('visible margin and viewport defects never become invisible block limits', () => {
+  for (const miss of [
+    'The body margin is 8px instead of 0px, shifting the whole page.',
+    'Missing viewport metadata makes the phone page render at desktop width.',
+    'Different box-sizing makes the cards wider than the screen.',
+    'Horizontal overflow at 390px because viewport metadata is missing.',
+    'Missing article element semantics and a body margin that shifts every card.',
+  ]) {
+    const report = { ai: { status: 'completed' }, design: { status: 'completed', misses: [miss], captures: [1440, 390].map((width) => ({ width, height: 1000, match: 100, pixels: width * 1000, changedPixels: 0, reference: 'reference.png', rebuilt: 'rebuilt.png' })) }, queryMonitor: { status: 'completed' }, codeProfiler: { status: 'completed' } }
+    finalizeDesignReport(report)
+    assert.equal(report.design.missDetails[0].visible, true, miss)
+    assert.equal(report.state, 'partial', miss)
+    const html = designReportHTML(report)
+    assert.match(html, />You can see it</)
+    assert.doesNotMatch(html, />Not visible</)
+  }
+})
+
 test('saved blocks with failed captures keep notes and do not invent zero changed pixels', () => {
   const report = { ai: { status: 'completed' }, design: { status: 'blocked', native: { status: 'completed', invalidBlocks: 0, inventory: { 'core/group': 1 } }, captures: [], misses: ['AI note'] }, blocker: 'Capture calibration failed.' }
   finalizeDesignReport(report)
