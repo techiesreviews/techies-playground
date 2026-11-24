@@ -23,7 +23,7 @@ const ms = (s) => { const v = s * 1000; return v < 10 ? `${v.toFixed(1)} ms` : `
 const mb = (b) => `${Math.round(b / 1048576)} MB`
 const device = (w) => (w <= 600 ? 'phone' : 'desktop')
 const when = (iso) => Number.isFinite(Date.parse(iso)) ? new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }).format(new Date(iso)) + ' UTC' : 'Not recorded'
-const took = (a, b) => { if (!Number.isFinite(Date.parse(a)) || !Number.isFinite(Date.parse(b))) return 'not recorded'; const s = Math.round((new Date(b) - new Date(a)) / 1000); return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${s % 60} s`; }
+const took = (a, b) => { if (!Number.isFinite(Date.parse(a)) || !Number.isFinite(Date.parse(b))) return 'not recorded'; const s = Math.max(0, Math.round((new Date(b) - new Date(a)) / 1000)); return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${s % 60} s`; }
 const stage = (s) => ({ completed: 'Done', running: 'Running', blocked: 'Stopped', paused: 'Paused', 'not-run': 'Not run' })[s] || 'Not run'
 const stageTone = (s) => (s === 'completed' ? 'ok' : s === 'blocked' ? 'bad' : s === 'paused' ? 'warn' : 'idle')
 
@@ -75,8 +75,8 @@ function compareSection(vm, state) {
       <div><h2 id="h-compare">Side by side</h2><p class="muted small" id="hint">${hint}</p></div>
       <div class="controls">
         <fieldset class="seg" id="view"><legend class="sr">Screen size</legend>
-          <label><input type="radio" name="view" value="desktop" ${state.view === 'desktop' ? 'checked' : ''}>Desktop <span class="sub">1440</span></label>
-          <label><input type="radio" name="view" value="phone" ${state.view === 'phone' ? 'checked' : ''}>Phone <span class="sub">390</span></label>
+          <label><input type="radio" name="view" value="desktop" ${state.view === 'desktop' ? 'checked' : ''} ${vm.captures.some((c) => device(c.width) === 'desktop') ? '' : 'disabled'}>Desktop <span class="sub">1440</span></label>
+          <label><input type="radio" name="view" value="phone" ${state.view === 'phone' ? 'checked' : ''} ${vm.captures.some((c) => device(c.width) === 'phone') ? '' : 'disabled'}>Phone <span class="sub">390</span></label>
         </fieldset>
         <fieldset class="seg" id="compare"><legend class="sr">How to compare</legend>
           <label><input type="radio" name="compare" value="slide" ${state.compare === 'slide' ? 'checked' : ''}>Slide</label>
@@ -88,11 +88,17 @@ function compareSection(vm, state) {
       <div class="stage" id="stage">${stageHTML(vm, state)}</div>
       <div class="compare-foot" id="foot">${footHTML(vm, state)}</div>
     </div>
+    <noscript><style>.controls, .compare-card, #hint { display: none; }</style>
+      <div class="card static-comparison">${vm.captures.map((c) => `<section><h3>${c.width} px</h3><div class="static-pair">
+        ${[['Original', c.reference], ['Gutenberg copy', c.rebuilt]].map(([label, file]) => `<figure><figcaption><a href="${esc(file)}">Open ${label.toLowerCase()} at ${c.width} px</a></figcaption><img src="${esc(file)}" width="${c.width}" height="${c.height}" alt="${label} at ${c.width} pixels wide"></figure>`).join('')}
+      </div></section>`).join('')}</div>
+    </noscript>
   </section>`
 }
 
 function stageHTML(vm, state) {
-  const c = vm.captures.find((x) => device(x.width) === state.view) || vm.captures[0]
+  const c = vm.captures.find((x) => device(x.width) === state.view)
+  if (!c) return `<div class="empty"><p>${state.view === 'phone' ? 'Phone' : 'Desktop'} capture did not finish.</p></div>`
   const alt = (what) => `${what} at ${c.width} pixels wide`
 
   if (state.compare === 'slide') {
@@ -110,7 +116,8 @@ function stageHTML(vm, state) {
 }
 
 function footHTML(vm, state) {
-  const c = vm.captures.find((x) => device(x.width) === state.view) || vm.captures[0]
+  const c = vm.captures.find((x) => device(x.width) === state.view)
+  if (!c) return `<div class="empty"><p>${state.view === 'phone' ? 'Phone' : 'Desktop'} capture did not finish.</p></div>`
   return `<span><strong class="num">${pct(c.match)}</strong> match at ${c.width} px wide</span>
     <span class="num">${c.changedPixels.toLocaleString('en')} of ${c.pixels.toLocaleString('en')} pixels are different${c.overflow ? ' · page scrolls sideways' : ''}</span>`
 }
@@ -137,11 +144,17 @@ function missesSection(vm) {
     ${body}</section>`
 }
 
+function testerReason(vm, tester, stopped) {
+  if (tester.data.reason) return tester.data.reason
+  if (vm.report.blocker) return tester.status === 'blocked' ? vm.report.blocker : `Did not run because the test stopped: ${vm.report.blocker}`
+  return vm.rebuilt ? stopped : 'This test needs the rebuilt page, so it did not run.'
+}
+
 function speedCard(vm) {
   const head = `<div class="tester-head"><div><h3>Page speed</h3><p class="caption">Tested with Query Monitor</p></div>
     <span class="pill" data-tone="${stageTone(vm.qm.status)}">${ICON[stageTone(vm.qm.status)]}${stage(vm.qm.status)}</span></div>`
   if (vm.qm.status !== 'completed') {
-    const why = vm.qm.data.reason || vm.report.blocker || (vm.rebuilt ? 'The page was rebuilt, but the speed check did not finish.' : 'This test needs the rebuilt page, so it did not run.')
+    const why = testerReason(vm, vm.qm, 'The page was rebuilt, but the speed check did not finish.')
     return `<div class="card tester">${head}<p class="note note-box">${esc(why)}</p></div>`
   }
   const q = vm.qm.data, o = q.observations, warm = o.filter((x) => x.phase === 'warm'), last = warm[warm.length - 1]
@@ -168,7 +181,7 @@ function pluginCard(vm) {
   const head = `<div class="tester-head"><div><h3>Which plugins take the time</h3><p class="caption">Tested with Code Profiler</p></div>
     <span class="pill" data-tone="${stageTone(vm.cp.status)}">${ICON[stageTone(vm.cp.status)]}${stage(vm.cp.status)}</span></div>`
   if (vm.cp.status !== 'completed') {
-    const why = vm.cp.data.reason || vm.report.blocker || (!vm.rebuilt ? 'This test needs the rebuilt page, so it did not run.' : 'The page was rebuilt, but the profiler did not finish this time.')
+    const why = testerReason(vm, vm.cp, 'The page was rebuilt, but the profiler did not finish this time.')
     return `<div class="card tester">${head}<p class="note note-box">${esc(why)}</p></div>`
   }
   const p = vm.cp.data, rows = [...p.attribution].sort((a, b) => b.seconds - a.seconds), top = Math.max(.0001, rows[0]?.seconds || 0)
@@ -201,7 +214,7 @@ function statsSection(vm) {
   const matchPct = px ? (1 - diff / px) : 1
   const elapsed = Math.max(0, Math.round((new Date(r.finishedAt) - new Date(r.startedAt)) / 1000))
   const runMin = Math.floor(elapsed / 60), runSec = elapsed % 60
-  const t = (hue, vis, sr, label, sub, tone, extra) => `<div class="card stat" data-tone="${tone || ''}" style="--hue:${hue}"><dt>${label}</dt><dd class="stat-num num"><span class="sr">${sr === 'none' ? 'No result' : sr}</span><span aria-hidden="true">${vis}</span></dd>${sub ? `<dd class="stat-sub">${sub}</dd>` : ''}${extra ? `<dd class="stat-art">${extra}</dd>` : ''}</div>`
+  const t = (hue, vis, sr, label, sub, tone, extra) => `<div class="card stat" data-tone="${tone || ''}" style="--hue:${hue}"><dt>${label}</dt><dd class="stat-num num"><span class="sr">${sr === 'none' ? 'No result' : sr}</span><span aria-hidden="true">${vis}</span></dd>${sub ? `<dd class="stat-sub">${sub}</dd>` : ''}${extra ? `<dd class="stat-art" aria-hidden="true">${extra}</dd>` : ''}</div>`
   const OKTICK = `<svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>`
   const tiles = [
     failed ? t(190, dash, 'none', 'Blocks built', 'Not rebuilt') : t(190, cnt(total), `${total}`, 'Blocks built', 'in the Gutenberg copy', '', dotsOf(total)),
@@ -350,7 +363,7 @@ const inlineJSON = (value) => JSON.stringify(value).replace(/</g, '\\u003c').rep
 
 export function designReportHTML(report) {
   const vm = viewModel(report), r = vm.report, v = r.summary
-  const state = { view: 'desktop', compare: 'slide', pos: 50 }
+  const state = { view: device(vm.captures[0]?.width || 1440), compare: 'slide', pos: 50 }
   const controls = vm.captures.length ? `<script type="module">
     const esc = ${esc.toString()}
     const pct = ${pct.toString()}

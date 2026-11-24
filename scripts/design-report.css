@@ -117,7 +117,7 @@ button, input, summary, label { touch-action: manipulation; }
 
 /* Segmented switch: real radio buttons, so keyboard and screen readers just work. */
 .seg {
-  display: inline-flex; gap: 2px; padding: 4px;
+  display: inline-flex; flex-wrap: wrap; max-inline-size: 100%; gap: 2px; padding: 4px;
   background: var(--sunk); border: 0; border-radius: 12px;
   min-inline-size: 0;
 }
@@ -142,7 +142,7 @@ button, input, summary, label { touch-action: manipulation; }
 .site { padding-block: 20px; }
 .site .wrap { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 24px; }
 .brand { font-weight: 600; letter-spacing: -.01em; }
-.site nav { display: flex; gap: 4px; }
+.site nav { display: flex; flex-wrap: wrap; gap: 4px; }
 .site a {
   display: inline-flex; align-items: center; min-block-size: 44px; padding-inline: 12px;
   border-radius: 8px; color: var(--ink-2); font-size: var(--fs-small); text-decoration: none;
@@ -187,7 +187,7 @@ h2 { font-size: var(--fs-h2); font-weight: 600; line-height: 1.25; letter-spacin
   border-radius: 999px; background: var(--sunk); color: var(--ink-2);
   font-size: var(--fs-caption); font-weight: 600; font-variant-numeric: tabular-nums;
 }
-.controls { display: flex; flex-wrap: wrap; gap: 8px; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; max-inline-size: 100%; min-inline-size: 0; }
 @media (min-width: 48rem) { .controls { flex-wrap: nowrap; flex: none; } }
 
 /* Compare */
@@ -310,7 +310,7 @@ details > summary::-webkit-details-marker { display: none; }
 
 /* Run in numbers: each tile has its own colour, a counting number and a small picture of the figure */
 @property --n { syntax: "<integer>"; inherits: false; initial-value: 0; }
-.stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); gap: 12px; }
 @media (min-width: 48rem) { .stats { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; } }
 .stat {
   --hue: 190; position: relative; isolation: isolate; overflow: clip;
@@ -403,3 +403,11 @@ details > summary::-webkit-details-marker { display: none; }
 
 .miss-title, .miss-why, .plugin-name { overflow-wrap: anywhere; }
 .stat-art { order: 4; }
+
+.seg label:has(input:disabled) { opacity: .55; cursor: not-allowed; }
+.seg input:disabled { cursor: not-allowed; }
+.static-comparison, .static-comparison section, .static-pair figure { display: grid; gap: 16px; min-inline-size: 0; }
+.static-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: 16px; }
+.static-comparison a { display: inline-flex; align-items: center; min-block-size: 44px; color: var(--accent); overflow-wrap: anywhere; }
+.static-comparison a:active { opacity: .7; }
+.static-comparison img { inline-size: 100%; block-size: auto; border: 1px solid var(--line); }

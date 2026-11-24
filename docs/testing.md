@@ -42,7 +42,7 @@ with a saved AI response; see the run guide for its two private path arguments.
 
 `node scripts/design-report-check.mjs .scratch/design-report-check` runs a separate
 Chromium report check: 12 theme/width/state combinations, real fixture PNG differences,
-keyboard/pointer comparisons, disclosures, offline assets and motion preferences.
+keyboard/pointer comparisons, disclosures, offline assets, JavaScript-disabled image access, 200% phone text and motion preferences.
 It uses injected tester observations and no private run data, AI or WordPress. The
 before/prototype/after comparison evidence is in
 `changes/2026-11-24-design-report-look.md`.
@@ -54,7 +54,7 @@ Code Profiler compatibility. Run `node scripts/private-runner.mjs enqueue`, then
 `node scripts/private-runner.mjs once` for the separate, real headless attempt; retain
 its private reports and distinguish a completed profile from a no-go.
 
-The suite uses Node's built-in test runner and contains 420 tests in 43 files in the current working tree. `npm test` names its files (`src/**/*.test.js`, `scripts/*.test.mjs`), so a locally prepared `playground-host/dist` adds none.
+The suite uses Node's built-in test runner and contains 422 tests in 43 files in the current working tree. `npm test` names its files (`src/**/*.test.js`, `scripts/*.test.mjs`), so a locally prepared `playground-host/dist` adds none.
 
 Use the shared [Agent Kit](agents/agent-scripts.md): `scripts/agents/kit doctor`, `scripts/agents/kit unit` (the same files as `npm test`), and `scripts/agents/kit build`. The unit tests are Node tests only; browser specs and `kit shots` are not integrated. Real browser checks below use T3 separately and must not be inferred from the Node results.
 
