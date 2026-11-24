@@ -33,6 +33,7 @@ Prefer, in order:
 
 ## Index
 
+- [2026-11-24-design-report-review-fixes.md](2026-11-24-design-report-review-fixes.md) — visible layout notes, honest 99% boundary scores, and unclipped slider endpoints (TOOLS-457).
 - [2026-11-24-design-report-look.md](2026-11-24-design-report-look.md) — approved offline results-page layout, saved display states, plain-word notes and public-fixture comparison evidence (TOOLS-450).
 
 - [2026-11-23-preserve-licence-list-on-read-error.md](2026-11-23-preserve-licence-list-on-read-error.md) — license metadata read failures keep previous state, warn clearly and pause launch instead of skipping saved keys (TOOLS-438).

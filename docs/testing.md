@@ -43,9 +43,15 @@ with a saved AI response; see the run guide for its two private path arguments.
 `node scripts/design-report-check.mjs .scratch/design-report-check` runs a separate
 Chromium report check: 12 theme/width/state combinations, real fixture PNG differences,
 keyboard/pointer comparisons, disclosures, offline assets, JavaScript-disabled image access, 200% phone text and motion preferences.
+Home/End checks at both widths and themes verify a 44 px hit-testable handle and an
+unclipped focus ring, with endpoint screenshots and `slider-ends.json`.
+`scripts/design-runner.test.mjs` also covers visible layout notes (including mixed
+semantic/layout notes) and 98.96/98.99/99/100% display boundaries in all score locations.
 It uses injected tester observations and no private run data, AI or WordPress. The
 before/prototype/after comparison evidence is in
 `changes/2026-11-24-design-report-look.md`.
+The endpoint and score regression evidence is in
+`changes/2026-11-24-design-report-review-fixes.md`.
 
 The independent [private runner proof](private-runner.md) has queue-concurrency,
 partial-failure, permission, HTML-escaping and real-collector/artifact gate coverage in

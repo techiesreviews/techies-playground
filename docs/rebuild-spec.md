@@ -13,6 +13,9 @@ Paused/blocked attempts show their actual reasons and no invented scores. All re
 sections, original comparison images and expandable raw evidence work without
 JavaScript or a live runner. Slider dragging and the device/comparison switches need
 the embedded JavaScript.
+Visible margin, sizing and viewport defects must never be labelled "Not visible".
+Scores are floored to one decimal, so a value below 99% cannot appear to pass.
+The entire 44 px slider handle and focus ring remain visible at 0% and 100%.
 It has no Figma input, other builders, scheduling, public endpoint or hosted pairing.
 
 ## 1. Application shell

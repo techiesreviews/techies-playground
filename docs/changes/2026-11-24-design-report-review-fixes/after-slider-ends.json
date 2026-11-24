@@ -1,0 +1,114 @@
+[
+  {
+    "width": 1440,
+    "colorScheme": "light",
+    "ends": [
+      {
+        "key": "Home",
+        "screenshot": "slider-1440-light-home.png",
+        "value": "0",
+        "width": 44,
+        "height": 44,
+        "focused": true,
+        "clippedBy": [],
+        "ringInViewport": true,
+        "grabbable": true
+      },
+      {
+        "key": "End",
+        "screenshot": "slider-1440-light-end.png",
+        "value": "100",
+        "width": 44,
+        "height": 44,
+        "focused": true,
+        "clippedBy": [],
+        "ringInViewport": true,
+        "grabbable": true
+      }
+    ]
+  },
+  {
+    "width": 1440,
+    "colorScheme": "dark",
+    "ends": [
+      {
+        "key": "Home",
+        "screenshot": "slider-1440-dark-home.png",
+        "value": "0",
+        "width": 44,
+        "height": 44,
+        "focused": true,
+        "clippedBy": [],
+        "ringInViewport": true,
+        "grabbable": true
+      },
+      {
+        "key": "End",
+        "screenshot": "slider-1440-dark-end.png",
+        "value": "100",
+        "width": 44,
+        "height": 44,
+        "focused": true,
+        "clippedBy": [],
+        "ringInViewport": true,
+        "grabbable": true
+      }
+    ]
+  },
+  {
+    "width": 390,
+    "colorScheme": "light",
+    "ends": [
+      {
+        "key": "Home",
+        "screenshot": "slider-390-light-home.png",
+        "value": "0",
+        "width": 44,
+        "height": 44,
+        "focused": true,
+        "clippedBy": [],
+        "ringInViewport": true,
+        "grabbable": true
+      },
+      {
+        "key": "End",
+        "screenshot": "slider-390-light-end.png",
+        "value": "100",
+        "width": 44,
+        "height": 44,
+        "focused": true,
+        "clippedBy": [],
+        "ringInViewport": true,
+        "grabbable": true
+      }
+    ]
+  },
+  {
+    "width": 390,
+    "colorScheme": "dark",
+    "ends": [
+      {
+        "key": "Home",
+        "screenshot": "slider-390-dark-home.png",
+        "value": "0",
+        "width": 44,
+        "height": 44,
+        "focused": true,
+        "clippedBy": [],
+        "ringInViewport": true,
+        "grabbable": true
+      },
+      {
+        "key": "End",
+        "screenshot": "slider-390-dark-end.png",
+        "value": "100",
+        "width": 44,
+        "height": 44,
+        "focused": true,
+        "clippedBy": [],
+        "ringInViewport": true,
+        "grabbable": true
+      }
+    ]
+  }
+]

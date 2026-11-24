@@ -89,6 +89,10 @@ Without JavaScript, a static fallback exposes the complete original/copy picture
 at both captured widths, with direct PNG links. Missing capture sizes are disabled
 in the device switch; they never silently display another size. Controls and stat
 tiles reflow when text is enlarged to 200% on a 390 px screen.
+The slider's full 44 px handle and focus ring remain visible and reachable at both
+ends; rounded corners belong to the pictures, without clipping the control.
+Displayed picture scores are floored to one decimal everywhere, including the
+comparison footer after switching sizes. A match below 99% never displays as 99%.
 
 Before JSON/HTML persistence, the generator writes `state: passed|partial|failed`,
 `summary` (tone, pill, title, lead), and `design.missDetails` (`raw`, `title`, `why`,
@@ -98,6 +102,9 @@ completed testers. Behind-the-scenes notes can remain on a passed run. Missing
 testers/captures or visible differences make a completed rebuild partial; an incomplete
 AI/design stage is failed. Stop reasons use actual saved evidence, without inventing
 a timeout or cash-cost claim. These display states are separate from pipeline `go`.
+Body-margin, box-sizing and viewport-metadata notes count as visible layout misses,
+including mixed notes. Only an exact article-semantics note gets the invisible
+block-limit wording; unknown metadata notes retain neutral AI-note wording.
 
 The report counts four saved pictures for two width comparisons, including originals
 and copies. Elapsed time comes from timestamps, including failed attempts. `go` means all stages completed;
@@ -129,3 +136,6 @@ run. It checks all three report states at 1440/390 in light/dark, no sideways sc
 44 px radio targets, slider keys and drag, comparison controls, disclosures, final
 counters and reduced motion. It also asserts that opening the saved page requires no
 HTTP requests. Screenshots and `browser-evidence.json` go to the chosen directory.
+Home/End checks save eight focused endpoint screenshots (1440/390, light/dark),
+verify the entire handle is hit-testable, and check focus-ring clipping and viewport
+bounds. Their geometry is also saved in `slider-ends.json`.
