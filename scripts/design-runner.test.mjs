@@ -205,6 +205,18 @@ test('visible margin and viewport defects never become invisible block limits', 
   }
 })
 
+test('picture scores below the cutoff never display as 99 percent', () => {
+  for (const [match, shown, state] of [[98.96, '98.9', 'partial'], [98.99, '98.9', 'partial'], [99, '99', 'passed'], [100, '100', 'passed']]) {
+    const report = { ai: { status: 'completed' }, design: { status: 'completed', misses: [], captures: [1440, 390].map((width) => ({ width, height: 1000, match, pixels: width * 1000, changedPixels: 0, reference: 'reference.png', rebuilt: 'rebuilt.png' })) }, queryMonitor: { status: 'completed' }, codeProfiler: { status: 'completed' } }
+    finalizeDesignReport(report)
+    assert.equal(report.state, state)
+    const html = designReportHTML(report)
+    assert.equal(html.match(/class="score-num num">([^<]+)/)[1], shown)
+    assert.deepEqual([...html.matchAll(/<dd>([\d.]+%)<\/dd>/g)].map((m) => m[1]), [`${shown}%`, `${shown}%`])
+    assert.equal(html.match(/<strong class="num">([\d.]+%)<\/strong> match/)[1], `${shown}%`)
+  }
+})
+
 test('saved blocks with failed captures keep notes and do not invent zero changed pixels', () => {
   const report = { ai: { status: 'completed' }, design: { status: 'blocked', native: { status: 'completed', invalidBlocks: 0, inventory: { 'core/group': 1 } }, captures: [], misses: ['AI note'] }, blocker: 'Capture calibration failed.' }
   finalizeDesignReport(report)
