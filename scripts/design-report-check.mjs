@@ -8,6 +8,40 @@ import { chromium } from 'playwright'
 import { enqueue, runOnce } from './private-runner.mjs'
 import { designReportHTML, finalizeDesignReport, pixelScore, sampleHTML } from './design-runner.mjs'
 
+async function checkSliderEnds(page, root, width, colorScheme) {
+  const results = []
+  const slider = page.getByRole('slider')
+  for (const key of ['Home', 'End']) {
+    await slider.focus()
+    await page.keyboard.press(key)
+    await slider.scrollIntoViewIfNeeded()
+    const geometry = await slider.evaluate((knob) => {
+      const box = knob.getBoundingClientRect()
+      const style = getComputedStyle(knob)
+      const ring = parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset)
+      const clippedBy = []
+      for (let el = knob.parentElement; el; el = el.parentElement) {
+        const bounds = el.getBoundingClientRect(), css = getComputedStyle(el)
+        if (['clip', 'hidden', 'auto', 'scroll'].includes(css.overflowX) && (box.left - ring < bounds.left || box.right + ring > bounds.right)) clippedBy.push(el.className)
+      }
+      const hit = (x, y) => knob.contains(document.elementFromPoint(x, y))
+      return {
+        value: knob.getAttribute('aria-valuenow'), width: box.width, height: box.height,
+        focused: knob.matches(':focus-visible'), clippedBy,
+        ringInViewport: box.left - ring >= 0 && box.right + ring <= innerWidth && box.top - ring >= 0 && box.bottom + ring <= innerHeight,
+        grabbable: [box.left + 2, box.right - 2].every((x) => hit(x, box.top + box.height / 2)),
+      }
+    })
+    const box = await page.locator('#viewer').boundingBox()
+    const scrollY = await page.evaluate(() => window.scrollY)
+    const x = Math.max(0, box.x - 40)
+    const screenshot = `slider-${width}-${colorScheme}-${key.toLowerCase()}.png`
+    await page.screenshot({ path: path.join(root, screenshot), fullPage: true, clip: { x, y: scrollY + box.y + box.height * .45 - 40, width: Math.min(width, box.x + box.width + 40) - x, height: 124 } })
+    results.push({ key, screenshot, ...geometry })
+  }
+  return results
+}
+
 if (process.argv.length !== 3) throw new Error('Usage: node scripts/design-report-check.mjs <evidence-directory>')
 const root = path.resolve(process.argv[2])
 await mkdir(root, { recursive: true })
@@ -65,7 +99,7 @@ try {
   finalizeDesignReport(failed)
   await writeFile(path.join(directory, 'passed.html'), designReportHTML(passed))
   await writeFile(path.join(directory, 'failed.html'), designReportHTML(failed))
-  const errors = [], network = [], matrix = []
+  const errors = [], network = [], matrix = [], sliderEnds = []
   page.on('pageerror', (error) => errors.push(error.message))
   page.on('request', (request) => { if (/^https?:/.test(request.url())) network.push(request.url()) })
   for (const width of [1440, 390]) for (const colorScheme of ['light', 'dark']) for (const state of ['partial', 'passed', 'failed']) {
@@ -81,6 +115,9 @@ try {
     assert.ok(await page.evaluate(() => [...document.querySelectorAll('input[type=radio]')].every((el) => el.getBoundingClientRect().height >= 44)))
     await page.screenshot({ path: path.join(root, `${state}-${width}-${colorScheme}.png`), fullPage: true })
     if (state === 'partial') {
+      const ends = await checkSliderEnds(page, root, width, colorScheme)
+      sliderEnds.push({ width, colorScheme, ends })
+      await writeFile(path.join(root, 'slider-ends.json'), JSON.stringify(sliderEnds, null, 2))
       assert.ok(await page.locator('.runs .col').first().evaluate((el) => el.getBoundingClientRect().height > 0), 'Speed bars must be visible')
       const slider = page.getByRole('slider')
       await slider.focus()
@@ -154,7 +191,12 @@ try {
   assert.equal(normalPhoneColumns, 2, 'Normal text keeps two stat columns at 360 px')
   assert.equal(errors.length, 0, errors.join('\n'))
   assert.equal(network.length, 0, 'Saved reports must work offline without HTTP requests')
-  await writeFile(path.join(root, 'browser-evidence.json'), JSON.stringify({ matrix, errors, network, captures, noJavaScript: { fallbackImages, fallbackLinks, fallbackLoaded }, enlargedText: { width: 390, percent: 200, scrollWidth: enlargedWidth }, normalPhone: { width: 360, statColumns: normalPhoneColumns }, controls: 'keyboard, pointer drag, touch knob drag, touch scroll cancellation, device and comparison radios, disclosures', report: path.relative(root, path.join(directory, 'report.html')) }, null, 2))
+  await writeFile(path.join(root, 'browser-evidence.json'), JSON.stringify({ matrix, errors, network, captures, sliderEnds, noJavaScript: { fallbackImages, fallbackLinks, fallbackLoaded }, enlargedText: { width: 390, percent: 200, scrollWidth: enlargedWidth }, normalPhone: { width: 360, statColumns: normalPhoneColumns }, controls: 'keyboard, pointer drag, touch knob drag, touch scroll cancellation, device and comparison radios, disclosures', report: path.relative(root, path.join(directory, 'report.html')) }, null, 2))
+  for (const { ends } of sliderEnds) for (const end of ends) {
+    assert.equal(end.value, end.key === 'Home' ? '0' : '100')
+    assert.ok(end.focused && end.ringInViewport && !end.clippedBy.length, `Slider focus ring must be fully visible: ${JSON.stringify(end)}`)
+    assert.ok(end.width >= 44 && end.height >= 44 && end.grabbable, 'The full slider target must be grabbable at both ends')
+  }
   console.log(`RESULT: ok design-report-browser 12 layouts; offline fonts/images; controls; counters; evidence ${root}`)
 } finally {
   await browser.close()
