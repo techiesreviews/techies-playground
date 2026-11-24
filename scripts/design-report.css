@@ -197,14 +197,14 @@ h2 { font-size: var(--fs-h2); font-weight: 600; line-height: 1.25; letter-spacin
   --max: 100%;
   position: relative; inline-size: min(100%, var(--max)); margin-inline: auto;
   aspect-ratio: var(--ar);
-  border-radius: 8px; overflow: clip; background: var(--surface);
+  border-radius: 8px; background: var(--surface);
   outline: 1px solid var(--img-line); outline-offset: -1px;
   touch-action: pan-y; user-select: none; -webkit-user-select: none;
   cursor: ew-resize;
   isolation: isolate;
 }
 .viewer[data-view="phone"] { --max: 390px; }
-.viewer img { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; pointer-events: none; -webkit-user-drag: none; }
+.viewer img { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; border-radius: inherit; pointer-events: none; -webkit-user-drag: none; }
 .viewer .orig { clip-path: inset(0 calc(100% - var(--pos, 50%)) 0 0); }
 .tag {
   position: absolute; inset-block-start: 10px; z-index: 2; pointer-events: none;
