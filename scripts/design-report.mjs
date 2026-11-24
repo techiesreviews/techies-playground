@@ -29,12 +29,11 @@ const stageTone = (s) => (s === 'completed' ? 'ok' : s === 'blocked' ? 'bad' : s
 
 function plainMiss(text) {
   let m
-  if (/article element semantics/i.test(text)) return { title: 'The cards are plain boxes, not “article” sections', why: 'Screen readers and search engines get a smaller hint about what each card is. It looks the same.', visible: false, kind: 'block-limit' }
-  if (/doctype|viewport metadata|lang="en"/i.test(text)) return { title: 'Page-level settings can’t be set with blocks', why: 'Language, the browser tab title and the phone setup normally come from the theme. Blocks can’t reach them.', visible: false, kind: 'block-limit' }
-  if (/box-sizing|body margin/i.test(text)) return { title: 'Two site-wide layout rules can’t be set with blocks', why: 'These come from the theme, so the copy needs a theme to behave the same on every site.', visible: false, kind: 'block-limit' }
+  if (/^article element semantics[.!]?$/i.test(text)) return { title: 'The cards are plain boxes, not “article” sections', why: 'Screen readers and search engines get a smaller hint about what each card is. It looks the same.', visible: false, kind: 'block-limit' }
   if ((m = text.match(/^(\d+)px: ([\d.]+)% of pixels differ/))) return { title: `On the ${device(+m[1])}, ${+m[2]}% of the picture is different`, why: 'Compare the two pictures above to see where.', visible: true }
   if ((m = text.match(/Horizontal overflow at (\d+)px/))) return { title: `On the ${device(+m[1])}, the page scrolls sideways`, why: 'Something is wider than the screen.', visible: true }
   if ((m = text.match(/Missing required text: (.+)/))) return { title: `Text is missing: “${m[1]}”`, why: 'The copy dropped words that are in the original.', visible: true }
+  if (/box-sizing|body margin|viewport metadata/i.test(text)) return { title: text, why: 'Theme-level layout settings can change the spacing, sizing or phone layout. Compare the pictures above.', visible: true }
   if (/not rebuilt as an H1/i.test(text)) return { title: 'The main title is not a proper heading', why: 'Blocks can set the page title. This rebuild used the wrong heading level, which changes its meaning for screen readers and search engines.', visible: false, kind: 'semantic' }
   return { title: text, why: 'The AI reported this detail. Check the pictures and original wording to assess its effect.', visible: false, kind: 'unclassified' }
 }
