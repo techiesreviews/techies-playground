@@ -18,7 +18,7 @@ const ICON = {
   knob: '<svg class="icon" viewBox="0 0 22 22" aria-hidden="true"><path d="m9 6.5-4.5 4.5L9 15.5"/><path d="m13 6.5 4.5 4.5-4.5 4.5"/></svg>',
 }
 
-const pct = (n) => `${Math.round(n * 10) / 10}%`
+const pct = (n) => `${Math.floor(n * 10) / 10}%`
 const ms = (s) => { const v = s * 1000; return v < 10 ? `${v.toFixed(1)} ms` : `${Math.round(v)} ms`; }
 const mb = (b) => `${Math.round(b / 1048576)} MB`
 const device = (w) => (w <= 600 ? 'phone' : 'desktop')
@@ -50,7 +50,7 @@ function scoreCard(vm) {
       })
   return `<div class="card score" role="group" aria-label="Picture match">
     <p class="eyebrow">Picture match</p>
-    <p class="score-num num">${failed ? '—' : `${Math.round(vm.lowest * 10) / 10}<small>%</small>`}</p>
+    <p class="score-num num">${failed ? '—' : `${pct(vm.lowest).slice(0, -1)}<small>%</small>`}</p>
     <p class="score-note">${failed ? vm.rebuilt ? 'No score. The page was rebuilt, but picture capture did not finish.' : 'No score. The page has not been rebuilt.' : 'of the original’s pixels also look the same in the copy. 99% or more counts as the same.'}</p>
     <dl class="sizes">${rows.join('')}</dl>
   </div>`
