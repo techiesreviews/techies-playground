@@ -73,6 +73,7 @@ Use the shared [Agent Kit](agents/agent-scripts.md): `scripts/agents/kit doctor`
 | `recipe.test.js` | Stable IDs, version hints, labels, default storage, validation, advanced settings, Blueprint output (the Freemius plugin written before installs), directory installs, secret-field rejection, credential URL aliases, safe/unsafe persistence boundaries, public URL controls and external setup warnings. |
 | `wordpress-versions.test.js` | Live version normalization, exact latest resolution, preserved saved versions, fetch contract. |
 | `wordpress-org-plugins.test.js` | Slugs, normalized/sanitized results, entity decoding, artwork host allowlist (HTTPS from `ps.w.org` only, never the theme host), search and featured request parameters. |
+| `wordpress-org-images.test.js` | The shared artwork check: protocol-relative URLs become HTTPS, the host must match exactly (no subdomain, suffix or username trick), and non-URL values give no image. |
 | `wordpress-org-themes.test.js` | Slugs, HTTPS screenshot normalization, artwork host allowlist (HTTPS from `ts.w.org` only, never the plugin host), search request. |
 | `github-repository.test.js` | Public star-count normalization and the fixed Techies Playground repository API request. |
 | `package-upload.test.js` | Plugin/classic/block-theme header classification, misleading filenames, invalid/nested/ambiguous archives, 150-file drop forwarding, text drags, nested drag state, leave reset and listener cleanup. |
