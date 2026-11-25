@@ -1,16 +1,8 @@
-const PLUGIN_DIRECTORY_API = 'https://api.wordpress.org/plugins/info/1.2/'
-const PLUGIN_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+import { normalizeWordPressOrgImageUrl } from './wordpress-org-images.js'
 
-function normalizeImageUrl(value) {
-  if (typeof value !== 'string' || !value) return ''
-  const normalized = value.startsWith('//') ? `https:${value}` : value
-  try {
-    const url = new URL(normalized)
-    return url.protocol === 'https:' && url.hostname === 'ps.w.org' ? url.href : ''
-  } catch {
-    return ''
-  }
-}
+const PLUGIN_DIRECTORY_API = 'https://api.wordpress.org/plugins/info/1.2/'
+const PLUGIN_IMAGE_HOST = 'ps.w.org'
+const PLUGIN_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
 function decodeHtmlEntities(value) {
   return value
@@ -39,7 +31,10 @@ export function normalizeWordPressOrgPluginResults(payload) {
       author: typeof plugin.author === 'string' ? plugin.author.replace(/<[^>]*>/g, '').trim() : '',
       activeInstalls: Number.isSafeInteger(plugin.active_installs) ? plugin.active_installs : 0,
       tested: typeof plugin.tested === 'string' ? plugin.tested : '',
-      image: normalizeImageUrl(plugin.icons?.svg || plugin.icons?.['2x'] || plugin.icons?.['1x'] || plugin.icons?.default),
+      image: normalizeWordPressOrgImageUrl(
+        plugin.icons?.svg || plugin.icons?.['2x'] || plugin.icons?.['1x'] || plugin.icons?.default,
+        PLUGIN_IMAGE_HOST,
+      ),
     }]
   })
 }

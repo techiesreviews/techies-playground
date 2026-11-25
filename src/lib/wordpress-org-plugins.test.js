@@ -48,6 +48,16 @@ test('rejects artwork outside the official plugin image host', () => {
   assert.equal(plugin.image, '')
 })
 
+test('accepts plugin artwork only over HTTPS from ps.w.org', () => {
+  const imageFor = (svg) => normalizeWordPressOrgPluginResults({ plugins: [{
+    slug: 'example', name: 'Example', icons: { svg },
+  }] })[0].image
+  assert.equal(imageFor('//ps.w.org/example/assets/icon.svg'), 'https://ps.w.org/example/assets/icon.svg')
+  assert.equal(imageFor('http://ps.w.org/example/assets/icon.svg'), '')
+  assert.equal(imageFor('https://ts.w.org/example/assets/icon.svg'), '')
+  assert.equal(imageFor('not a url'), '')
+})
+
 test('searches with a compact official-directory request', async () => {
   let requestedUrl = ''
   const results = await searchWordPressOrgPlugins('woo commerce', {
