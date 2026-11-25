@@ -72,8 +72,8 @@ Use the shared [Agent Kit](agents/agent-scripts.md): `scripts/agents/kit doctor`
 | `freemius-plugin.test.js` | Runs the Freemius must-use plugin in PHP 8.3 (php-wasm) against stubbed WordPress functions: `auth_date` from the `Date` header, the proxy opt-in for Authorization, calls sent straight to `/cors-proxy.php` on the site's scheme, host and port (direct to Freemius without a usable site address), only `api.`, `sandbox-api.` and `wp.freemius.com`, no double stamping, untouched string headers and preempted answers. |
 | `recipe.test.js` | Stable IDs, version hints, labels, default storage, validation, advanced settings, Blueprint output (the Freemius plugin written before installs), directory installs, secret-field rejection, credential URL aliases, safe/unsafe persistence boundaries, public URL controls and external setup warnings. |
 | `wordpress-versions.test.js` | Live version normalization, exact latest resolution, preserved saved versions, fetch contract. |
-| `wordpress-org-plugins.test.js` | Slugs, normalized/sanitized results, entity decoding, artwork host allowlist, search and featured request parameters. |
-| `wordpress-org-themes.test.js` | Slugs, HTTPS screenshot normalization, artwork host allowlist, search request. |
+| `wordpress-org-plugins.test.js` | Slugs, normalized/sanitized results, entity decoding, artwork host allowlist (HTTPS from `ps.w.org` only, never the theme host), search and featured request parameters. |
+| `wordpress-org-themes.test.js` | Slugs, HTTPS screenshot normalization, artwork host allowlist (HTTPS from `ts.w.org` only, never the plugin host), search request. |
 | `github-repository.test.js` | Public star-count normalization and the fixed Techies Playground repository API request. |
 | `package-upload.test.js` | Plugin/classic/block-theme header classification, misleading filenames, invalid/nested/ambiguous archives, 150-file drop forwarding, text drags, nested drag state, leave reset and listener cleanup. |
 | `vault.test.js` | Separate theme storage and IndexedDB transaction completion. |

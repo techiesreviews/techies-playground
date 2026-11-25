@@ -1,19 +1,11 @@
+import { normalizeWordPressOrgImageUrl } from './wordpress-org-images.js'
+
 const THEME_DIRECTORY_API = 'https://api.wordpress.org/themes/info/1.2/'
+const THEME_IMAGE_HOST = 'ts.w.org'
 const THEME_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
 export function isWordPressOrgThemeSlug(value) {
   return typeof value === 'string' && value.length <= 100 && THEME_SLUG.test(value)
-}
-
-function normalizeImageUrl(value) {
-  if (typeof value !== 'string' || !value) return ''
-  const normalized = value.startsWith('//') ? `https:${value}` : value
-  try {
-    const url = new URL(normalized)
-    return url.protocol === 'https:' && url.hostname === 'ts.w.org' ? url.href : ''
-  } catch {
-    return ''
-  }
 }
 
 export function normalizeWordPressOrgThemeResults(payload) {
@@ -26,7 +18,7 @@ export function normalizeWordPressOrgThemeResults(payload) {
       version: typeof theme.version === 'string' ? theme.version : '',
       author: typeof theme.author === 'string' ? theme.author.replace(/<[^>]*>/g, '').trim() : '',
       rating: Number.isFinite(theme.rating) ? theme.rating : 0,
-      image: normalizeImageUrl(theme.screenshot_url),
+      image: normalizeWordPressOrgImageUrl(theme.screenshot_url, THEME_IMAGE_HOST),
     }]
   })
 }

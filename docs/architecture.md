@@ -46,6 +46,7 @@ The resulting layout-A page is a private local file, not a hosted launcher route
 | `src/lib/wordpress-versions.js` | Runtime WordPress.org version fetch, supported-version normalization, fallback and saved-version preservation. | App; release automation has parallel server-side logic. |
 | `src/lib/wordpress-org-plugins.js` | Featured/search requests and safe plugin result normalization. | App. |
 | `src/lib/wordpress-org-themes.js` | Search requests and safe theme result normalization. | App. |
+| `src/lib/wordpress-org-images.js` | The shared artwork check: an image URL is kept only over HTTPS from the one WordPress.org image host its caller names (`ps.w.org` for plugins, `ts.w.org` for themes). | `wordpress-org-plugins.js`, `wordpress-org-themes.js`. |
 | `src/lib/package-upload.js` | ZIP header detection with zip.js and global file-drag listener lifecycle. | App and regression tests. |
 | `src/lib/vault.js` | IndexedDB plugin/theme ZIP CRUD and ZIP signature check. | App. |
 | `src/lib/license-vault.js` | IndexedDB encrypted license CRUD, PBKDF2 derivation, AES-GCM, clipboard copy, decrypting the newest key per package for the automatic fill. | `LicenseManager`, Add key and launch in App. |

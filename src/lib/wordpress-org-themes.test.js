@@ -29,6 +29,15 @@ test('rejects screenshots outside the official theme image host', () => {
   assert.equal(theme.image, '')
 })
 
+test('accepts theme screenshots only over HTTPS from ts.w.org', () => {
+  const imageFor = (screenshot_url) => normalizeWordPressOrgThemeResults({ themes: [{
+    slug: 'example', name: 'Example', screenshot_url,
+  }] })[0].image
+  assert.equal(imageFor('http://ts.w.org/example/screenshot.jpg'), '')
+  assert.equal(imageFor('https://ps.w.org/example/screenshot.jpg'), '')
+  assert.equal(imageFor('not a url'), '')
+})
+
 test('searches the official theme directory', async () => {
   let requestedUrl = ''
   const results = await searchWordPressOrgThemes('astra', {
