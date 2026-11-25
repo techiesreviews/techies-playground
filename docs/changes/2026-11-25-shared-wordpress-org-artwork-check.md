@@ -31,6 +31,7 @@ One shared function, with each caller naming its own allowed host, removes the d
 - New `src/lib/wordpress-org-images.js` with `normalizeWordPressOrgImageUrl(value, allowedHostname)`, the former body with the host as a parameter.
 - `wordpress-org-plugins.js` passes `PLUGIN_IMAGE_HOST = 'ps.w.org'`; `wordpress-org-themes.js` passes `THEME_IMAGE_HOST = 'ts.w.org'`. Both private copies are deleted.
 - New tests in `wordpress-org-plugins.test.js` and `wordpress-org-themes.test.js` pin the HTTPS rule, the per-directory host and the unparsable-value case.
+- After the first review, `src/lib/wordpress-org-images.test.js` tests the shared function directly: exact host matching against subdomain, suffix and username-trick addresses, and non-URL values.
 
 ## Tests and evidence
 
@@ -40,6 +41,8 @@ One shared function, with each caller naming its own allowed host, removes the d
 | Local worktree, after change | `scripts/agents/kit unit --affected` | Same tests pass | `RESULT: ok unit 12/12 (2 files)` | Executed |
 | Local worktree, after change | `npm test` | Whole suite passes | 429 pass, 0 fail | Executed |
 | Local worktree, after change | `scripts/agents/kit build` | Vite build succeeds | `RESULT: ok build finished` | Executed |
+| Local worktree, after review fixes | `scripts/agents/kit unit --affected` | Directory tests and the direct test pass | `RESULT: ok unit 15/15 (3 files)` | Executed |
+| Local worktree, after review fixes | `npm test` | Whole suite passes | 432 pass, 0 fail | Executed |
 
 The new tests are characterization tests: a refactor with no behaviour change has no failing-first test, so they were run on the old code first to show they describe current behaviour.
 
