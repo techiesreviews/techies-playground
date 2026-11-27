@@ -155,6 +155,16 @@ const LICENSE_LIST_RETRY_ERROR = 'Saved license keys still could not be read. La
 const LICENSE_READ_TIMEOUT_MS = 10000
 const CHANGELOG_ENTRIES = [
   {
+    version: '0.13.9',
+    date: 'November 27, 2026',
+    title: 'WordPress Playground 3.1.66',
+    summary: 'Playground runs on its newest release.',
+    changes: [
+      'Playground is updated to 3.1.66.',
+      'The update was prepared automatically from the official Playground release.',
+    ],
+  },
+  {
     version: '0.13.8',
     date: 'November 24, 2026',
     title: 'More accurate design comparisons',
